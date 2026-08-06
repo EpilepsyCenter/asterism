@@ -41,6 +41,7 @@ class SessionState:
     overrides: dict = field(default_factory=dict)       # FigureOverrides fields
     last_figure: Any = None                             # matplotlib Figure (single)
     figures: dict = field(default_factory=dict)         # {metric: Figure} for multi
+    figure_set: Any = None                              # composed multi-panel Figure
 
     # Export
     output_dir: str = ""

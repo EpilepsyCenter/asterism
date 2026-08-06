@@ -40,12 +40,16 @@ def layout(sid: str):
                 html.Label("Figure type", className="field-label"),
                 dcc.Dropdown(id="fig-kind", options=kinds, value="bar",
                              clearable=False),
-                html.Label("Metric", className="field-label",
+                html.Label("Metric(s)", className="field-label",
                            style={"marginTop": "10px"}),
                 dcc.Dropdown(id="fig-metric",
                              options=[{"label": m, "value": m} for m in metrics],
-                             value=(metrics[0] if metrics else None),
-                             clearable=False, disabled=not metrics),
+                             value=(metrics if metrics else None),
+                             multi=True, disabled=not metrics),
+                html.Div("Pick several to render one panel per metric (a figure set, "
+                         "like a TRACER cohort).",
+                         style={"fontSize": "0.72rem", "color": "var(--ned-text-muted)",
+                                "marginTop": "3px"}),
                 html.Label("Title", className="field-label", style={"marginTop": "10px"}),
                 dcc.Input(id="fig-title", type="text", value="",
                           style={"width": "100%"}),
@@ -73,6 +77,22 @@ def layout(sid: str):
     ])
 
 
+def _one_figure(st, kind, metric, ov):
+    """Render a single figure of `kind` for `metric`, using that metric's stats."""
+    from asterism.core.stats import run_analysis
+    if kind == "bar":
+        stat = st.analyses.get(metric or "value")
+        if stat is None:
+            stat = run_analysis(st.dataset, st.design, metric=metric)
+            st.analyses[metric or "value"] = stat
+        return bar_figure(st.dataset, stat, lab_style=_LAB, metric=metric, overrides=ov)
+    if kind == "xy":
+        return xy_figure(st.dataset, lab_style=_LAB, metric=metric, overrides=ov)
+    return frequency_figure(st.dataset, lab_style=_LAB, metric=metric,
+                            kind=("cumulative" if kind == "freq_cumulative" else "histogram"),
+                            overrides=ov)
+
+
 @callback(
     Output("fig-preview", "children"),
     Output("tab-refresh", "data", allow_duplicate=True),
@@ -87,51 +107,76 @@ def layout(sid: str):
     State("tab-refresh", "data"),
     prevent_initial_call=True,
 )
-def on_render(n, kind, metric, title, ylabel, points, bracket_mode, sid, refresh):
+def on_render(n, kind, metrics, title, ylabel, points, bracket_mode, sid, refresh):
     if not n:
         return no_update, no_update
     st = server_state.get_session(sid)
     if st.dataset is None:
         return alert("Import a dataset first.", "warning"), no_update
-    ov = FigureOverrides(
-        title=title or None,
-        y_label=ylabel or None,
-        show_points=("on" in (points or [])),
-        bracket_label_mode=bracket_mode,
-    )
-    # Brackets must come from THIS metric's analysis, not whatever ran last. Look it
-    # up; if the user hasn't run it yet, run it now so the figure is self-consistent.
-    stat = st.analyses.get(metric or "value")
-    if stat is None and kind == "bar":
-        from asterism.core.stats import run_analysis
-        stat = run_analysis(st.dataset, st.design, metric=metric)
-        st.analyses[metric or "value"] = stat
+    metrics = metrics if isinstance(metrics, list) else ([metrics] if metrics else [None])
+    if not metrics:
+        metrics = [None]
+    multi = len([m for m in metrics if m is not None]) > 1
+
+    st.figures = {}
+    tiles = []
     try:
-        if kind == "bar":
-            fig = bar_figure(st.dataset, stat, lab_style=_LAB, metric=metric,
-                             overrides=ov)
-        elif kind == "xy":
-            fig = xy_figure(st.dataset, lab_style=_LAB, metric=metric, overrides=ov)
-        elif kind == "freq_cumulative":
-            fig = frequency_figure(st.dataset, lab_style=_LAB, metric=metric,
-                                   kind="cumulative", overrides=ov)
-        else:
-            fig = frequency_figure(st.dataset, lab_style=_LAB, metric=metric,
-                                   kind="histogram", overrides=ov)
+        for m in metrics:
+            # In multi mode each panel is titled/labelled by its metric; a single
+            # per-figure title/ylabel would be wrong across different metrics.
+            ov = FigureOverrides(
+                title=(m if multi else (title or None)),
+                y_label=(m if multi else (ylabel or None)),
+                show_points=("on" in (points or [])),
+                bracket_label_mode=bracket_mode,
+            )
+            fig = _one_figure(st, kind, m, ov)
+            st.figures[m or "value"] = fig
+            src = mpl_png_src(fig, dpi=300)
+            tiles.append(html.Div(style={"textAlign": "center"}, children=[
+                html.Img(src=src, style={"width": "360px" if multi else "520px",
+                                         "maxWidth": "100%",
+                                         "border": "1px solid var(--ned-border)",
+                                         "borderRadius": "6px", "background": "white",
+                                         "padding": "8px"}),
+            ]))
     except Exception as e:
         return alert(f"Could not render: {e}", "danger"), (refresh or 0) + 1
 
-    st.last_figure = fig
     st.figure_kind = kind
-    st.metric = metric or "value"       # so Export pairs the right results/info
-    src = mpl_png_src(fig, dpi=300)
+    st.last_figure = next(iter(st.figures.values()))
+    st.metric = (metrics[0] or "value")
+
+    # Build the multi-panel figure set for export (bar panels only, §10b-pre).
+    st.figure_set = None
+    if multi and kind == "bar":
+        st.figure_set = _build_figure_set(st, [m for m in metrics if m])
+
+    note = ("Figure set — one panel per metric, each with its own stats. "
+            "Export as a single multi-panel file on the Export tab."
+            if multi else
+            "Preview (PNG, upscaled). Export produces vector SVG/PDF from this same "
+            "figure at its exact mm size.")
     return html.Div([
-        html.Img(src=src, style={"width": "520px", "maxWidth": "100%",
-                                 "border": "1px solid var(--ned-border)",
-                                 "borderRadius": "6px", "background": "white",
-                                 "padding": "8px"}),
-        html.Div("Preview (PNG, upscaled). Export produces vector SVG/PDF from this "
-                 "same figure at its exact mm size.",
-                 style={"fontSize": "0.75rem", "color": "var(--ned-text-muted)",
-                        "marginTop": "6px"}),
+        html.Div(tiles, style={"display": "flex", "flexWrap": "wrap", "gap": "14px"}),
+        html.Div(note, style={"fontSize": "0.75rem", "color": "var(--ned-text-muted)",
+                              "marginTop": "8px"}),
     ]), (refresh or 0) + 1
+
+
+def _build_figure_set(st, metrics):
+    """A Panel per metric (bars + that metric's brackets) → one mm-exact figure set."""
+    from asterism.core.build import comparisons_from_stat, dataset_to_bargroups
+    from asterism.core.figure_set import Panel, figure_set
+    from asterism.core.stats import run_analysis
+    fig_cfg = _LAB["figure"]
+    panels = []
+    for i, m in enumerate(metrics):
+        stat = st.analyses.get(m) or run_analysis(st.dataset, st.design, metric=m)
+        st.analyses[m] = stat
+        groups = dataset_to_bargroups(st.dataset, metric=m)
+        comps = comparisons_from_stat(stat, groups)
+        panels.append(Panel(groups, width_mm=fig_cfg["width_mm"],
+                            height_mm=fig_cfg["height_mm"], comparisons=comps,
+                            y_label=m, title=m, rng_seed=i))
+    return figure_set(panels, lab_style=_LAB)

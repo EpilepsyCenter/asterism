@@ -63,24 +63,35 @@ def on_export(n, name, sid):
     stem = Path(folder) / (name or "figure_1")
     written = []
     try:
-        paths = export_all(st.last_figure, stem, dpi=150)
-        written.extend(paths.values())
-        # numbers (CSV)
+        figures = st.figures or {st.metric: st.last_figure}
+        multi = len(figures) > 1
+        # 1) each figure as its own vector trio; single figure keeps the plain name
+        for metric, fig in figures.items():
+            fstem = stem.parent / (f"{stem.name}_{metric}" if multi else stem.name)
+            written.extend(export_all(fig, fstem, dpi=150).values())
+        # 2) the multi-panel figure set as ONE file (SPEC §10b-pre)
+        if st.figure_set is not None:
+            written.extend(export_all(st.figure_set, stem.parent / f"{stem.name}_set",
+                                      dpi=150).values())
+        # 3) numbers (CSV) — the full canonical frame, once
         if st.dataset is not None:
             csv_path = stem.with_suffix(".csv")
             st.dataset.frame.to_csv(csv_path, index=False)
             written.append(csv_path)
-        # results string + info block — for the analysis matching the figure's metric
-        stat = st.analyses.get(st.metric)
-        if stat is not None:
-            (stem.parent / f"{stem.name}_results.txt").write_text(
+        # 4) results string + info block per metric present in the figures
+        for metric in figures:
+            stat = st.analyses.get(metric)
+            if stat is None:
+                continue
+            tag = f"_{metric}" if multi else ""
+            (stem.parent / f"{stem.name}{tag}_results.txt").write_text(
                 stat.results_string() + "\n")
-            written.append(stem.parent / f"{stem.name}_results.txt")
+            written.append(stem.parent / f"{stem.name}{tag}_results.txt")
             info = stat.info_block()
             info["source_file"] = st.file_path
-            (stem.parent / f"{stem.name}_info.json").write_text(
+            (stem.parent / f"{stem.name}{tag}_info.json").write_text(
                 json.dumps(info, indent=2, default=str))
-            written.append(stem.parent / f"{stem.name}_info.json")
+            written.append(stem.parent / f"{stem.name}{tag}_info.json")
     except Exception as e:
         return alert(f"Export failed: {e}", "danger")
 
@@ -109,12 +120,13 @@ def on_copy(n, sid):
     if not n:
         return no_update
     st = server_state.get_session(sid)
-    if st.last_figure is None:
+    fig = st.figure_set if st.figure_set is not None else st.last_figure
+    if fig is None:
         return alert("Render a figure first.", "warning")
     try:
         from asterism.core.clipboard import (copy_figure_to_pasteboard,
                                              pasteboard_flavours)
-        copy_figure_to_pasteboard(st.last_figure)
+        copy_figure_to_pasteboard(fig)
         flavours = pasteboard_flavours()
         return alert(f"Vector PDF copied to the clipboard (flavours: {flavours}). "
                      f"Paste into Affinity.", "success")
