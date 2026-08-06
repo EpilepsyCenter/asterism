@@ -11,9 +11,13 @@ A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the
   frozen apps' export writers (`core/importer/`; SPEC §5–6). Exercises the long-format,
   wide-melt, two-row-header, and tag-to-factor paths. A real export is the final
   acceptance check, not a prerequisite.
+- **Step 3 — stats core:** built, seeded from `glia/stats.py` (`core/stats.py`; SPEC §8,
+  §10–11). Dispatches the detected design to pingouin/scipy, runs on subject means by
+  default, and emits the §10 results string + info block. Key numbers cross-checked
+  against scipy in the tests.
 
-Next: SPEC §13 step 3 (stats core, seeded from `glia/stats.py`) then step 4
-(golden-dataset tests vs Prism).
+Next: SPEC §13 step 4 (golden-dataset tests vs real Prism output) then step 5
+(figure layer, seeded from the export spike).
 
 ## Running the spike
 
@@ -84,6 +88,7 @@ asterism/
     contract.py    #   canonical long-format data contract + subject logic (§3–4)
     validation.py  #   loud import-time validation checks (§7)
     design.py      #   design detection → test selection (§8)
+    stats.py       #   execute the detected design; results string + info block (§8,§10)
     importer/      #   import layer (§5–6): pure functions, no UI
       roles.py     #     synonym-dictionary role guessing (§5.1)
       inventory.py #     column inventory + header/wide-long detection (§5.1)
