@@ -56,7 +56,7 @@ def test_analyse_and_figure_and_export_flow():
 
     analyze.layout(sid)
     analyze.on_run(1, "amplitude_pA", "auto", sid, 0)
-    assert st.stat is not None and st.stat.test == "Welch's t-test"
+    assert st.analyses["amplitude_pA"].test == "Welch's t-test"
 
     figure.layout(sid)
     figure.on_render(1, "bar", "amplitude_pA", "Amp", "pA", ["on"], "stars", sid, 0)

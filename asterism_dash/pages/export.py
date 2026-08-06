@@ -70,12 +70,13 @@ def on_export(n, name, sid):
             csv_path = stem.with_suffix(".csv")
             st.dataset.frame.to_csv(csv_path, index=False)
             written.append(csv_path)
-        # results string + info block
-        if st.stat is not None:
+        # results string + info block — for the analysis matching the figure's metric
+        stat = st.analyses.get(st.metric)
+        if stat is not None:
             (stem.parent / f"{stem.name}_results.txt").write_text(
-                st.stat.results_string() + "\n")
+                stat.results_string() + "\n")
             written.append(stem.parent / f"{stem.name}_results.txt")
-            info = st.stat.info_block()
+            info = stat.info_block()
             info["source_file"] = st.file_path
             (stem.parent / f"{stem.name}_info.json").write_text(
                 json.dumps(info, indent=2, default=str))
@@ -85,10 +86,11 @@ def on_export(n, name, sid):
 
     items = [html.Li(str(p)) for p in written]
     extras = []
-    if st.stat is not None:
+    stat = st.analyses.get(st.metric)
+    if stat is not None:
         extras.append(html.Div(className="card", style={"marginTop": "10px"}, children=[
             html.Div("Results string", className="metric-label"),
-            html.Div(st.stat.results_string(), className="results-string"),
+            html.Div(stat.results_string(), className="results-string"),
         ]))
     return html.Div([
         alert(f"Exported {len(written)} files to {folder}", "success"),

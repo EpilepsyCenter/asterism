@@ -200,9 +200,11 @@ def grouped_bar(
         fig_cfg = lab_style["figure"]
         w_mm, h_mm = fig_cfg["width_mm"], fig_cfg["height_mm"]
         fig = Figure(figsize=(mm(w_mm), mm(h_mm)))
+        # left margin holds the y tick labels + the rotated y-axis label; too tight
+        # and the label is clipped at the canvas edge.
         rect = axes_rect_mm(
             fig_w_mm=w_mm, fig_h_mm=h_mm,
-            left_mm=9, bottom_mm=6, right_mm=1.5, top_mm=5,
+            left_mm=12, bottom_mm=7, right_mm=2, top_mm=5,
         )
         ax = fig.add_axes(rect)
         ax.set_gid("axes_main")

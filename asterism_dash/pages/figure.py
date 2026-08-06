@@ -99,9 +99,16 @@ def on_render(n, kind, metric, title, ylabel, points, bracket_mode, sid, refresh
         show_points=("on" in (points or [])),
         bracket_label_mode=bracket_mode,
     )
+    # Brackets must come from THIS metric's analysis, not whatever ran last. Look it
+    # up; if the user hasn't run it yet, run it now so the figure is self-consistent.
+    stat = st.analyses.get(metric or "value")
+    if stat is None and kind == "bar":
+        from asterism.core.stats import run_analysis
+        stat = run_analysis(st.dataset, st.design, metric=metric)
+        st.analyses[metric or "value"] = stat
     try:
         if kind == "bar":
-            fig = bar_figure(st.dataset, st.stat, lab_style=_LAB, metric=metric,
+            fig = bar_figure(st.dataset, stat, lab_style=_LAB, metric=metric,
                              overrides=ov)
         elif kind == "xy":
             fig = xy_figure(st.dataset, lab_style=_LAB, metric=metric, overrides=ov)
@@ -116,11 +123,15 @@ def on_render(n, kind, metric, title, ylabel, points, bracket_mode, sid, refresh
 
     st.last_figure = fig
     st.figure_kind = kind
-    src = mpl_png_src(fig, dpi=150)
+    st.metric = metric or "value"       # so Export pairs the right results/info
+    src = mpl_png_src(fig, dpi=300)
     return html.Div([
-        html.Img(src=src, style={"maxWidth": "100%", "border": "1px solid var(--ned-border)",
-                                 "borderRadius": "6px", "background": "white"}),
-        html.Div("Preview (PNG). Export produces vector SVG/PDF from this same figure.",
+        html.Img(src=src, style={"width": "520px", "maxWidth": "100%",
+                                 "border": "1px solid var(--ned-border)",
+                                 "borderRadius": "6px", "background": "white",
+                                 "padding": "8px"}),
+        html.Div("Preview (PNG, upscaled). Export produces vector SVG/PDF from this "
+                 "same figure at its exact mm size.",
                  style={"fontSize": "0.75rem", "color": "var(--ned-text-muted)",
                         "marginTop": "6px"}),
     ]), (refresh or 0) + 1

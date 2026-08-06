@@ -24,7 +24,7 @@ from .figures import BarGroup, render_grouped_bar_into
 from .style import LabStyle, mm
 
 # internal margins of a panel (mm), matching the single-panel builder
-_PANEL_MARGINS = dict(left=9.0, bottom=6.0, right=1.5, top=5.0)
+_PANEL_MARGINS = dict(left=12.0, bottom=7.0, right=2.0, top=5.0)
 
 
 @dataclass

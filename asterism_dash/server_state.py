@@ -28,17 +28,19 @@ class SessionState:
     factors: list = field(default_factory=list)
     import_notes: list = field(default_factory=list)    # e.g. excluded-animal reports
 
-    # Analysis
+    # Analysis. `design` is dataset-level (same for every metric — it keys off the
+    # factor/subject structure, not the values). `analyses` holds one StatResult PER
+    # metric, so a figure's brackets always come from THAT metric's test, never from
+    # whichever analysis happened to run last.
     metric: str = ""
     design: Any = None                                  # DesignResult
-    test_override: str = ""                             # "" = use recommended
-    parametric_override: str = "auto"                  # auto | parametric | nonparametric
-    stat: Any = None                                    # StatResult
+    analyses: dict = field(default_factory=dict)        # {metric: StatResult}
 
     # Figure
     figure_kind: str = "bar"                            # bar | xy | frequency
     overrides: dict = field(default_factory=dict)       # FigureOverrides fields
-    last_figure: Any = None                             # matplotlib Figure
+    last_figure: Any = None                             # matplotlib Figure (single)
+    figures: dict = field(default_factory=dict)         # {metric: Figure} for multi
 
     # Export
     output_dir: str = ""

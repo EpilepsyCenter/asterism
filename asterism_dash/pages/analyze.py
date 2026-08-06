@@ -79,7 +79,8 @@ def on_run(n, metric, parametric_mode, sid, refresh):
     parametric = {"auto": None, "parametric": True, "nonparametric": False}[parametric_mode]
     stat = run_analysis(st.dataset, st.design, metric=metric, parametric=parametric)
     st.metric = metric or ""
-    st.stat = stat
+    # Store keyed by metric so each figure can find its own test (not just the last run).
+    st.analyses[metric or "value"] = stat
 
     if stat.error:
         return alert(f"Test could not run: {stat.error}", "danger"), (refresh or 0) + 1

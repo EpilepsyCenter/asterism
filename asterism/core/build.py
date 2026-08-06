@@ -200,7 +200,7 @@ def bar_figure(
     return fig
 
 
-def _new_axes(lab_style: LabStyle, *, left=11.0, bottom=9.0, right=2.0, top=5.0):
+def _new_axes(lab_style: LabStyle, *, left=13.0, bottom=9.0, right=2.0, top=5.0):
     fig_cfg = lab_style["figure"]
     w_mm, h_mm = fig_cfg["width_mm"], fig_cfg["height_mm"]
     from matplotlib.figure import Figure
