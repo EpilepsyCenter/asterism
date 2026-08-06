@@ -4,7 +4,8 @@ inventory with overridable role guesses, and build the canonical Dataset."""
 from __future__ import annotations
 
 import pandas as pd
-from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import (ALL, Input, Output, State, callback, ctx, dash_table, dcc, html,
+                  no_update)
 
 from asterism.core.contract import Dataset
 from asterism.core.design import detect_design
@@ -21,6 +22,10 @@ _ROLE_OPTIONS = [{"label": r.value, "value": r.value} for r in Role]
 
 def layout(sid: str):
     st = server_state.get_session(sid)
+    if st.dataset is not None:
+        # snapshot what the table will render, so the edit callback can distinguish
+        # this programmatic load from a real user edit
+        st.extra["_render_snapshot"] = _records(st.dataset.frame)
     return html.Div(className="page", children=[
         html.H3("Import"),
         html.P("Load a TRACER cohort export, a NED-Net results file, or a manual "
@@ -39,6 +44,40 @@ def layout(sid: str):
         html.Button("Build dataset", id="imp-build", className="btn-ned-primary",
                     style={"marginTop": "12px"}),
         html.Div(id="imp-result", style={"marginTop": "14px"}),
+        html.Div(id="imp-data-status", style={"marginTop": "10px"}),
+        html.Div(id="imp-data-container", style={"marginTop": "10px"},
+                 children=(_data_table(st.dataset) if st.dataset is not None else None)),
+    ])
+
+
+def _records(frame) -> list[dict]:
+    return frame.astype(object).where(pd.notna(frame), None).to_dict("records")
+
+
+def _data_table(ds):
+    """Editable table of the canonical long-format data (SPEC §2/§7 spirit — the user
+    sees everything and can fix it). Edits sync back to the dataset."""
+    frame = ds.frame
+    return html.Div([
+        html.Div(f"RAW DATA · {len(frame)} rows", className="field-label",
+                 style={"marginTop": "6px"}),
+        html.Div("Every row of the canonical long format. Editable — fix a value, a "
+                 "group label, or blank a cell to drop it, then re-run on the Analyse "
+                 "tab.", style={"fontSize": "0.78rem", "color": "var(--ned-text-muted)",
+                                "marginBottom": "6px"}),
+        dash_table.DataTable(
+            id="imp-data",
+            data=_records(frame),
+            columns=[{"name": str(c), "id": str(c),
+                      "type": ("numeric" if c == "value" else "text")}
+                     for c in frame.columns],
+            editable=True, sort_action="native", filter_action="native",
+            page_size=15, style_table={"overflowX": "auto"},
+            style_cell={"fontFamily": "var(--ned-font-mono)", "fontSize": "12px",
+                        "padding": "4px 8px", "textAlign": "left"},
+            style_header={"fontWeight": "600", "textTransform": "uppercase",
+                          "fontSize": "10px"},
+        ),
     ])
 
 
@@ -197,3 +236,44 @@ def _issues_block(issues):
                Severity.INFO: "info"}
     return [alert(f"[{i.severity.value}] {i.message}", variant[i.severity])
             for i in issues]
+
+
+@callback(
+    Output("imp-data-container", "children"),
+    Input("tab-refresh", "data"),
+    State("session-id", "data"),
+    prevent_initial_call=True,
+)
+def render_data_table(_refresh, sid):
+    """(Re)render the raw-data table after a build. Snapshots the emitted rows so the
+    edit callback can tell a programmatic load from a user edit."""
+    st = server_state.get_session(sid)
+    if st.dataset is None:
+        return no_update
+    st.extra["_render_snapshot"] = _records(st.dataset.frame)
+    return _data_table(st.dataset)
+
+
+@callback(
+    Output("imp-data-status", "children"),
+    Input("imp-data", "data"),
+    State("session-id", "data"),
+    prevent_initial_call=True,
+)
+def on_edit_data(data, sid):
+    """Sync a user's table edits back into the canonical dataset (SPEC §2 — the user
+    stays in control). Cached analyses/figures are cleared because the data changed."""
+    st = server_state.get_session(sid)
+    if st.dataset is None or data is None:
+        return no_update
+    if data == st.extra.get("_render_snapshot"):
+        return no_update  # programmatic (re)render, not an edit
+    new = pd.DataFrame(data, columns=list(st.dataset.frame.columns))
+    if "value" in new.columns:
+        new["value"] = pd.to_numeric(new["value"], errors="coerce")
+    st.dataset = Dataset(new, factors=st.dataset.factors, x=st.dataset.x)
+    st.analyses.clear()
+    st.figures.clear()
+    st.extra["_render_snapshot"] = data
+    return alert("Edits applied. Cached analyses/figures cleared — re-run on the "
+                 "Analyse and Figure tabs.", "warning")
