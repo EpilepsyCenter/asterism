@@ -138,10 +138,13 @@ def switch_tab(n_clicks_list, current, ids):
 @callback(
     Output("tab-content", "children"),
     Input("active-tab", "data"),
-    Input("tab-refresh", "data"),
     State("session-id", "data"),
 )
-def render_tab(active_tab, _refresh, sid):
+def render_tab(active_tab, sid):
+    # Rebuild tab content ONLY when the active tab changes. Deliberately NOT
+    # triggered by `tab-refresh` — that store exists solely to refresh the sidebar,
+    # and re-rendering the tab here would wipe outputs a page callback just set
+    # (the run-test result, the figure preview).
     fn = _PAGE_LAYOUTS.get(active_tab)
     return fn(sid) if fn else html.Div("Unknown tab")
 
