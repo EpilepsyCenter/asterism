@@ -240,17 +240,61 @@ def _two_group(sf: pd.DataFrame, factor: str, *, paired: bool,
             parametric=True,
         )
     else:
-        if paired:
-            r = pg.wilcoxon(x, y)
-            res = StatResult(design="", test="Wilcoxon signed-rank",
-                             statistic_name="W", statistic=float(r["W_val"].iloc[0]),
-                             p=float(r["p_val"].iloc[0]), parametric=False)
-        else:
-            r = pg.mwu(x, y)
-            res = StatResult(design="", test="Mann–Whitney U",
-                             statistic_name="U", statistic=float(r["U_val"].iloc[0]),
-                             p=float(r["p_val"].iloc[0]), parametric=False)
+        res = _wilcoxon(x, y) if paired else _mann_whitney(x, y)
     res.posthoc = []
+    return res
+
+
+def _mann_whitney(x, y) -> StatResult:
+    """Two-sample Mann–Whitney U, matching Prism's exact/approximate choice.
+
+    Prism (and this) compute the EXACT p when there are no ties and n is modest,
+    falling back to the normal approximation otherwise. pingouin's `mwu` always
+    uses the approximation — which disagrees with Prism by ~17× on a clean small
+    sample (found via the qPCR golden dataset). We also report the *minimum* U,
+    the convention Prism prints.
+    """
+    from scipy import stats
+    xv = np.asarray(x, float)
+    yv = np.asarray(y, float)
+    xv, yv = xv[~np.isnan(xv)], yv[~np.isnan(yv)]
+    n1, n2 = len(xv), len(yv)
+    combined = np.concatenate([xv, yv])
+    has_ties = len(np.unique(combined)) < len(combined)
+    use_exact = (not has_ties) and n1 <= 100 and n2 <= 100
+    method = "exact" if use_exact else "asymptotic"
+    u1, p = stats.mannwhitneyu(xv, yv, alternative="two-sided", method=method)
+    u_min = min(u1, n1 * n2 - u1)  # Prism prints the minimum U
+    res = StatResult(design="", test="Mann–Whitney U", statistic_name="U",
+                     statistic=float(u_min), p=float(p), parametric=False)
+    res.settings["mwu_method"] = method
+    res.notes.append(
+        f"Mann–Whitney p by {method} method"
+        + (" (ties present → normal approximation)" if has_ties else "")
+        + "; matches Prism's exact/approximate selection."
+    )
+    return res
+
+
+def _wilcoxon(x, y) -> StatResult:
+    """Paired Wilcoxon signed-rank, exact when no ties/zeros and n modest."""
+    from scipy import stats
+    xv = np.asarray(x, float)
+    yv = np.asarray(y, float)
+    d = xv - yv
+    d = d[~np.isnan(d)]
+    nz = d[d != 0]
+    has_ties = len(np.unique(np.abs(nz))) < len(nz)
+    use_exact = (not has_ties) and (len(d) == len(nz)) and len(nz) <= 50
+    method = "exact" if use_exact else "approx"
+    try:
+        w, p = stats.wilcoxon(xv, yv, method=method)
+    except Exception:
+        w, p = stats.wilcoxon(xv, yv)
+        method = "approx"
+    res = StatResult(design="", test="Wilcoxon signed-rank", statistic_name="W",
+                     statistic=float(w), p=float(p), parametric=False)
+    res.settings["wilcoxon_method"] = method
     return res
 
 

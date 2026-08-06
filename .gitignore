@@ -14,3 +14,7 @@ venv/
 
 # Claude Code local (machine-specific permission overrides)
 .claude/settings.local.json
+
+# Raw lab Prism projects — full projects with experimenter/date metadata; kept
+# local only. Golden VALUES are extracted into tests/golden/prism_golden.json.
+sample_data/

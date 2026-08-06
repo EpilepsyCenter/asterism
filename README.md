@@ -15,9 +15,14 @@ A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the
   §10–11). Dispatches the detected design to pingouin/scipy, runs on subject means by
   default, and emits the §10 results string + info block. Key numbers cross-checked
   against scipy in the tests.
+- **Step 4 — golden-dataset tests vs real Prism output:** built (`tests/test_golden.py`,
+  `tests/golden/`; SPEC §13 step 4). Caught a real trap — pingouin's Mann-Whitney
+  defaults to the normal approximation and disagreed with Prism's exact test by ~17× on
+  a small sample; ASTERISM now matches Prism's exact result. Welch t reproduces Prism to
+  4 decimals. Raw Prism projects stay local (`sample_data/`, gitignored); only the
+  extracted golden values are committed.
 
-Next: SPEC §13 step 4 (golden-dataset tests vs real Prism output) then step 5
-(figure layer, seeded from the export spike).
+Next: SPEC §13 step 5 (figure layer, seeded from the export spike) then step 6 (UI).
 
 ## Running the spike
 
