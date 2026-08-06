@@ -140,14 +140,18 @@ def render_grouped_bar_into(
             if pt_cfg["show"]:
                 jw = pt_cfg["jitter_width"]
                 for sid, reps in sub.subjects.items():
-                    jitter = rng.uniform(-jw, jw, size=len(reps))
-                    pc = ax.scatter(
-                        np.full(len(reps), x) + jitter, reps,
-                        s=pt_cfg["replicate_size"],
-                        facecolor=subj_colour[sid], edgecolor="none",
-                        alpha=pt_cfg["replicate_alpha"], zorder=2,
-                    )
-                    pc.set_gid(gid(f"points_replicate_{g.label}_{sub.label}_{sid}"))
+                    # Only draw the small replicate cloud when the subject
+                    # actually has >1 replicate (SuperPlot). For subject-level-only
+                    # data a small point would just sit under the big one.
+                    if len(reps) > 1:
+                        jitter = rng.uniform(-jw, jw, size=len(reps))
+                        pc = ax.scatter(
+                            np.full(len(reps), x) + jitter, reps,
+                            s=pt_cfg["replicate_size"],
+                            facecolor=subj_colour[sid], edgecolor="none",
+                            alpha=pt_cfg["replicate_alpha"], zorder=2,
+                        )
+                        pc.set_gid(gid(f"points_replicate_{g.label}_{sub.label}_{sid}"))
                     max_ink = max(max_ink, float(np.max(reps)))
 
                 sx = np.linspace(-jw, jw, len(means)) if len(means) > 1 else np.array([0.0])

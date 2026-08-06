@@ -21,8 +21,15 @@ A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the
   a small sample; ASTERISM now matches Prism's exact result. Welch t reproduces Prism to
   4 decimals. Raw Prism projects stay local (`sample_data/`, gitignored); only the
   extracted golden values are committed.
+- **Step 5 — figure layer:** built on the step-0 rendering primitives (`core/build.py`;
+  SPEC §9). Data-driven from a `Dataset` (+ `StatResult`): column & grouped bars with
+  SuperPlot nesting, XY (mean ± SEM per group), frequency distributions (histogram /
+  cumulative). **Significance brackets are drawn from the real post-hoc p-values**, not
+  hand-typed. Per-figure overrides (`FigureOverrides`): y-limits, labels, points on/off,
+  which comparisons get brackets, label mode. Every type still passes §10b export QA.
 
-Next: SPEC §13 step 5 (figure layer, seeded from the export spike) then step 6 (UI).
+Next: SPEC §13 step 6 (Dash + pywebview UI, copy the GliaAnalysis skeleton) then
+steps 7–8 (level/subject/tag maps; QuantStudio ΔΔCt + manual template).
 
 ## Running the spike
 
@@ -94,6 +101,10 @@ asterism/
     validation.py  #   loud import-time validation checks (§7)
     design.py      #   design detection → test selection (§8)
     stats.py       #   execute the detected design; results string + info block (§8,§10)
+    build.py       #   data-driven figure builders: bar/XY/frequency, stats brackets (§9)
+    figures.py     #   grouped-bar rendering primitives (from the step-0 spike)
+    brackets.py    #   significance brackets: auto stacking + collision avoidance
+    figure_set.py  #   multi-panel figure sets on a journal-column canvas (§10b-pre)
     importer/      #   import layer (§5–6): pure functions, no UI
       roles.py     #     synonym-dictionary role guessing (§5.1)
       inventory.py #     column inventory + header/wide-long detection (§5.1)
