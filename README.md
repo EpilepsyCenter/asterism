@@ -55,6 +55,14 @@ Open `spike_out/single_panel.pdf` and `figure_set.pdf` in Affinity and confirm:
 If matplotlib clears this bar, the stack decision (§11) holds and the build proceeds to
 SPEC §13 step 1. If it can't, that changes the stack, not the schedule.
 
+## Platform note — clipboard is macOS-only
+
+"Copy figure" (vector PDF straight onto the pasteboard, SPEC §10a) is **macOS-only**.
+Windows has no native PDF clipboard flavour, and an EMF-based equivalent was considered
+and **dropped** (external converter dependency + untestable clipboard path weren't worth
+it). **Windows users take the file-export path instead** (SPEC §10, SVG/PDF), which is
+fully cross-platform. Everything else — figures, figure sets, export, QA — runs anywhere.
+
 ## Font caveat (SPEC §10b)
 
 `svg.fonttype: none` references the font **by name** rather than embedding it, so **Arial

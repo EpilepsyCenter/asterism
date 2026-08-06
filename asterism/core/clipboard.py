@@ -32,7 +32,12 @@ def copy_pdf_bytes_to_pasteboard(pdf_bytes: bytes) -> int:
         from AppKit import NSPasteboard, NSPasteboardTypePDF
         from Foundation import NSData
     except ImportError as exc:  # pragma: no cover - non-mac
-        raise RuntimeError("Clipboard PDF export requires macOS + PyObjC") from exc
+        # Deliberately macOS-only (SPEC §10a). Windows/Linux have no native PDF
+        # pasteboard flavour; those users take the file-export path (SPEC §10).
+        raise RuntimeError(
+            "Clipboard 'Copy figure' is macOS-only. On Windows/Linux, export the "
+            "figure to file (SVG/PDF) and import it instead."
+        ) from exc
 
     pb = NSPasteboard.generalPasteboard()
     pb.clearContents()
