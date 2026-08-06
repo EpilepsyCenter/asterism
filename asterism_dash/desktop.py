@@ -35,8 +35,19 @@ def _pick_port(preferred: int) -> int:
 
 
 def _run_server(port: int) -> None:
-    from waitress import serve
+    """Serve the Dash WSGI app. Prefer waitress (production WSGI); if it isn't
+    installed, fall back to Flask/werkzeug's threaded dev server so the native
+    launcher still works with only the base requirements installed."""
     from asterism_dash.main import app
+    try:
+        from waitress import serve
+    except ImportError:
+        print("[ASTERISM] waitress not installed — using the built-in server. "
+              "For the production server: pip install -r requirements-desktop.txt",
+              file=sys.stderr)
+        app.server.run(host=HOST, port=port, debug=False, use_reloader=False,
+                       threaded=True)
+        return
     logging.getLogger("waitress").setLevel(logging.ERROR)
     serve(app.server, host=HOST, port=port, threads=SERVER_THREADS)
 
