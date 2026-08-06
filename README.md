@@ -28,8 +28,21 @@ A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the
   hand-typed. Per-figure overrides (`FigureOverrides`): y-limits, labels, points on/off,
   which comparisons get brackets, label mode. Every type still passes §10b export QA.
 
-Next: SPEC §13 step 6 (Dash + pywebview UI, copy the GliaAnalysis skeleton) then
-steps 7–8 (level/subject/tag maps; QuantStudio ΔΔCt + manual template).
+- **Step 6 — Dash + pywebview UI:** built (`asterism_dash/`; SPEC §11–12). Skeleton
+  harvested from GliaAnalysis (session store, native pickers, `--ned-*` CSS tokens,
+  pywebview launcher). Four tabs wiring the core: Import (classify + column inventory
+  with overridable roles) → Analyse (design + test + results string) → Figure (type +
+  overrides + live preview) → Export (SVG/PDF/PNG + CSV + results + info block, macOS
+  clipboard). The preview is a PNG of the exact figure that exports — never a second
+  renderer (§11). Boots, serves, and the full callback flow is smoke-tested.
+
+Next: SPEC §13 steps 7–8 (level/subject/tag map UIs; QuantStudio ΔΔCt + manual template).
+
+## Running the app
+
+    pip install -r requirements-desktop.txt
+    python app.py                       # browser at http://127.0.0.1:8050
+    python -m asterism_dash.desktop     # native desktop window (pywebview)
 
 ## Running the spike
 

@@ -1,0 +1,59 @@
+/* ASTERISM-specific classes, layered on top of the harvested --ned- token set
+   (style.css). Kept small on purpose — reuse the design system, don't fork it. */
+
+.page {
+    padding: 22px 26px;
+    max-width: 1100px;
+}
+
+.page-subtitle {
+    color: var(--ned-text-muted);
+    font-size: 0.86rem;
+    margin-bottom: 16px;
+    max-width: 680px;
+}
+
+.field-label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ned-text-muted);
+    margin-bottom: 4px;
+}
+
+.card {
+    background: var(--ned-surface);
+    border: 1px solid var(--ned-border);
+    border-radius: var(--ned-radius);
+    padding: 14px 16px;
+}
+
+/* Column-inventory table (Import tab) */
+.inv-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+}
+.inv-table th,
+.inv-table td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--ned-border);
+    vertical-align: middle;
+}
+.inv-table th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ned-text-muted);
+}
+
+/* The publication results string, e.g. "F(2,21) = 8.43, p = 0.002, one-way ANOVA" */
+.results-string {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.95rem;
+    color: var(--ned-text);
+    margin-top: 4px;
+    user-select: all;
+}
