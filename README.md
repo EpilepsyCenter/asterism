@@ -4,9 +4,11 @@ A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the
 
 ## Status
 
-**Step 0 — export-fidelity spike: built and passing.** This is the assumption the
-whole project rests on (SPEC §10a–10b, §13 step 0). The automated half is green;
-the manual Affinity check is still on you (see below).
+- **Step 0 — export-fidelity spike:** built, passing, and verified in Affinity (SPEC §10a–10b).
+- **Step 1 — data contract + validation + design detection:** built, pure/unit-tested
+  (`core/contract.py`, `validation.py`, `design.py`; SPEC §3–4, §7–8).
+
+Next: SPEC §13 step 2 (importer) and step 3 (stats core, seeded from `glia/stats.py`).
 
 ## Running the spike
 
@@ -73,7 +75,10 @@ lab. Both were present on the machine the spike was built on.
 
 ```
 asterism/
-  core/            # UI-free by contract (SPEC §11): figure + export, no Dash imports
+  core/            # UI-free by contract (SPEC §11): pure functions, no Dash imports
+    contract.py    #   canonical long-format data contract + subject logic (§3–4)
+    validation.py  #   loud import-time validation checks (§7)
+    design.py      #   design detection → test selection (§8)
     style.py       #   .mplstyle + lab YAML loading, mm→fraction geometry helpers
     figures.py     #   grouped bar builder (SuperPlot nesting), gids on every artist
     brackets.py    #   significance brackets: auto stacking + collision avoidance
