@@ -1,0 +1,16 @@
+# Generated spike/figure output — reproducible via `python spike.py`
+spike_out/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Claude Code local (machine-specific permission overrides)
+.claude/settings.local.json

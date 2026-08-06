@@ -1,0 +1,10 @@
+# ASTERISM — pinned to what the step-0 spike was verified against.
+# Keep this boring; bus factor is a stated risk (SPEC §14).
+matplotlib==3.10.8
+numpy==2.4.3
+PyYAML==6.0.3
+scipy==1.17.1
+# macOS clipboard path (SPEC §10a). Not needed for the file-export/QA tests.
+pyobjc-framework-Cocoa ; sys_platform == "darwin"
+# dev
+pytest

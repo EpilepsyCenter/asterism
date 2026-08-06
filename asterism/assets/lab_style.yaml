@@ -1,0 +1,57 @@
+# ASTERISM lab style file (SPEC §9).
+# Version-controlled, set once, inherited by every figure. Per-figure overrides
+# happen in the UI; anything overridden on *every* figure means a default here is
+# wrong. All sizes that end up as ink are in points or millimetres, never pixels.
+
+version: 1
+
+# --- Figure geometry (mm — authored at final panel size, SPEC §10b) ---------
+figure:
+  width_mm: 45          # single small panel; a grouped bar at column-fraction width
+  height_mm: 40
+  dpi: 600              # only affects the PNG raster; SVG/PDF stay vector
+
+# --- Bars -------------------------------------------------------------------
+bar:
+  width: 0.6            # fraction of the per-bar slot
+  within_group_gap: 0.15
+  between_group_gap: 0.5
+  edge_width: 0.75      # points
+  fill_alpha: 1.0
+
+# --- Point overlay (SuperPlot; Lord et al. 2020 J Cell Biol) ----------------
+points:
+  show: true
+  replicate_size: 6     # small points: individual replicates (cells/ROIs/wells)
+  subject_size: 34      # large points: per-subject means, coloured by subject
+  replicate_alpha: 0.35
+  subject_edge_width: 0.6
+  jitter_width: 0.16
+  colour_by: subject    # subject | group | none
+
+# --- Significance brackets (custom draw fn; matplotlib has none) ------------
+brackets:
+  line_width: 0.75      # points
+  cap_length_mm: 1.2    # vertical tick at each end of the bracket
+  height_offset_mm: 1.5 # gap above the tallest artist under the bracket
+  stack_gap_mm: 2.2     # vertical spacing between stacked brackets
+  label_mode: stars     # stars | p_value
+  font_size: 7
+
+# --- Palette (colour-blind-safe; Wong 2011 Nature Methods) ------------------
+palette:
+  - "#0072B2"   # blue
+  - "#D55E00"   # vermillion
+  - "#009E73"   # green
+  - "#CC79A7"   # reddish purple
+  - "#E69F00"   # orange
+  - "#56B4E9"   # sky blue
+
+# --- Figure-set layout (SPEC §10b-pre) --------------------------------------
+figure_set:
+  column_width_mm: 180  # journal double-column canvas width
+  panel_gap_mm: 6       # gap between panels in the rough grid
+  margin_mm: 4          # outer margin of the figure-set canvas
+  panel_letters: true   # auto A, B, C… in house style
+  letter_font_size: 9
+  letter_weight: bold
