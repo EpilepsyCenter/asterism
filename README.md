@@ -7,8 +7,13 @@ A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the
 - **Step 0 — export-fidelity spike:** built, passing, and verified in Affinity (SPEC §10a–10b).
 - **Step 1 — data contract + validation + design detection:** built, pure/unit-tested
   (`core/contract.py`, `validation.py`, `design.py`; SPEC §3–4, §7–8).
+- **Step 2 — importer:** built, unit-tested against synthetic files that reproduce the
+  frozen apps' export writers (`core/importer/`; SPEC §5–6). Exercises the long-format,
+  wide-melt, two-row-header, and tag-to-factor paths. A real export is the final
+  acceptance check, not a prerequisite.
 
-Next: SPEC §13 step 2 (importer) and step 3 (stats core, seeded from `glia/stats.py`).
+Next: SPEC §13 step 3 (stats core, seeded from `glia/stats.py`) then step 4
+(golden-dataset tests vs Prism).
 
 ## Running the spike
 
@@ -79,6 +84,12 @@ asterism/
     contract.py    #   canonical long-format data contract + subject logic (§3–4)
     validation.py  #   loud import-time validation checks (§7)
     design.py      #   design detection → test selection (§8)
+    importer/      #   import layer (§5–6): pure functions, no UI
+      roles.py     #     synonym-dictionary role guessing (§5.1)
+      inventory.py #     column inventory + header/wide-long detection (§5.1)
+      reshape.py   #     melt, two-row-header parse, tag explode/assign (§5.2–5.3, §6)
+      recipes.py   #     confirmed-mapping recipes, YAML, signature reuse (§5.5)
+      sources.py   #     TRACER + NED-Net source recipes, by header signature (§6)
     style.py       #   .mplstyle + lab YAML loading, mm→fraction geometry helpers
     figures.py     #   grouped bar builder (SuperPlot nesting), gids on every artist
     brackets.py    #   significance brackets: auto stacking + collision avoidance
