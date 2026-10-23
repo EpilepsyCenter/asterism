@@ -1,445 +1,603 @@
 # ASTERISM — design spec
 
-A GraphPad Prism replacement scoped to one lab. Not a product, not a Prism clone — a
-consumer of data the lab's existing tools already produce, plus a house-style figure
-engine.
+A desktop app for scientific graphing and statistics that does what **GraphPad Prism 11**
+does (projects of live-linked data tables, analyses, graphs and layouts, with Prism's
+table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
+of NED-Net. Built with Qt (PySide6).
 
-Status: design agreed, nothing built yet.
+Status: **M1, M1b, M2, M3, M4 and M5 done; M6 (contingency, survival, parts of whole) next.** The Qt spike (M0) passed on
+2026-10-22.
 
-> **Starting a new session on this repo?** Read this file first, then start at
-> **§13 step 0** — the export-fidelity spike. It is an afternoon of work and it tests
-> the assumption everything else depends on. Do not begin the importer before it passes.
->
-> Sibling apps referenced throughout live at `~/Software/TRACER`, `~/Software/NED-Net`,
-> and `~/Software/GliaAnalysis`. See §2 — the first two are **frozen** and must not be
-> modified.
-
----
-
-## 1. Scope
-
-**In:** paired/unpaired t-tests, one- and two-way ANOVA (incl. repeated measures),
-linear regression, correlation, Kolmogorov–Smirnov. Grouped and column bar graphs,
-XY plots, frequency distributions. Import from TRACER, NED-Net, QuantStudio, and a
-manual template. Publication-quality vector export.
-
-**Out:** general-purpose stats menu, direct-manipulation figure editing, `.pzfx`
-import, cross-platform packaging, anything aimed at users outside the lab.
-
-**Assay coverage:** electrophysiology (via TRACER), EEG (via NED-Net), immunostaining
-(via GliaAnalysis), qPCR (via QuantStudio export), western blot and other manual
-assays (via template).
+> **Starting a new session on this repo?** Read this file, then check §15 for the current
+> milestone and its acceptance list. Run the app with `./start-asterism.sh` and the tests
+> with `.venv/bin/python -m pytest -q`. Prism 11 (and 10) are installed on the developer's machine
+> for screenshots, sample files and reference numbers: when in doubt about *what* a
+> feature does, look at Prism; decide *how it looks* ourselves (§2.1–2.3).
 
 ---
 
-## 2. Hard constraints
+## 1. Product
 
-- **TRACER and NED-Net are frozen.** No code changes to either. They are relied-upon
-  production tools; destabilising them is not an acceptable cost. The new app is a
-  pure consumer and does all reconciliation in its own import layer.
-- **Harvest by copy, never by dependency.** Useful code in the existing apps is copied
-  as a seed and allowed to diverge. No import coupling in either direction.
-- **Nothing is inferred silently.** Every guess the importer makes is displayed and
-  overridable before it affects an analysis.
+**What it is:** a complete, polished app, not a lab script. It is **free**: shared with other
+labs, never sold. Prism users should find every capability they rely on (the same sheet
+types, analyses, options and live linking between data, results and graphs) and learn
+ASTERISM's own interface in minutes.
+
+**What makes it worth switching to:**
+1. **Exports that open in Affinity/Illustrator essentially final**: live text, real fonts,
+   named groups, exact millimetre sizes (§10).
+2. **Numbers you can defend**: every analysis is checked against Prism's own output in the
+   test suite (§13).
+3. **A calm, modern native app** that looks like the developer's other tools (§12).
+4. **It reads your existing work**: Prism files (`.pzfx`, `.prism`), Excel/CSV, and the
+   lab instruments' and sibling apps' exports (§11).
+
+**Who it is for:** anyone who uses Prism for column, grouped, XY, contingency and
+survival work. Prism's long tail (e.g. every nonlinear model, power analysis,
+multiple-variable methods) arrives after the core is solid, in the order users ask for it.
 
 ---
 
-## 3. Data contract
+## 2. Principles and hard constraints
 
-One canonical long format. Everything upstream converges on this:
+1. **Function follows Prism 11; form is ASTERISM's own.** What ASTERISM can do follows
+   Prism: table types and sub-column formats, analyses and every option, defaults,
+   calculations and the numbers in results, live linking, and reading Prism files.
+   How it is presented is ours: window layout, navigation, toolbar, dialog layouts and
+   groupings, names and wording (§12). Functionality and file formats are not protected
+   (EU: *SAS Institute v World Programming*, 2012; US: *Lotus v Borland*); a product's
+   distinctive look and arrangement can be (trade dress, GUI copyright, design rights),
+   also when distributed free. So:
+   - never reproduce Prism's window arrangement (ribbon with Prism's groups, Navigator
+     sections and Family panel), its dialog layouts or tab sets, its icons or artwork;
+   - never use Prism's coined terms ("Family", "Magic", "Welcome dialog", "Project
+     Companion", …) or copy its text (help, dialog wording, result layouts beyond
+     standard statistical terms such as "P value" or "t, df");
+   - screenshots of Prism are used to learn *which options exist*, never as layouts to
+     reproduce.
+2. **Look and structure follow NED-Net.** The skin (colours, controls, typography) and the
+   window structure (full-height sidebar, toolbar above the content, status bar) mirror
+   NED-Net's desktop UI so the two apps read as coming from one developer (§12).
+3. **Interoperate, don't copy.** Reading Prism files is for interoperability. Never use
+   Prism's trademarks. ASTERISM is not affiliated with GraphPad. If ASTERISM is shared
+   widely, check with Lund University's innovation office first (free).
+4. **Numbers match Prism.** Same defaults (Student's t, not Welch; Prism's percentile
+   rule; exact P values where Prism uses them; Prism's P formatting and asterisk cutoffs).
+   Any intentional difference is documented in the results sheet and in §14.
+5. **One drawing path.** Every graph element is drawn once, through one canvas API, in
+   points. Screen, PDF, SVG and PNG all come from that same layout. Never add a second
+   renderer for previews.
+6. **The document model is UI-free.** `asterism/doc`, `asterism/analysis` and
+   `asterism/core` never import Qt. That keeps the model, file format and statistics
+   testable without a display.
+7. **Every user change is undoable**, and every project change marks the document as
+   edited.
+8. **Never modify the sibling apps** (TRACER, NED-Net, GliaAnalysis). ASTERISM consumes
+   their exports. Borrowed code is copied and allowed to diverge; there are no import
+   dependencies in either direction.
+9. **Nothing is inferred silently** in imports: every guess is shown and can be overridden
+   before it affects an analysis.
+10. **Never lose work.** Atomic saves, autosave with crash recovery, versioned file format.
+
+---
+
+## 3. Stack
+
+- **Python 3.12+**, **PySide6 6.11 (Qt Widgets)**. Fusion style + one app stylesheet
+  (§12); native title bar, menu bar, file dialogs and system font.
+- **Statistics:** numpy, scipy, pandas, pingouin, statsmodels. The pure-Python core in
+  `asterism/core/stats.py` holds the golden-tested executors.
+- **Export:** QPdfWriter (PDF), our own `SvgCanvas` (SVG with named groups), QImage (PNG/TIFF).
+- **Packaging (M11):** PyInstaller-built app bundles. macOS signed and notarized
+  (`.dmg`); Windows installer. File associations for `.asterism`, `.pzfx`, `.prism`.
+
+**Why Qt, not Electron or the old Dash app:** the spike showed Qt Widgets gives a
+genuinely native window, fast table editing, direct manipulation on the graph canvas,
+and vector export that passes the fidelity QA, all in one language and one process.
+Live linking (edit a cell, results and graphs follow) costs nothing in one process.
+Electron would add a second language and build system for no capability we need.
+
+---
+
+## 4. Architecture
 
 ```
-value | metric | unit | subject | replicate | <factor columns…> | batch | source_file
+asterism/
+  core/        UI-free, pre-existing: stats executors, importers, validation, export QA
+  doc/         UI-free document model: sheets, graph specs, undo stack, file format
+  analysis/    UI-free analysis registry: runs an Analysis sheet → result pages
+  app/         PySide6 only: windows, project sidebar, toolbar, sheet views, dialogs, graph canvas,
+               export, theme, icons
 ```
 
-- `subject` — the unit of independence (animal, culture, blot). **Required.**
-- `replicate` — cell / ROI / field / well / event, within a subject. Optional.
-- `batch` — plate, blot, cohort, session. Optional; usable later as a blocking factor.
+Dependency rule: `app → analysis → doc → core`. Lower layers never import upper ones.
 
-`subject` is load-bearing. It drives paired-vs-unpaired detection, repeated-measures
-detection, and honest n reporting (`n = 8 animals, 217 cells`). Stats run on subject
-means by default.
-
-## 4. Factor model
-
-Factors are **a user-defined list, not named slots.** No built-in `genotype` or
-`treatment` fields.
-
-- `factors: [group]` — the default and the common case. One-way.
-- `factors: [genotype, treatment]` — opt-in, only for factorial designs.
-
-Design detection keys off the *number and structure* of factor columns, never their
-names. A single-factor import requires no annotation step at all.
+- **Events.** Model objects expose plain-Python signals (`asterism.doc.events.Signal`,
+  weak references to bound methods, so a deleted view never gets called). Views subscribe.
+  A table emits `changed`, analyses recompute, graphs rebuild: Prism's live linking.
+- **Undo.** `asterism.doc.undo.UndoStack` holds command objects with `redo()` / `undo()`.
+  The app builds its Undo/Redo actions from the stack's signals. The stack's clean index
+  plus a "touched" flag for non-undoable edits drive the window's edited state.
+- **Recalculation** is synchronous for now (analyses are fast). If a long-running analysis
+  arrives (e.g. nonlinear fits on large data), it gets a worker thread; the result object
+  is immutable so it can be handed across.
+- **Identity.** Every sheet has a stable UUID; links between sheets (analysis → table,
+  graph → table/analysis, layout → graphs) are stored as ids in the file and resolved to
+  objects on load.
 
 ---
 
-## 5. Import layer
+## 5. Document model
 
-### 5.1 Column inventory
-On import, display every column: name, dtype, n unique, sample values, and a guessed
-role (pre-filled dropdown, always overridable). Role guesses come from fuzzy matching
-against a synonym dictionary:
+A **project** contains five kinds of sheet. The project sidebar (§12) shows them in three
+sections, with each table's analyses and graphs nested under it:
 
-- `value` ← amp / amplitude / intensity / intden / area / ct / dct / ddct / fold / count / rate
-- `subject` ← animal / animal_id / mouse / rat / id / prep / culture / blot
-- `replicate` ← cell / cell_id / roi / field / well / event_id / rep
-- `group` ← group / group_id / genotype / treatment / condition / tx
-
-Also detect header row and wide-vs-long (multiple numeric columns with short,
-low-cardinality, non-numeric headers ⇒ wide; offer to melt).
-
-### 5.2 Level map (optional)
-Splits one existing column into multiple factors. Only shown when the user asks for a
-second factor. An editable table over the observed unique values:
-
-| group | genotype | treatment |
+| Sidebar section | Sheets | Notes |
 |---|---|---|
-| WT_veh | WT | vehicle |
-| KO_CNO | KO | CNO |
+| Data | data table, and under it its analyses and graphs | tables are typed (§6); results are recomputed, never stored; a graph is a spec (§8) over one table |
+| Notes | info sheet | constants (experiment date, ID, notebook ref, …) + free notes |
+| Layouts | layout | a page arranging graphs, tables and text (§9) |
 
-Offer "split on delimiter" as a pre-fill, but the table is the source of truth — typed
-by the user, so it cannot guess wrong.
+**Linked sheets:** a data table plus every analysis and graph fed by it. Deleting a table
+deletes its linked sheets too (undoable). Renaming a table renames graphs that still carry
+its name.
 
-### 5.3 Tag map (TRACER only)
-TRACER's `group_tags` / `series_specific_tags` are **atomic tag lists**, not delimited
-strings, so this is assignment rather than parsing. Show distinct observed tags; user
-assigns each to a factor or leaves it unassigned (unassigned tags remain usable as
-filters).
-
-### 5.4 Subject map (optional)
-A per-project `animals.csv` (`subject, genotype, sex, age_wk, cohort, …`) left-joined
-on `subject`. Supplies metadata that no source app exports — TRACER has no sex/age/date
-fields, NED-Net has no genotype. Written once per cohort, inherited by every file from
-every source app. **This is why no upstream changes are needed.**
-
-### 5.5 Recipes
-The confirmed mapping (roles + level map + tag map) is saved keyed on the file's column
-signature plus its set of unique level values. Second file from the same experiment
-imports with zero clicks. Recipes are small YAML files, version-controlled with the
-project.
+**New table → starter graph:** creating a data table also creates its graph.
 
 ---
 
-## 6. Source recipes
+## 6. Data tables
 
-### TRACER — `cohort_summary.xlsx`
-- **`Cells (long)` sheet** is already the target shape:
-  `cell_id, animal_id, group, file_name, metric, value`.
-  Map `animal_id`→subject, `cell_id`→replicate. Nothing else required.
-- `Cells (wide)` also available; carries `group_tags`, `series_specific_tags`,
-  `meta.*` columns.
-- Per-event sheets: `cell_id, animal_id, group, file_name, event_index, value` —
-  use for frequency distributions and KS.
-- Note: TRACER's **per-recording CSVs carry no subject identity** (keyed on `file` +
-  HEKA tree indices only). Import the cohort export, not the per-recording CSVs.
+Prism's eight table types, each with its sub-column formats:
 
-### NED-Net — `results_graph_data.xlsx` (Results tab)
-Three recipes:
-1. **`PerAnimal`** — one row per animal, wide across metrics
-   (`rate_per_h`, `mean_duration_s`, `conv_rate_per_h`, …). Melt to long,
-   `animal`→subject, `group`→group.
-   ⚠️ Carries an `excluded` column — respect it and report the count
-   ("3 animals excluded per source file"). Never silently drop or include.
-2. **`Daily_counts_byGroup` / `Daily_rate_byGroup` / `Circadian_byGroup`** —
-   **two-row header** (row 1 = group labels, row 2 = `recording_day` or `hour_of_day`
-   then animal IDs). Needs its own recipe. Maps to XY plots, one line per group,
-   mean ± SEM.
-3. **`ISI_distribution` / `ISI_CDF`** — pre-binned, one column per group. Maps
-   directly to the frequency-distribution figure type; `ISI_CDF` pairs with KS.
+| Type | X | Y sub-columns | Typical graphs |
+|---|---|---|---|
+| Column | none | one value per row per group | scatter, bars, box, violin |
+| XY | numbers / dates / elapsed times | replicates, or mean+SD/SEM+N | points + lines, fits |
+| Grouped | row titles | replicates, or mean+SD/SEM+N | grouped bars, interleaved scatter |
+| Contingency | row titles | counts | stacked/grouped bars |
+| Survival | time | event codes per group | Kaplan-Meier staircase |
+| Parts of whole | row titles | one value | pie, donut, stacked bar |
+| Multiple variables | none | one variable per column | scatter matrices, correlation |
+| Nested | none | sub-columns per subject | nested scatter / superplot |
 
-### QuantStudio — ΔΔCt
-Parsing is a standard recipe: skip the metadata preamble by detecting the header row
-(the one containing `Well`), then read `Well, Sample Name, Target Name, CT, Ct Mean, Ct SD`.
-
-The ΔΔCt transform ships with the app, as **visible settings with defaults**:
-
-| Setting | Default | Notes |
-|---|---|---|
-| Undetermined wells | drop | alternative: censor at cycle max (40) |
-| Technical replicates | recompute from wells | alternative: use QuantStudio's `Ct Mean` |
-| Replicate outlier cutoff | SD > 0.5 → flag | off by default; flag rather than auto-drop |
-| Reference gene(s) | one, user-selected | support geometric mean of ≥2 |
-| Calibrator | control group mean | computed **within plate** |
-| Plate scope | per plate | `plate` becomes a column; never pool ΔΔCt across plates |
-
-Whatever is chosen is recorded in the export's info block.
-
-### Manual assays — template
-Normalization is done by the user in Excel beforehand. The app does not attempt it.
-
-- **Sheet 1 (`data`)** — flat rectangle, no preamble:
-  `subject, group, value` + optional `replicate` and extra factor columns.
-- **Sheet 2 (`info`)** — two columns, `field` / `value`: metric name, unit, free-text
-  normalization note, template version.
-
-The normalization note is not verified, only recorded — it travels into the results
-block so the methods section stays answerable.
+Common features: column titles above group names (Group A, B, …), row titles, excluded
+values (shown in blue italics, ignored by analyses and graphs), paste from Excel (TSV),
+Enter moves down, every edit undoable, columns and rows insert/delete, unlimited growth.
+The **New Table** dialog (also shown on the start screen) picks the table type, sub-column
+format and a starter graph, in ASTERISM's own layout: table types in the dialog's section
+sidebar, a live preview of the empty table and its graph beside them.
 
 ---
 
-## 7. Validation (loud, at import, never at analysis)
+## 7. Analyses
 
-Check and display before anything runs:
-- missing required columns; unknown/extra columns
-- non-numeric values in `value`; `Undetermined`-style sentinel strings
-- missing values, and where
-- duplicate `subject`+`replicate` keys
-- unequal n across groups
-- a `subject` present in only one group when the design says paired
-- groups with n < 3
-- template version older than current
+ASTERISM offers the same analyses as Prism, with every option and the same numbers, in
+its own presentation:
+- The **Analyze** dialog lists analyses by table type in its section sidebar, with a
+  search field and a short description of the selected analysis; unimplemented analyses
+  are visible but disabled.
+- Each analysis has a **parameters dialog** (section sidebar, our own grouping) carrying
+  every choice Prism offers. Reopen it from the results sheet's toolbar.
+- The **results sheet** reports the same quantities as Prism (test statistic, df, P
+  value, effect sizes, confidence intervals, descriptive statistics), in our own layout
+  and wording; standard statistical terms are kept. Results recompute live.
 
----
+Priority order (each tier lands with golden tests, §13):
 
-## 8. Design detection → test selection
+1. **Column:** descriptive statistics, normality and lognormality tests, one-sample t and
+   Wilcoxon, t tests and nonparametric tests (done in the spike), one-way ANOVA (ordinary,
+   Welch, Brown-Forsythe, RM, Kruskal-Wallis, Friedman) with multiple comparisons (Tukey,
+   Dunnett, Šídák, Holm-Šídák, Bonferroni, Dunn, uncorrected Fisher's LSD), identify
+   outliers (ROUT, Grubbs), frequency distribution.
+2. **Grouped:** two-way ANOVA (ordinary and repeated measures, mixed-effects for missing
+   values) with multiple comparisons; multiple t tests.
+3. **XY:** linear regression, correlation (Pearson/Spearman), area under curve,
+   smoothing, nonlinear regression with the common model families (dose-response,
+   exponential, Michaelis-Menten, Gaussian, polynomial) and comparison of fits.
+4. **Contingency:** chi-square, Fisher's exact, relative risk / odds ratio.
+   **Survival:** Kaplan-Meier, log-rank (Mantel-Cox), Gehan-Breslow-Wilcoxon, hazard ratio.
+   **Parts of whole:** fractions of total.
+5. **Transforms and data manipulation:** transform, normalize, remove baseline, prune,
+   transpose, fraction of total. These produce result *tables* that can be graphed and
+   analyzed further, like Prism's.
+6. Long tail on demand: multiple regression, PCA, power analysis, ROC, Bland-Altman, …
 
-| Design detected | Test |
-|---|---|
-| 2 levels, one factor, subjects distinct | Welch's t-test (Mann–Whitney if non-normal) |
-| 2 levels, one factor, subjects shared | Paired t-test (Wilcoxon signed-rank) |
-| ≥3 levels, one factor, distinct | One-way ANOVA → Tukey, or Dunnett vs. control |
-| ≥3 levels, one factor, shared | RM one-way ANOVA, Geisser–Greenhouse correction |
-| Two factors | Two-way ANOVA; RM on whichever factor shares subjects |
-| Numeric x present | Linear regression; Pearson or Spearman |
-| Two distributions, no grouping | Two-sample Kolmogorov–Smirnov |
-
-Always display the inferred design and the chosen test; always allow override.
-Normality and sphericity checks are advisory flags, not blockers.
-
-**Welch caveat:** Prism defaults to Student's t-test, this defaults to Welch's. The
-numbers will differ. Make the choice visible in the output string and document it —
-the first unexplained disagreement with a Prism file costs the project its credibility.
-
----
-
-## 9. Figure layer
-
-Types: grouped bar, column bar, XY, frequency distribution (histogram and cumulative).
-Default overlay is **points on bars**; for nested data, subject means as large points
-over replicate-level small points, coloured by subject (SuperPlot format, Lord et al.
-2020 *J Cell Biol*).
-
-Two layers of customization:
-
-**Lab style file** — version-controlled YAML, set once, inherited by every figure:
-bar width, within-group and between-group gaps, edge width, fill alpha, point sizes,
-jitter width, point colouring mode, bracket geometry (style, line width, cap length,
-height offset, stack gap, label mode, font size), palette, figure dimensions in mm,
-font, DPI.
-
-**Per-figure overrides in the UI** — y limits, axis labels, plot type, which comparisons
-get brackets, whether points show. Anything overridden on every figure is a signal the
-style default is wrong.
-
-Significance brackets are a custom draw function (matplotlib has none). Placement is
-automatic: compute significant comparisons, sort spans by width, stack, collision-avoid.
+Results can feed graphs: multiple comparison results draw significance brackets
+(stars or exact P) on the linked graph.
 
 ---
 
-## 10. Export
+## 8. Graphs
 
-Always emit together:
-1. Figure — SVG and PDF (live text, not outlines), plus PNG at configured DPI.
-2. Numbers — the underlying values as CSV.
-3. Results string — e.g. `F(2,21) = 8.43, p = 0.0021, one-way ANOVA with Tukey's post-hoc`.
-4. Info block — n at each level, test chosen, settings used (ΔΔCt params, normalization
-   note, style file version, app version).
+- **Graph types by table type,** chosen in ASTERISM's **Graph Type** dialog (types grouped
+  in its section sidebar, a preview of the current data in each).
+- **Direct manipulation:** click to select an element (data set, axis, title, bracket,
+  legend), drag to move titles, brackets and legends, double-click text to edit it in
+  place, double-click any other element to open the Format Graph dialog at its section.
+- **One Format Graph dialog** with a section sidebar (§12), in our own grouping:
+  - *Graph:* Size and frame · Titles and fonts · Significance
+  - *Data sets* (with a data-set picker, or all at once): **Style**, one page for everything
+    about how a data set is drawn (plot type and summary line, show individual points,
+    symbols, bars or box, error bars or whiskers) · Show and order
+  - *Axes:* X axis · Y axis · Right Y axis
 
-### 10a. Clipboard is the primary path for single graphs
-
-The real workflow is paste-into-Affinity, not export-then-import. So:
-
-- **"Copy figure" puts vector PDF on the macOS pasteboard** (`NSPasteboardTypePDF` via
-  PyObjC), rendered from the same matplotlib figure as the file export — never
-  screenshotted from the on-screen preview.
-- **Put the PDF flavour on the pasteboard and nothing else.** If a PNG representation is
-  also offered "for convenience", some receiving app will eventually prefer it and you
-  get a silent rasterisation with no error and no visible symptom until print.
-- File export stays canonical for anything going into a manuscript, because the §10b
-  QA checks validate files, not pasteboards.
-- Verify in the step-0 spike: paste into Affinity, then confirm what landed is vector
-  and not a bitmap.
-
-### 10b-pre. Figure sets — the actual answer to multi-panel figures
-
-A finished panel routinely contains ~12 graphs. Exporting or pasting them one at a time
-is the real friction, and neither files nor clipboard fixes it at per-graph granularity.
-
-**Figure set export:** select N analyses → **one** PDF/SVG containing all N, each
-positioned on a canvas at journal column width (e.g. 180 mm), each an independently
-named group (§10b gids), each still at its own exact mm size. Optional auto panel
-letters (A, B, C…) in the house style.
-
-One import into Affinity, everything present and pre-arranged in a rough grid, and the
-remaining work is nudging rather than assembling. This is cheap to build — it is
-explicit axes placement on a larger canvas, which the mm-exact authoring discipline
-already requires — and it saves far more time than the clipboard path does.
-
-Do **not** attempt full panel composition (precise alignment, shared legends, cross-panel
-annotation). Rough grid plus correct sizes plus named groups is the 90% win; Affinity is
-better at the last 10% and people already know how to do it there.
+  It carries every option Prism offers for the graph type (§13a), with Apply/Cancel/OK and
+  undo for each Apply.
+- **Toolbar text tools** act on the selected text element: font, size, bold, italic,
+  underline, superscript, subscript.
+- **Colour schemes** and **Copy formatting** (apply one graph's formatting to others).
+- Drawing and text tools on the graph (lines, arrows, boxes, free text); legends.
+- Graph sizes are set in millimetres. The graph is drawn at final size: what you see at
+  100% is what exports.
+- A graph sheet shows the graph alone on a white area that fills the window, always
+  centred (also when zooming, resizing or dragging a title). There is no page on a graph
+  sheet; pages belong to layouts (§9).
+- Scatter plots spread tied values side by side within the column; only points that do
+  not fit overlap, and the rest of the cloud keeps its true spacing.
+- Box and whiskers follow Prism: box = 25th–75th percentile with the median line; seven
+  whisker methods (min–max, min–max with all points, Tukey, 10–90, 5–95, 2.5–97.5,
+  1–99 percentiles); points beyond the whiskers drawn individually; under four values
+  the whiskers show the range; optional "+" at the mean; whiskers can be switched off.
 
 ---
 
-## 10b. Export fidelity — hard requirement
+### 8a. Graph catalogue, in order of implementation
 
-**The exported file must open in Affinity essentially final.** If it needs rebuilding
-rather than touching up, the tool has failed and has merely replaced Prism's copy-paste
-tax with a redraw tax. This constrains the figure layer more than anything else in this
-spec.
+Sources: Prism's user guide (graph families and Format Graph pages), the example
+graphs Prism 11 ships in `Prism 11.app/Contents/SharedSupport/Portfolio`, and the
+graphs Prism's analyses create. Every type also comes horizontal where Prism offers it.
+Status: ✅ done · ◐ partly done · blank = to do.
 
-### Non-negotiable matplotlib settings (bake into the `.mplstyle`)
+**Column (M3)**
+1. ✅ Scatter dot plot: points spread (ties side by side), line at mean/median ± SD/SEM/95% CI/IQR
+2. ✅ Column bar: mean ± SD/SEM/95% CI/range, with or without points
+3. ✅ Box and whiskers: seven whisker methods, outliers, mean "+", optional all points
+4. ✅ Violin plot: truncated at the extremes (as Prism), light/medium/heavy smoothing, median and quartile lines, optional points
+5. ✅ Before-after: symbols + lines (mean ± error beside: M9)
+6. ✅ Mean (or median) with error only: one symbol per data set
+7. ✅ Floating bars: min to max
+8. ✅ Aligned dot plot (frequency dot plot: M5 with frequency-distribution graphs)
+9. ✅ Significance brackets from multiple comparisons, stars or exact P, stacked
 
-```
-svg.fonttype:        none      # text stays <text>; default 'path' OUTLINES ALL TEXT
-pdf.fonttype:        42        # TrueType. Default Type 3 imports badly
-ps.fonttype:         42
-axes.unicode_minus:  False     # avoid the U+2212 glyph-substitution mess
-font.family:         Arial     # or Helvetica. NEVER DejaVu Sans (matplotlib default)
-savefig.transparent: True      # composites cleanly over panel backgrounds
-```
+**Grouped (M4)**
+10. ✅ Interleaved bars, separated bars, with optional points
+11. ✅ Stacked bars and 100% stacked bars (error bars drawn above each segment)
+12. ✅ Interleaved / separated scatter with mean ± error
+13. ✅ Grouped box and whiskers, grouped violin
+14. ◐ Connected means (done); replicates with connected means (M9)
+15. Bars extending left and right (population pyramid, fold change both ways) — M9 with horizontal graphs
+16. ✅ Heat map of a grouped table (colour range from the Y axis range)
+- ✅ Legends (draggable), palette colours per data set, brackets from two-way comparisons
+  and multiple t tests, crowded X labels tilt automatically
 
-`svg.fonttype: none` references the font by name rather than embedding it, so the font
-must be installed on the machine opening the file. Fine within a lab; note it in the
-README.
+**Nested (M4, right after grouped — the lab's cell-within-animal data)**
+17. ✅ Nested scatter (sub-columns coloured per subject, each subject its own column or pooled)
+18. ✅ Nested bar / box / violin / symbol-at-mean with nested points; SuperPlot (subject means)
 
-### Geometry
+**XY (M5)**
+19. ✅ Points only, points + connecting line, line only; mean ± error or each replicate; X error bars; XY bars
+20. ◐ Spaghetti plot (each replicate connected) done; discontinuous lines (M9)
+21. ✅ Area fills, including semitransparent overlapping fills
+22. ✅ Fitted curves with confidence / prediction bands (any linked linear or nonlinear fit)
+23. ◐ Fit over a selected range and curve drawn over a chosen range done; plot a function (M9)
+24. Bubble plot (third variable as symbol size) — with multiple-variable graphs (M9)
+25. ✅ Frequency distribution: histogram and cumulative, as a graph of the analysis's results (live)
 
-- **Author at final panel size in millimetres.** `figsize = (w_mm/25.4, h_mm/25.4)`.
-  Never draw big and scale down in Affinity — scaling desynchronises line widths and
-  font sizes from the journal spec.
-- All line widths and font sizes in **points**, correct at 1:1.
-- **Position axes explicitly** with `fig.add_axes([...])`. Do *not* use
-  `bbox_inches='tight'` — it silently changes the output canvas size, which destroys
-  mm-exactness and makes panels from different figures inconsistent.
-- **Nothing rasterized.** No `rasterized=True` unless deliberately chosen for a very
-  large point cloud, and surfaced in the UI when it happens.
+**Survival, contingency, parts of whole (M6)**
+26. Kaplan-Meier staircase with censor ticks, CI bands or error bars, % or fraction, survival or death
+27. Contingency: interleaved and stacked bars of counts / percentages
+28. Pie and donut charts
+29. 100% stacked bar and percentage dot plot (waffle)
 
-### Named layers
+**Graphs created by analyses (with each analysis, M3–M7)**
+30. Estimation plots (t test: Gardner-Altman; one-way ANOVA: Cumming)
+31. Normality QQ plot; residual plots for regression
+32. Bland-Altman plot
+33. ROC curve
+34. Volcano plot (multiple t tests)
+35. Forest plot (odds ratios, hazard ratios)
 
-Call `set_gid()` on every artist and artist group — `bars_WT`, `points_subject_KO`,
-`bracket_1`, `errorbar_WT`, `axis_y`. matplotlib writes gids through as SVG element ids,
-so they arrive in Affinity as **named, selectable objects** instead of anonymous nested
-groups. This is the single highest-leverage thing for a touch-up workflow and it is
-almost free.
+**Multiple variables (later, on demand)**
+36. Scatter coloured / sized by a variable, confidence ellipses, convex hulls
+37. Correlation matrix heat map, dendrograms (clustering)
+38. PCA plots: scree, loadings, biplot / vector plot
 
-Honest caveat: matplotlib SVG is still nested-group-heavy even with gids. It will not be
-as clean as hand-authored SVG, and expect to ungroup once on arrival.
+**Graph features used across types (M3–M9, as each type needs them)**
+Error bar direction (above/below/both); left and right Y axes; log axes; axis gaps;
+time-scale axes; grid lines and shaded bands (QC graphs); nudging data sets
+(waterfall); labelling points with row titles; colour by row ("rainbow"); colour
+schemes; legends; text, lines, arrows and pictures on graphs; overlaying graphs in a
+layout (M8).
 
-### Automated export QA
+## 9. Layouts
 
-Run against a reference figure in CI — cheap, and catches silent regressions when a
-matplotlib version or a style edit breaks one of the settings above:
-
-- parse the exported SVG; assert `<text>` elements are present and non-zero
-- assert **no `<image>` elements** (nothing was rasterized)
-- assert canvas width/height match the requested mm within tolerance
-- assert the expected `gid`s are present
-
----
-
-## 11. Stack
-
-- Core: plain Python package, **zero UI imports**. Functions in, figure + results object out.
-- Stats: `pingouin` (t-tests, RM/mixed ANOVA, post-hocs with p-adjustment, effect sizes,
-  normality, sphericity), `scipy.stats` (KS), `statsmodels` (`MixedLM` for nested models).
-- Figures: `matplotlib`, house style in a `.mplstyle` + the YAML above.
-- UI: **Dash + pywebview desktop shell**, following the NED-Net / GliaAnalysis pattern.
-  Copy their app skeleton wholesale — `server_state.py` session store, `components.py`
-  (`alert`, `metric_card`), `desktop.py` pywebview launcher, the `--ned-*` CSS token
-  set, sidebar layout, native folder/file pickers, `Start … (Native)` launcher scripts.
-
-**Why Dash over Marimo/Streamlit:** the lab already runs two apps in this exact idiom,
-so there is no new UI vocabulary for anyone to learn and the "how does a biologist launch
-this" problem is already solved with working code. Dash also has a higher layout ceiling
-(React underneath, arbitrary CSS) which matters for the figure customization panel, and
-it adds no new dependency family to a project where bus factor is a stated risk.
-
-Marimo's reactivity is genuinely nicer than Dash callbacks, and it would be the right
-call if the primary users were code-comfortable and wanted to drop into Python
-mid-analysis. That is not the requirement here.
-
-**Why not Electron, like TRACER?** Considered and rejected, but it is a close call.
-TRACER's architecture is justified by TRACER's complexity — 15 analysis windows,
-interactive trace viewing, manual event curation, cross-window state sync. This app is
-import → map → test → plot → export, roughly a tenth the surface area, and most
-interaction is dropdowns over a static image. Electron costs two languages and two
-build systems (PyInstaller + electron-builder), and means a future maintainer needs
-React, TypeScript, Python *and* the packaging pipeline rather than just Python.
-
-The one real thing Electron buys is that direct figure manipulation (dragging brackets,
-nudging legends) stays possible. Dash closes that door. That is an acceptable loss only
-because final polish is expected to happen in Illustrator — the same workflow already
-used for Prism figures.
-
-**Flip to Electron if:** (a) this app is meant to eventually absorb TRACER's cohort
-module and become the lab's primary analysis surface, so architectural consistency pays
-back; or (b) the author is realistically the sole maintainer indefinitely and is already
-fluent in the TRACER stack, which largely negates the bus-factor argument.
-
-**Do not** mix renderers — e.g. Plotly for an interactive preview plus matplotlib for
-export. Two rendering paths that must agree is how the preview stops matching the
-exported file, which is the same trust failure this spec is built to avoid.
-
-Keeping the core UI-free is what makes this reversible — and makes the golden-dataset
-tests possible.
-
-All three existing apps are Python, so a shared pip package would be *possible* — but
-see the frozen-app constraint. Copy, don't couple.
+A layout sheet is a page (letter/A4, portrait/landscape, or custom size) holding graphs,
+data/result tables and text. Graphs are placed live (they update with their data),
+snap to a grid and to each other, and can carry automatic panel letters (A, B, C…).
+A layout exports as one PDF/SVG in which each graph is its own named group at its own
+exact size. This replaces the old "figure set" export.
 
 ---
 
-## 12. Harvest list
+## 10. Export and clipboard
 
-GliaAnalysis is the closest existing implementation of this app — it already does
-per-cell → per-animal aggregation, pingouin stats with an LMM path, group/split/
-replicate-unit selection, and Prism-ready export. Treat it as the reference build.
+**Formats:** PDF, SVG, PNG and TIFF (chosen DPI), for a single graph, a layout, or a batch
+of selected sheets. Results and data tables export as CSV/Excel.
 
-| From | What | Path |
-|---|---|---|
-| GliaAnalysis | **whole Dash app skeleton** — session store, shared components, pywebview launcher | `glia_dash/server_state.py`, `components.py`, `desktop.py` |
-| GliaAnalysis | design system — CSS tokens, sidebar layout, native pickers | `glia_dash/assets/style.css` |
-| GliaAnalysis | pingouin + statsmodels stats layer, LMM path, post-hocs, per-animal aggregation | `glia/stats.py` |
-| GliaAnalysis | group / split / replicate-unit selection UI | `glia_dash/pages/explore.py`, `pages/stats.py` |
-| GliaAnalysis | `info` sheet convention for run metadata | `glia_dash/exporters.py` |
-| TRACER | matplotlib figure rendering to SVG/PDF/PNG | `backend/export/trace_export.py:302` (`render_to_bytes`) |
-| TRACER | cohort graph construction | `backend/api/cohort.py`, `CohortWindow.tsx` |
+**Fidelity is a hard requirement:** an exported graph must open in Affinity/Illustrator
+needing only touch-up, never rebuilding. Enforced by the automated export QA
+(`asterism/core/qa.py`) in the test suite:
 
-Copy as seed code. Do not create an import dependency in either direction.
+- text stays live text (`<text>` in SVG; real text in PDF), never outlines;
+- PDF fonts are TrueType/CID, never Type 3;
+- nothing is rasterized (no `<image>` in SVG);
+- canvas size matches the requested millimetres;
+- every element is a named group (`data-A`, `y-axis`, `bracket`, `graph-title`, …), so it
+  arrives as a selectable named object.
 
----
-
-## 13. Build order
-
-0. **Export fidelity spike, before anything else.** Hand-build one representative
-   grouped bar figure with points and brackets, then check three things in Affinity:
-   (a) the exported file needs only touch-up, not rebuilding; (b) a pasted copy arrives
-   as vector, not a bitmap; (c) a two-panel figure-set file imports as separate named
-   groups at correct mm sizes. This is the assumption the whole project rests on
-   (§10a–10b) and it is testable in an afternoon. If matplotlib can't clear this bar,
-   that changes the stack decision, not the schedule.
-1. Data contract + validation + design detection (pure functions, unit-testable).
-2. Importer: column inventory, role assignment, recipes. Test against one real
-   `cohort_summary.xlsx` and one real `results_graph_data.xlsx` — between them they
-   exercise the long-format path, the two-row-header path, and the tag-to-factor path.
-3. Stats core, seeded from `glia/stats.py`.
-4. **Golden-dataset tests**: a handful of datasets already analysed in Prism, with
-   Prism's output as expected values, in CI. Build this early — it is what makes the
-   tool trustworthy when its numbers are questioned.
-5. Figure layer + style file, seeded from TRACER's renderer.
-6. Marimo UI.
-7. Level map / subject map / tag map.
-8. QuantStudio ΔΔCt + manual template.
+**Clipboard:** Copy on a graph puts **vector PDF only** on the macOS pasteboard (no
+bitmap flavour a receiving app might silently prefer). On Windows, users export files
+(no clipboard path for now; see §14).
 
 ---
 
-## 14. Open
+## 11. Files and import
 
-- Normalization for manual assays: **resolved** — user does it in Excel, app records
-  the note only.
-- Whether qPCR also goes through the manual template rather than QuantStudio parsing:
-  **resolved** — build the QuantStudio ΔΔCt path, exports are consistent enough.
-- Adoption risk: v1 must do one thing dramatically faster than Prism, or it won't get
-  used. Most likely candidate: TRACER cohort export → finished figure in one step.
-- Bus factor: keep it boring. Pure Python, no build step, pinned deps, README a
-  first-year can follow, on the lab GitHub rather than one laptop.
+- **Native format `.asterism`:** a zip containing `project.json` (format id, format
+  version, app version, sheets with data, parameters and specs). Results are recomputed
+  on open, never trusted from disk. Saves are atomic (write temp, then replace). Files
+  from a newer format version are refused with a clear message (read-only viewing may
+  come later); older versions are migrated forward by explicit, tested migration steps
+  (`asterism/doc/fileformat.py: migrate`).
+- **Autosave and recovery (M11):** periodic snapshots beside the file. After a crash, the
+  next launch offers to restore them.
+- **Prism import (M10):** `.pzfx` (XML) and `.prism` (zip of JSON + CSV) → data tables
+  first; analyses and graph formatting where they map cleanly. Report what could not be
+  carried over; never drop it silently.
+- **Spreadsheet import:** CSV/TSV/Excel into a chosen table type, with a preview.
+- **Lab importers** (`asterism/core/importer`, pre-existing): TRACER `cohort_summary.xlsx`,
+  NED-Net `results_graph_data.xlsx`, QuantStudio qPCR (ΔΔCt with visible settings), and
+  the manual template. These go through the column inventory and role guessing (every
+  guess shown and overridable), then land in typed tables.
+  The importer's long-format data contract (`value | metric | unit | subject | replicate
+  | factors… | batch | source_file`) stays as the intermediate form; `subject` remains
+  the unit of independence when tables are built from it.
+
+---
+
+## 12. Look and feel
+
+- **Skin:** `asterism/app/theme.py` mirrors NED-Net's `--ned-*` tokens
+  (`NED-Net-desktop-ui/eeg_seizure_analyzer/dash_app/assets/style.css`): warm-paper
+  palette, one desaturated cyan accent (`#007d93`, dark `#62c8df`), near-black text,
+  boxed fields, filled-accent default button, segmented tabs, accent-filled sidebar
+  selection, NED-Net's cool dark mode. Follows the system light/dark setting live.
+  If NED-Net's tokens change, mirror them in `theme.py`. Never hardcode colours elsewhere.
+- **Window structure (NED-Net's):**
+  - *Project sidebar*, full window height: the ASTERISM wordmark at the top (where NED-Net
+    shows its name), a search field, then the Data / Notes / Layouts sections (§5) as
+    rounded rows; each section header has a "+" button to add a sheet. Analyses and
+    graphs sit indented under their table.
+  - *Top bar* above the sheet only (not across the sidebar): the sheet's name (click to
+    rename) and a one-line description (e.g. "Column table · 2 data sets") on the left;
+    then caption-less icon groups for project-wide actions: **Project** (new, open, save,
+    undo, redo, print), **Sheet** (new table / graph / layout / notes, duplicate, delete),
+    **Edit** (cut, copy, paste, insert/delete rows, exclude, sort, transpose); an
+    **Export** button with a menu at the right end, and a button to show/hide the tool panel.
+    Icons that don't fit go into a "»" overflow menu: the top bar never sets a minimum
+    window width, so the sidebars can always be resized.
+  - *Tool panel* on the right: the tools for the current sheet's content, in captioned
+    groups: **Analyze** (a labelled Analyze… button plus analysis tools), **Graph** (a
+    labelled Format graph… button, graph type, axes, significance, colours, copy
+    formatting, legend, nudge), **Draw**, **Text**. Tools that do not apply to the current
+    sheet are greyed out, not hidden; tools not built yet are greyed out with a tooltip.
+    Icon buttons share the panel's width, so the right margin always equals the left.
+  - Both sidebars are **resizable** by dragging their inner edge (left: about 180–480 px;
+    right: about 200–360 px) and can be hidden; widths are remembered between sessions.
+  - *Status bar*: muted items on the left (cell position; for a selection, n and mean),
+    zoom on the right for graphs.
+  - *Native menu bar* with every action, including those not on the toolbar.
+- **Dialogs** use a **section sidebar** on the left (rounded rows with small group labels,
+  like the project sidebar) and the selected section's controls on the right, with
+  Help, Cancel and OK (and Apply where useful) along the bottom. No tab bars across the
+  top of dialogs. Long dialogs scroll within the section, never the whole dialog.
+- **Icons:** SF Symbols via the theme-icon engine on macOS, tinted with theme colours.
+  Windows needs a bundled fallback icon set (M11).
+- **Graphs and layouts stay print colours** (white page) in both light and dark mode.
+- **One window per project**, like Prism. Opening a file reuses an untouched empty window.
+
+---
+
+## 13. Testing
+
+- **Model, file format and analyses:** plain pytest, no Qt.
+- **App:** offscreen Qt tests (`QT_QPA_PLATFORM=offscreen`) for live linking, dialogs,
+  undo, save/open.
+- **Golden tests:** every analysis checked against Prism's output on real data
+  (`tests/golden/prism_golden.json`, extracted from Prism projects kept locally in
+  `sample_data/`, which is gitignored). Add cases with each analysis. These already caught
+  one trap: pingouin's Mann-Whitney uses the normal approximation where Prism uses the
+  exact test (~17× different P on a small sample).
+- **Export QA** on every graph type (§10).
+- **Screenshot tour** (`python -m asterism --shots DIR`) for visual review of every main
+  screen and dialog, in light and dark mode.
+
+---
+
+## 13a. Checking Prism's options (parity sources)
+
+Every dialog's options, defaults and behaviours are checked against Prism before a
+milestone closes, using only legitimate sources:
+
+1. **Prism's published user guide** (graphpad.com/guides/prism/latest/user-guide), which
+   documents each dialog and calculation.
+2. **Prism's own files:** projects saved in Prism with options varied one at a time;
+   diffing the `.pzfx` (XML) / `.prism` (zip of JSON) files gives the exact option names,
+   values and defaults. This also feeds the importer (M10).
+3. **Screenshots** of each dialog, to learn which options exist (never as layouts to
+   copy, §2.1), and Prism's numbers on the same data (golden tests).
+4. **The example and sample files Prism installs** (`Prism 11.app/Contents/SharedSupport/`:
+   `Portfolio/` example graphs with thumbnails, `SampleData/`, `Equations/`) and the
+   published `.pzfx` schema (`Resources/PrismXMLSchema.xsd`). These are documents, not code.
+
+Never decompile or disassemble Prism's program or open its interface files (`.nib`): its
+licence forbids reverse engineering whether or not ASTERISM is sold, and other labs would
+inherit the risk. Copying its code or text would also undermine principle 3 (§2).
+
+## 14. Deliberate differences from Prism, and open questions
+
+**Differences (by design, §2.1):**
+- ASTERISM's own window structure (NED-Net's sidebar / toolbar / status bar) instead of a
+  ribbon, navigator and family panel; linked sheets nested under their table.
+- Dialogs with a section sidebar instead of tabs; one Format Graph dialog covering data
+  sets and axes; our own groupings and wording.
+- NED-Net skin instead of Prism's look (§12).
+- Graph selection handles in the accent colour.
+- Windows: no clipboard path; export files instead (revisit if users ask).
+
+**Open questions:**
+- Packaging specifics (PyInstaller vs. Briefcase), code-signing identity, update channel.
+- How deep `.prism` import goes beyond data tables (the format is undocumented and
+  changes between Prism versions).
+- Licence for distributing ASTERISM free to other labs (e.g. an open-source licence
+  compatible with PySide6's LGPL). Not sold, so no commercial licensing.
+- Whether ASTERISM files should embed fonts used in graphs (portability vs. size).
+
+---
+
+## 15. Build order
+
+Each milestone ends with its acceptance list passing, the test suite green, and the
+screenshot tour reviewed.
+
+**M0 — Qt spike. Done (2026-10-22).** Native window, sidebar, Column table,
+scatter-with-mean graph with Format dialogs, t tests, PDF/SVG export through the QA,
+NED-Net skin.
+
+**M1 — Foundation. Done (2026-10-22).**
+- Real package layout (§4): spike code moved into `asterism/app`, the model into
+  `asterism/doc`, the statistics bridge into `asterism/analysis`; `qt_spike/` removed.
+- Old Dash UI, matplotlib figure engine and their launchers/tests removed (kept in git
+  history).
+- UI-free model with plain-Python signals and its own undo stack; adding/removing sheets
+  and renaming are undoable.
+- `.asterism` save / save as / open / revert, recent files, edited-state in the title bar,
+  close/quit prompts to save unsaved changes, open files from the command line and Finder.
+- Acceptance: create a project, enter data, run a t test, format the graph, save, quit,
+  reopen: everything identical (data, titles, parameters, graph spec, sheet order,
+  names). Undo works across every edit. Model and file-format tests run without Qt.
+- Note for macOS: command-line arguments also arrive as Finder "open document" events;
+  `asterism/app/main.py` ignores those duplicates (and folders).
+
+**M1b — ASTERISM's own interface. Done (2026-10-22).** Replace the spike's Prism-like arrangement
+(§2.1): NED-Net window structure (project sidebar with nested linked sheets, toolbar with
+title block, status bar), dialogs with a section sidebar, one Format Graph dialog in our
+own grouping, our own wording throughout (including results sheets: same numbers,
+our own section titles and row wording). Top bar (project-wide tools) + right tool panel
+(content tools), both sidebars resizable with remembered widths. Acceptance: no ribbon, navigator/family panel,
+top tab bars or Prism-coined terms remain; every spike feature still works; screenshot
+tour reviewed against NED-Net.
+
+**M2 — Data tables. Done (2026-10-23).** All eight table types (XY, Column, Grouped,
+Contingency, Survival, Parts of whole, Multiple variables, Nested) with Prism's entry
+formats (one value; n replicates; mean with SD / SEM / %CV, with or without N; mean ± error;
+mean with limits; XY X with error), row titles, data-set and sub-column titles, text in
+row titles and variable tables, excluded values, insert/delete rows and data sets (linked
+graphs and analyses follow), Table Format dialog, New Table dialog with preview and example
+data, start screen, file format v2 with a v1 migration. Column tables entered as mean and
+error are graphed from the entered values. Deferred: date and time X columns (M5);
+graphs for the other table types arrive with their milestones (placeholder sheet until then).
+
+**M3 — Column analyses and graphs. Done (2026-10-23).**
+- Analyses: normality and lognormality (D'Agostino-Pearson, Anderson-Darling, Shapiro-Wilk,
+  Kolmogorov-Smirnov/Lilliefors) and frequency distributions **match Prism exactly** on
+  the golden cases harvested from the lab's projects (`tests/golden/harvest.py`; findings:
+  Prism reports the uncorrected A² with P from A²*; bins use lower edges
+  c0 − w/2 + i·w; automatic width = range/20 rounded to 1-2-5). One-way ANOVA family
+  (ordinary, Welch + Brown-Forsythe, RM with Geisser-Greenhouse, Kruskal-Wallis,
+  Friedman) with Tukey, Dunnett (exact multivariate-t integration, not Monte Carlo),
+  Šídák, Holm-Šídák, Bonferroni, Fisher, Games-Howell, Dunnett T3, Tamhane T2 and Dunn,
+  cross-checked against scipy/statsmodels/pingouin; Prism golden values for these are
+  requested in `tests/golden/REQUESTS.md`. One-sample t / Wilcoxon, Grubbs outliers
+  (ROUT → M5), t test from entered mean/SD/N.
+- Graphs: stacked significance brackets for multiple comparisons, violin (truncated,
+  three smoothing levels), floating bars, one-symbol mean/median, aligned dots, range
+  error bars, before-after lines, Graph Type gallery previewed with the graph's data.
+- Deferred to M9: horizontal orientation; quartile-line styles for violins.
+
+**M3 (original plan)** §7 tier 1 with golden tests; column graph types
+(scatter, bars, box, violin), error-bar options, brackets from multiple comparisons,
+Graph Type dialog.
+
+**M4 — Grouped and nested. Done (2026-10-23).**
+- Golden-tested against Prism 11 on the lab's Seizure_data project: two-way ANOVA with
+  matched rows and unequal group sizes (sums of squares, F, P; Bonferroni and Tukey post
+  tests: difference, SE, df, CI, adjusted P), multiple Welch t tests and multiple
+  Mann-Whitney tests with Holm-Šídák. Findings: Prism's matched two-way ANOVA is an
+  unweighted-means analysis (n_h = harmonic mean of group sizes); between-group post tests
+  use the pooled subjects + residual mean square; Prism's Mann-Whitney P is exact also
+  with ties (permutation distribution of mid-ranks), now used everywhere.
+- Two-way ANOVA: ordinary (Type III, = statsmodels), matched rows, matched data sets,
+  matched every cell (= pingouin), Geisser-Greenhouse; comparisons within rows, within
+  data sets, all cells, main effects; Tukey, Bonferroni, Šídák, Holm-Šídák, Fisher.
+- Multiple t tests: Student, Welch, Mann-Whitney, paired, Wilcoxon; Holm-Šídák,
+  Šídák, Bonferroni, none; FDR by two-stage step-up (BKY), BH, BY (= statsmodels).
+- Nested t test and nested one-way ANOVA (REML mixed model; equals the test on subject
+  means with equal replicates), variance between subjects, likelihood-ratio test.
+- Graphs: §8a items 10–18 as marked; Format Graph "Arrangement" section; gallery per
+  table type.
+- Mixed-effects model for matched designs with missing values (done 2026-10-23, before
+  M5): REML with compound symmetry (subject variance may be negative, so complete data
+  give exactly RM ANOVA — golden-tested against Prism by fitting complete data both ways);
+  three variance components when both factors are matched; Type III Wald F tests;
+  containment degrees of freedom; post tests from the model's covariance; likelihood-ratio
+  test of the matching; random-effect SDs and variances. Prism's three choices on the
+  settings page (RM ANOVA only, mixed model always, mixed model only when values are
+  missing — the default). Same for one-way RM ANOVA. Checked against R (nlme compound
+  symmetry, lmerTest). Open: Prism's df method with gaps and its Geisser-Greenhouse
+  handling (requested in `tests/golden/REQUESTS.md`).
+- Deferred: three-way ANOVA; horizontal and left-right bars (M9).
+
+**M5 — XY. Done (2026-10-23).**
+- Golden-tested against Prism 11 (Seizure_data): simple linear regression (each replicate a
+  point, excluded X leaves the row out: slope, intercept, SEs, CIs, X-intercept and its
+  interval, R², Sy.x, F test) and Spearman correlation (means of replicates). Findings:
+  Spearman's exact P comes from the permutation distribution of the tied ranks (as for
+  Mann-Whitney); approximate P is the t test; CI by Fisher's z with SE √(1.06/(n−3)), only
+  for n > 10 (Prism's guide, after Zar).
+- Linear regression: through a fixed point, compare slopes then intercepts (ANCOVA, =
+  statsmodels), interpolation (X from Y with the Fieller interval, Y from X with the
+  confidence band), runs test (exact), replicates test, confidence / prediction bands.
+- Correlation: Pearson (Fisher z interval) and Spearman; X vs each data set (XY) or every
+  pair of data sets (Column).
+- Area under the curve: trapezoids, baseline, SE and CI from the SEMs, peaks with Prism's
+  "ignore small peaks" rules.
+- Nonlinear regression: 30 models in 9 families plus user-defined equations (safe parser);
+  constants, bounds, shared parameters (global fits); weighting by 1/Y² or 1/Y using the
+  curve's Y, 1/X², 1/X, 1/SD²; each replicate or means; profile-likelihood intervals
+  (default, as Prism recommends) or asymptotic with SEs; derived values (EC50, half-life…);
+  compare two models (extra sum-of-squares F, AICc) or data sets (one curve for all, one
+  parameter shared); interpolation; residuals; runs test; ROUT outliers (identify or
+  exclude). Cross-checked against R nls / MASS profile intervals.
+- ROUT (Motulsky & Brown 2006) also in Identify outliers for column data.
+- Graphs: XY graphs (§8a 19–25 as marked), numeric and log X axes, X title, legends,
+  graphs of analysis results (Graph.source), Format Graph XY options, XY gallery.
+- X values can be excluded (strike-through; leaves the row out).
+- Open: Prism golden values for nonlinear fits, ROUT and the exact-Spearman cut-off
+  (`tests/golden/REQUESTS.md`). Deferred: date/time X columns (M10 with import), plot a
+  function and discontinuous lines (M9), residual plots as graphs (with M7's result
+  tables), smoothing / derivatives (M7 transforms).
+
+**M6 — Contingency, survival, parts of whole.**
+
+**M7 — Transforms** producing result tables.
+
+**M8 — Layouts** and layout export.
+
+**M9 — Graph polish:** colour schemes, Copy formatting, drawing tools, right Y axis, axis breaks.
+
+**M10 — Import:** CSV/Excel, `.pzfx`, `.prism`, lab importers into typed tables.
+
+**M11 — Product:** autosave and recovery, preferences, help, Windows icon set, packaging,
+signing, file associations, sample projects.

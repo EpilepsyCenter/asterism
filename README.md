@@ -1,139 +1,70 @@
 # ASTERISM
 
-A GraphPad Prism replacement scoped to one lab. See [`SPEC.md`](SPEC.md) for the full design.
+Scientific graphing and statistics that does what GraphPad Prism does (live-linked data
+tables, analyses, graphs and layouts, with Prism's options and numbers) in ASTERISM's own
+interface. A native desktop app (Qt / PySide6) that shares its look with NED-Net. Free for
+labs; not affiliated with GraphPad.
+
+The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
 
 ## Status
 
-- **Step 0 — export-fidelity spike:** built, passing, and verified in Affinity (SPEC §10a–10b).
-- **Step 1 — data contract + validation + design detection:** built, pure/unit-tested
-  (`core/contract.py`, `validation.py`, `design.py`; SPEC §3–4, §7–8).
-- **Step 2 — importer:** built, unit-tested against synthetic files that reproduce the
-  frozen apps' export writers (`core/importer/`; SPEC §5–6). Exercises the long-format,
-  wide-melt, two-row-header, and tag-to-factor paths. A real export is the final
-  acceptance check, not a prerequisite.
-- **Step 3 — stats core:** built, seeded from `glia/stats.py` (`core/stats.py`; SPEC §8,
-  §10–11). Dispatches the detected design to pingouin/scipy, runs on subject means by
-  default, and emits the §10 results string + info block. Key numbers cross-checked
-  against scipy in the tests.
-- **Step 4 — golden-dataset tests vs real Prism output:** built (`tests/test_golden.py`,
-  `tests/golden/`; SPEC §13 step 4). Caught a real trap — pingouin's Mann-Whitney
-  defaults to the normal approximation and disagreed with Prism's exact test by ~17× on
-  a small sample; ASTERISM now matches Prism's exact result. Welch t reproduces Prism to
-  4 decimals. Raw Prism projects stay local (`sample_data/`, gitignored); only the
-  extracted golden values are committed.
-- **Step 5 — figure layer:** built on the step-0 rendering primitives (`core/build.py`;
-  SPEC §9). Data-driven from a `Dataset` (+ `StatResult`): column & grouped bars with
-  SuperPlot nesting, XY (mean ± SEM per group), frequency distributions (histogram /
-  cumulative). **Significance brackets are drawn from the real post-hoc p-values**, not
-  hand-typed. Per-figure overrides (`FigureOverrides`): y-limits, labels, points on/off,
-  which comparisons get brackets, label mode. Every type still passes §10b export QA.
+- **M0 — Qt spike:** done. Native window, Navigator, Column table, scatter graph with
+  Format Graph / Format Axes dialogs, t tests, PDF/SVG export that passes the fidelity QA.
+- **M1 — Foundation:** done. Real package layout, UI-free document model with its own undo
+  stack, `.asterism` project files (save, save as, open, revert, recent files), edited
+  state in the title bar, save prompts on close, files opened from the command line and
+  Finder.
+- **M1b — Own interface:** done. NED-Net window structure (resizable project sidebar with
+  linked sheets nested under their table, top bar with project-wide tools, resizable tool
+  panel on the right), dialogs with a section sidebar, one Format Graph dialog, our own
+  wording throughout (including results sheets).
+- **M2 — Data tables:** done. All eight table types with every entry format (replicates,
+  mean/SD/N and friends), row titles, excluded values, insert/delete rows and data sets,
+  New Table dialog and start screen, Table Format dialog; file format v2.
+- **M3 — Column analyses and graphs:** done. Normality tests and frequency distributions
+  match Prism exactly on real lab data; one-way ANOVA family with ten multiple-comparison
+  methods; one-sample tests, outliers; violin, before-after, floating bars and more, with
+  a Graph Type gallery and stacked significance brackets.
+- **M4 — Grouped and nested:** done. Two-way ANOVA (ordinary and matched) and multiple
+  t / Mann-Whitney tests match Prism exactly on real lab data; nested t test and nested
+  one-way ANOVA; grouped bars (side by side, separated, stacked), connected means, heat
+  maps, legends, nested scatter and SuperPlots.
+- **M5 — XY:** done. Linear regression and Spearman correlation match Prism exactly on real
+  lab data; nonlinear regression with 30 models, global fits, model comparison,
+  profile-likelihood intervals and ROUT (checked against R); area under the curve; XY graphs
+  with fitted curves and bands; frequency-distribution histograms.
+- **Next — M6:** contingency, survival and parts-of-whole tables.
 
-- **Step 6 — Dash + pywebview UI:** built (`asterism_dash/`; SPEC §11–12). Skeleton
-  harvested from GliaAnalysis (session store, native pickers, `--ned-*` CSS tokens,
-  pywebview launcher). Four tabs wiring the core: Import (classify + column inventory
-  with overridable roles) → Analyse (design + test + results string) → Figure (type +
-  overrides + live preview) → Export (SVG/PDF/PNG + CSV + results + info block, macOS
-  clipboard). The preview is a PNG of the exact figure that exports — never a second
-  renderer (§11). Boots, serves, and the full callback flow is smoke-tested.
-
-Next: SPEC §13 steps 7–8 (level/subject/tag map UIs; QuantStudio ΔΔCt + manual template).
-
-## Running the app
-
-    pip install -r requirements-desktop.txt
-    python app.py                       # browser at http://127.0.0.1:8050
-    python -m asterism_dash.desktop     # native desktop window (pywebview)
-
-## Running the spike
+## Run
 
 ```bash
-pip install -r requirements.txt
-python spike.py            # builds figures, exports, runs QA, copies PDF to clipboard
-pytest tests/ -q          # the CI half of the fidelity checks
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # first time
+./start-asterism.sh                     # or: .venv/bin/python -m asterism [file.asterism]
 ```
 
-`spike.py` writes to `spike_out/`:
+On macOS you can also double-click `Start ASTERISM.command`.
 
-| file | what |
-|---|---|
-| `single_panel.{svg,pdf,png}` | one grouped bar: SuperPlot nested points + stacked significance brackets |
-| `figure_set.{svg,pdf,png}` | two panels on a 180 mm journal-column canvas, each at its own mm size, named groups, auto letters |
+## Test
 
-It also puts a **vector PDF on the macOS pasteboard** (PDF flavour only).
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m asterism --shots /tmp/asterism-shots    # screenshot tour for visual review
+```
 
-## What the spike proved (the machine half)
-
-- `svg.fonttype: none` → text stays live `<text>`, not outlined to `<path>`.
-- `pdf.fonttype: 42` → TrueType (`CIDFontType2`), **no Type 3** (Type 3 imports badly).
-- No `<image>` elements — nothing silently rasterized.
-- Canvas is **mm-exact** (45×40 mm single panel; 180 mm-wide figure set) — achieved by
-  explicit `add_axes` placement and **never** `bbox_inches='tight'`.
-- `set_gid` names survive into the SVG as selectable `<g id="…">` groups; figure-set
-  panels arrive as independently named groups (`panel_A`, `panel_B`) at correct mm sizes.
-- Clipboard carries **PDF only** — no PNG/TIFF flavour that a receiving app could
-  silently prefer and rasterize.
-
-### The one non-obvious trap (now guarded)
-
-`savefig` reads the font-embedding rcParams (`svg.fonttype`, `pdf.fonttype`) at **save**
-time, not at figure-build time. Building under the house style but saving outside it
-silently outlines all text. Export therefore runs *inside* the house-style context; the
-`test_svg_text_stays_live` CI test guards the regression.
-
-## What you still have to check by hand (the human half, SPEC §13)
-
-Open `spike_out/single_panel.pdf` and `figure_set.pdf` in Affinity and confirm:
-
-1. **(a)** the file needs only touch-up, not rebuilding;
-2. **(b)** a copy pasted from `spike.py`'s clipboard write arrives as **vector**, not a bitmap;
-3. **(c)** the figure-set file imports as **separate named groups at correct mm sizes**.
-
-If matplotlib clears this bar, the stack decision (§11) holds and the build proceeds to
-SPEC §13 step 1. If it can't, that changes the stack, not the schedule.
-
-## Platform note — clipboard is macOS-only
-
-"Copy figure" (vector PDF straight onto the pasteboard, SPEC §10a) is **macOS-only**.
-Windows has no native PDF clipboard flavour, and an EMF-based equivalent was considered
-and **dropped** (external converter dependency + untestable clipboard path weren't worth
-it). **Windows users take the file-export path instead** (SPEC §10, SVG/PDF), which is
-fully cross-platform. Everything else — figures, figure sets, export, QA — runs anywhere.
-
-## Font caveat (SPEC §10b)
-
-`svg.fonttype: none` references the font **by name** rather than embedding it, so **Arial
-or Helvetica must be installed on any machine that opens these files.** Fine within the
-lab. Both were present on the machine the spike was built on.
+- `tests/doc/`: document model, undo, project files (no Qt).
+- `tests/app/`: the desktop app, offscreen.
+- `tests/test_golden.py`: statistics checked against real Prism output. The Prism projects
+  they were extracted from stay local in `sample_data/` (gitignored).
 
 ## Layout
 
-```
-asterism/
-  core/            # UI-free by contract (SPEC §11): pure functions, no Dash imports
-    contract.py    #   canonical long-format data contract + subject logic (§3–4)
-    validation.py  #   loud import-time validation checks (§7)
-    design.py      #   design detection → test selection (§8)
-    stats.py       #   execute the detected design; results string + info block (§8,§10)
-    build.py       #   data-driven figure builders: bar/XY/frequency, stats brackets (§9)
-    figures.py     #   grouped-bar rendering primitives (from the step-0 spike)
-    brackets.py    #   significance brackets: auto stacking + collision avoidance
-    figure_set.py  #   multi-panel figure sets on a journal-column canvas (§10b-pre)
-    importer/      #   import layer (§5–6): pure functions, no UI
-      roles.py     #     synonym-dictionary role guessing (§5.1)
-      inventory.py #     column inventory + header/wide-long detection (§5.1)
-      reshape.py   #     melt, two-row-header parse, tag explode/assign (§5.2–5.3, §6)
-      recipes.py   #     confirmed-mapping recipes, YAML, signature reuse (§5.5)
-      sources.py   #     TRACER + NED-Net source recipes, by header signature (§6)
-    style.py       #   .mplstyle + lab YAML loading, mm→fraction geometry helpers
-    figures.py     #   grouped bar builder (SuperPlot nesting), gids on every artist
-    brackets.py    #   significance brackets: auto stacking + collision avoidance
-    figure_set.py  #   multi-panel figure sets on a journal-column canvas
-    export.py      #   SVG/PDF/PNG — no bbox_inches='tight'
-    clipboard.py   #   macOS pasteboard, PDF-flavour-only
-    qa.py          #   the export-fidelity assertions
-  assets/
-    asterism.mplstyle   # the non-negotiable settings
-    lab_style.yaml      # version-controlled house style (SPEC §9)
-spike.py           # the step-0 runner
-tests/             # the CI half of the QA
-```
+| Path | What |
+|---|---|
+| `asterism/core/` | statistics executors, lab importers, validation, export QA (no Qt) |
+| `asterism/doc/` | document model, graph specs, undo stack, `.asterism` file format (no Qt) |
+| `asterism/analysis/` | analysis registry: analyses → Prism-style result pages (no Qt) |
+| `asterism/app/` | the PySide6 app: window, project sidebar, top bar and tool panel, sheets, dialogs, graph canvas, export, theme |
+
+Graph text uses Arial by default and stays live text in exported PDF/SVG, so the font must
+be installed on the machine that opens the file.

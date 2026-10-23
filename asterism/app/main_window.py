@@ -1,0 +1,912 @@
+"""Main window: project sidebar | top bar + sheet + status strip | tool panel.
+
+ASTERISM's own window structure (SPEC §2.1, §12), NED-Net's arrangement: the two
+sidebars are resizable (widths remembered) and can be hidden. One window per project;
+the window owns the file path and the edited state, and asks before closing unsaved work.
+"""
+
+from __future__ import annotations
+
+import copy
+import os
+
+import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtWidgets import (QComboBox, QFileDialog, QFontComboBox, QLabel, QMainWindow,
+                               QMenu, QMessageBox, QSplitter, QStackedWidget, QVBoxLayout,
+                               QWidget)
+
+from ..analysis import engine
+from ..doc import fileformat
+from ..doc.commands import ParamsCommand, SpecCommand
+from ..doc.model import (Analysis, Table, Graph, InfoSheet, LayoutSheet, Project, Sheet,
+                         column_letter)
+from ..doc.sample import blank_project, sample_project
+from . import documents, theme
+from .dialogs.analyze import AnalyzeDialog, TTestParamsDialog
+from .dialogs.format_graph import APPEARANCES, FormatGraphDialog
+from .graph import export as gexport
+from .graph.layout import GRAPHABLE_TYPES
+from .graph.view import GraphSheet
+from .icons import set_icon
+from .sheets import InfoSheetView, PlaceholderSheet, ResultsSheet
+from .sidebar import ProjectSidebar
+from .table_view import DataTableSheet
+from .toolbar import StatusStrip, ToolPanel, TopBar
+
+APP_NAME = "ASTERISM"
+SIDEBAR_W, TOOLS_W = 250, 232
+
+_windows: list["MainWindow"] = []
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, project: Project | None = None, path: str | None = None):
+        super().__init__()
+        theme.install()
+        self.project = project or blank_project(engine)
+        if self.project.engine is None:
+            self.project.set_engine(engine)
+        self.path: str | None = os.path.abspath(path) if path else None
+        self.setUnifiedTitleAndToolBarOnMac(False)
+        self.resize(1480, 920)
+        self.widgets: dict[int, QWidget] = {}
+        self.current: Sheet | None = None
+        self._enable_on: dict[QAction, set[str] | None] = {}
+        self._table_types: dict[QAction, set[str]] = {}    # actions that need a table type
+
+        self._make_actions()
+        self._make_menus()
+        self._make_layout()
+
+        self.project.structure_changed.connect(self._structure_changed)
+        self.project.edited.connect(self._edited)
+        self._edited()
+        sheets = self._all_sheets()
+        if sheets:
+            self.show_sheet(self.project.tables[0] if self.project.tables else sheets[0])
+
+    # ------------------------------------------------------------------ actions
+
+    def _act(self, text, sf=None, slot=None, shortcut=None, accent=None, tip=None,
+             kinds=None) -> QAction:
+        """kinds: sheet kinds the action applies to (None = always)."""
+        a = QAction(text, self)
+        set_icon(a, sf or "questionmark", accent)
+        if slot:
+            a.triggered.connect(slot)
+        if shortcut:
+            a.setShortcut(QKeySequence(shortcut))
+        a.setToolTip(tip or text.replace("…", ""))
+        a.setIconVisibleInMenu(False)
+        self._enable_on[a] = set(kinds) if kinds else None
+        return a
+
+    def _later(self, text, sf, milestone) -> QAction:
+        """A tool that is not built yet: visible, greyed out, with a tooltip saying when."""
+        a = QAction(text, self)
+        set_icon(a, sf)
+        a.setToolTip(f"{text.replace('…', '')} — arrives in {milestone}")
+        a.setEnabled(False)
+        a.setIconVisibleInMenu(False)
+        return a
+
+    def _make_actions(self) -> None:
+        A, L = self._act, self._later
+        G, T = ("graph",), ("table",)
+        # Project
+        self.a_new = A("New Project", "doc.badge.plus", new_window, QKeySequence.New, "accent")
+        self.a_open = A("Open…", "folder", self.open_file, QKeySequence.Open)
+        self.a_close = A("Close", "xmark", self.close, QKeySequence.Close)
+        self.a_save = A("Save", "square.and.arrow.down", self.save, QKeySequence.Save)
+        self.a_save_as = A("Save As…", "square.and.arrow.down.on.square", self.save_as,
+                           QKeySequence.SaveAs)
+        self.a_revert = A("Revert to Saved", "arrow.counterclockwise", self.revert)
+        self.a_sample = A("Open Sample Project", "doc.text", open_sample)
+        self.a_undo = A("Undo", "arrow.uturn.backward", self.project.undo.undo, QKeySequence.Undo)
+        self.a_redo = A("Redo", "arrow.uturn.forward", self.project.undo.redo, QKeySequence.Redo)
+        self.a_print = L("Print…", "printer", "M11")
+        # Sheet
+        self.a_new_table = A("New Data Table…", "tablecells.badge.ellipsis", lambda: self._command("new_table"), accent="accent")
+        self.a_new_graph = A("New Graph", "chart.line.uptrend.xyaxis", lambda: self._command("new_graph"), accent="accent")
+        self.a_new_layout = A("New Layout", "rectangle.split.2x2", lambda: self._command("new_layout"), accent="accent")
+        self.a_new_info = A("New Notes", "note.text.badge.plus", lambda: self._command("new_info"), accent="accent")
+        self.a_duplicate = L("Duplicate Sheet", "plus.square.on.square", "M2")
+        self.a_delete = A("Delete Sheet", "trash", self._delete_sheet, accent="red")
+        self.a_prev = A("Previous Sheet", "chevron.up", lambda: self._step_sheet(-1), "Ctrl+[")
+        self.a_next = A("Next Sheet", "chevron.down", lambda: self._step_sheet(1), "Ctrl+]")
+        # Edit
+        self.a_cut = A("Cut", "scissors", lambda: self._table_op("cut"), QKeySequence.Cut, kinds=T)
+        self.a_copy = A("Copy", "doc.on.doc", lambda: self._table_op("copy"), QKeySequence.Copy, kinds=T)
+        self.a_paste = A("Paste", "doc.on.clipboard", lambda: self._table_op("paste"), QKeySequence.Paste, kinds=T)
+        self.a_insert_row = A("Insert Rows", "text.insert", lambda: self._table_op("insert_rows"), kinds=T)
+        self.a_delete_row = A("Delete Rows", "text.badge.minus", lambda: self._table_op("delete_rows"), kinds=T)
+        self.a_insert_set = A("Insert Data Set", "rectangle.split.3x1", lambda: self._table_op("insert_sets"), kinds=T)
+        self.a_delete_set = A("Delete Data Set", "rectangle.badge.minus", lambda: self._table_op("delete_sets"), kinds=T)
+        self.a_exclude = A("Exclude or Include Values", "eye.slash", lambda: self._table_op("toggle_exclude"), "Ctrl+Shift+E", kinds=T)
+        self.a_table_format = A("Table Format…", "tablecells.badge.ellipsis", self.table_format, kinds=T)
+        self.a_sort = L("Sort", "arrow.up.arrow.down", "M2")
+        self.a_transpose = L("Transpose", "arrow.left.arrow.right.square", "M7")
+        # Export
+        self.a_export_pdf = A("Export PDF…", "doc.richtext", lambda: self.export("pdf"), "Ctrl+E", kinds=G)
+        self.a_export_svg = A("Export SVG…", "square.and.arrow.up", lambda: self.export("svg"), kinds=G)
+        self.a_export_png = A("Export PNG…", "photo", lambda: self.export("png"), kinds=G)
+        self.a_copy_graph = L("Copy Graph to Clipboard", "doc.on.clipboard.fill", "M8")
+        self.a_export_table = L("Export Table (CSV / Excel)…", "tablecells", "M10")
+        # Analyze
+        self.a_analyze = A("Analyze…", "function", self.analyze, "Ctrl+Shift+A", "accent", "Analyze data")
+        self.a_params = A("Analysis Settings…", "slider.horizontal.3", self.change_params, kinds=("analysis",))
+        self.a_desc = A("Descriptive Statistics", "sum", lambda: self._quick("descriptive"))
+        self.a_anova = A("One-way ANOVA…", "square.split.1x2", lambda: self._quick("anova1"), kinds=T)
+        self.a_normality = A("Normality Tests…", "checkmark.seal", lambda: self._quick("normality"), kinds=T)
+        self.a_freq = A("Frequency Distribution…", "chart.bar.xaxis", lambda: self._quick("frequency"), kinds=T)
+        self.a_outliers = A("Outlier Detection…", "line.3.horizontal.decrease", lambda: self._quick("outliers"), kinds=T)
+        self.a_anova2 = A("Two-way ANOVA…", "square.grid.3x2", lambda: self._quick("anova2"), kinds=T)
+        self.a_multi_t = A("Multiple t Tests…", "list.number", lambda: self._quick("multiple_t"), kinds=T)
+        self.a_nested = A("Nested t Test or ANOVA…", "square.stack.3d.down.right",
+                          lambda: self._quick("nested"), kinds=T)
+        self.a_linreg = A("Linear Regression…", "line.diagonal", lambda: self._quick("linreg"), kinds=T)
+        self.a_nonlin = A("Nonlinear Regression…", "point.topleft.down.to.point.bottomright.curvepath",
+                          lambda: self._quick("nonlin"), kinds=T)
+        self.a_corr = A("Correlation…", "chart.dots.scatter", lambda: self._quick("correlation"), kinds=T)
+        self.a_auc = A("Area Under the Curve…", "waveform.path.ecg", lambda: self._quick("auc"), kinds=T)
+        for a_ in (self.a_linreg, self.a_nonlin, self.a_auc):
+            self._table_types[a_] = {"xy"}
+        self._table_types[self.a_corr] = {"xy", "column"}
+        column_only = {"column", "xy"}
+        for a_ in (self.a_anova, self.a_normality, self.a_freq, self.a_outliers):
+            self._table_types[a_] = column_only
+        self._table_types[self.a_anova2] = {"grouped", "xy"}
+        self._table_types[self.a_multi_t] = {"grouped", "xy"}
+        self._table_types[self.a_nested] = {"nested"}
+        analyze_later = [self.a_nonlin, self.a_linreg, self.a_corr, self.a_auc,
+                         self.a_anova, self.a_anova2, self.a_multi_t, self.a_nested,
+                         self.a_normality, self.a_freq, self.a_outliers,
+                         L("Transform…", "x.squareroot", "M7"), L("Normalize…", "percent", "M7")]
+        # Graph
+        self.a_fmt_graph = A("Format Graph…", "paintbrush", lambda: self.format_graph(), "Ctrl+Shift+F", "accent", kinds=G)
+        self.a_axes = A("Axes…", "ruler", lambda: self.format_graph("y"), kinds=G)
+        self.a_bracket = A("Show Significance", "asterisk", self._toggle_brackets, kinds=G)
+        self.a_graph_type = A("Graph Type…", "square.grid.3x3.square", self.graph_type, kinds=G)
+        graph_later = [self.a_graph_type,
+                       L("Colour Scheme", "paintpalette", "M9"),
+                       L("Copy Formatting to Other Graphs", "wand.and.rays", "M9"),
+                       L("Legend", "list.bullet.rectangle", "M4"),
+                       L("Nudge Data Set", "arrow.up.and.down.and.arrow.left.and.right", "M9")]
+        # Draw (M9)
+        draw = [L("Line", "line.diagonal", "M9"), L("Arrow", "arrow.up.right", "M9"),
+                L("Box", "rectangle", "M9"), L("Ellipse", "circle", "M9"), L("Text", "textbox", "M9"),
+                L("Picture…", "photo", "M9"), L("Bring to Front", "square.3.layers.3d", "M9"),
+                L("Align", "align.horizontal.center", "M9")]
+        # Text
+        self.a_bold = A("Bold", "bold", lambda: self._font(bold=None), QKeySequence.Bold, kinds=G)
+        self.a_italic = A("Italic", "italic", lambda: self._font(italic=None), QKeySequence.Italic, kinds=G)
+        text_later = [L("Underline", "underline", "M9"), L("Superscript", "textformat.superscript", "M9"),
+                      L("Subscript", "textformat.subscript", "M9"),
+                      L("Symbol (Greek, ±, µ…)", "character", "M9"), L("Text Colour", "textformat.alt", "M9"),
+                      L("Align Left", "text.alignleft", "M9"), L("Centre", "text.aligncenter", "M9"),
+                      L("Align Right", "text.alignright", "M9")]
+        # View
+        self.a_toggle_sidebar = A("Show Project Sidebar", "sidebar.left", self._toggle_sidebar, "Ctrl+Meta+S", "muted")
+        self.a_toggle_tools = A("Show Tools", "sidebar.right", self._toggle_tools, "Ctrl+Alt+0", "muted")
+        for a in (self.a_toggle_sidebar, self.a_toggle_tools):
+            a.setCheckable(True)
+            a.setChecked(True)
+        self.a_help = A("ASTERISM Help", "questionmark.circle", self._about)
+
+        self.top_groups = [
+            [self.a_new, self.a_open, self.a_save, self.a_undo, self.a_redo, self.a_print],
+            [self.a_new_table, self.a_new_graph, self.a_new_layout, self.a_new_info,
+             self.a_duplicate, self.a_delete],
+            [self.a_cut, self.a_copy, self.a_paste, self.a_insert_row, self.a_delete_row,
+             self.a_insert_set, self.a_delete_set, self.a_exclude, self.a_sort],
+        ]
+        self.export_actions = [self.a_export_pdf, self.a_export_svg, self.a_export_png,
+                               self.a_copy_graph, self.a_export_table]
+        self.tool_groups = [
+            ("Analyze", self.a_analyze, [self.a_params, self.a_desc, *analyze_later]),
+            ("Graph", self.a_fmt_graph, [self.a_axes, self.a_bracket, *graph_later]),
+            ("Draw", None, draw),
+            ("Text", "text", None),
+        ]
+        self.text_actions = [self.a_bold, self.a_italic, *text_later]
+        self.project.undo.changed.connect(self._undo_changed)
+        self._undo_changed()
+
+    def _make_menus(self) -> None:
+        mb = self.menuBar()
+
+        def menu(title, items):
+            m = mb.addMenu(title)
+            for a in items:
+                if a is None:
+                    m.addSeparator()
+                elif isinstance(a, QMenu):
+                    m.addMenu(a)
+                else:
+                    m.addAction(a)
+            return m
+
+        self.recent_menu = QMenu("Open Recent", self)
+        self.recent_menu.aboutToShow.connect(self._fill_recent)
+        menu("File", [self.a_new, self.a_open, self.recent_menu, self.a_sample, None, self.a_close,
+                      self.a_save, self.a_save_as, self.a_revert, None, *self.export_actions,
+                      None, self.a_print])
+        menu("Edit", [self.a_undo, self.a_redo, None, self.a_cut, self.a_copy, self.a_paste, None,
+                      self.a_insert_row, self.a_delete_row, self.a_insert_set, self.a_delete_set,
+                      None, self.a_exclude, self.a_sort, self.a_transpose])
+        menu("Sheet", [self.a_new_table, self.a_new_graph, self.a_new_layout, self.a_new_info,
+                       None, self.a_table_format, None, self.a_duplicate, self.a_delete, None,
+                       self.a_prev, self.a_next])
+        menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_anova,
+                         self.a_normality, self.a_freq, self.a_outliers, None, self.a_anova2,
+                         self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
+                         self.a_corr, self.a_auc])
+        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket])
+        menu("View", [self.a_toggle_sidebar, self.a_toggle_tools])
+        mb.addMenu("Window")
+        menu("Help", [self.a_help])
+
+    def _fill_recent(self) -> None:
+        self.recent_menu.clear()
+        files = documents.recent_files()
+        for path in files:
+            act = self.recent_menu.addAction(os.path.basename(path))
+            act.setToolTip(path)
+            act.setEnabled(os.path.exists(path))
+            act.triggered.connect(lambda _=False, p=path: open_path(p, self))
+        if files:
+            self.recent_menu.addSeparator()
+        clear = self.recent_menu.addAction("Clear Menu", documents.clear_recent)
+        clear.setEnabled(bool(files))
+
+    # ------------------------------------------------------------------ layout
+
+    def _make_layout(self) -> None:
+        self.font_size = QComboBox()
+        self.font_size.setEditable(True)
+        self.font_size.addItems([str(s) for s in (6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36)])
+        self.font_size.setFixedWidth(74)
+        self.font_size.setCurrentText("12")
+        self.font_size.textActivated.connect(lambda s: self._font(size=float(s)))
+        self.font_family = QFontComboBox()
+        self.font_family.setMinimumWidth(0)
+        self.font_family.setCurrentText("Arial")
+        self.font_family.currentFontChanged.connect(lambda f: self._font(family=f.family()))
+        self.text_widgets = [self.font_family, self.font_size]
+
+        self.sidebar = ProjectSidebar(self.project)
+        self.sidebar.sheetActivated.connect(self.show_sheet)
+        self.sidebar.commandRequested.connect(self._command)
+        self.sidebar.renameRequested.connect(lambda s, name: self.project.rename(s, name))
+        self.sidebar.deleteRequested.connect(self._delete_sheet)
+        self.sidebar.setMinimumWidth(180)
+        self.sidebar.setMaximumWidth(480)
+
+        self.top = TopBar(self.top_groups, self.export_actions, self.a_toggle_tools)
+        self.top.title.renamed.connect(self._rename_current)
+        self.stack = QStackedWidget()
+        self.status = StatusStrip(self.a_toggle_sidebar)
+        self.status.zoom.valueChanged.connect(self._zoom_slider)
+        self.status.zoom_out.clicked.connect(lambda: self.status.zoom.setValue(int(self.status.zoom.value() / 1.25)))
+        self.status.zoom_in.clicked.connect(lambda: self.status.zoom.setValue(int(self.status.zoom.value() * 1.25)))
+        center = QWidget()
+        cv = QVBoxLayout(center)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(0)
+        cv.addWidget(self.top)
+        cv.addWidget(self.stack, 1)
+        cv.addWidget(self.status)
+
+        self.tools = ToolPanel(self.tool_groups, self.text_widgets, self.text_actions)
+        self.tools.setMinimumWidth(200)
+        self.tools.setMaximumWidth(360)
+
+        split = QSplitter(Qt.Horizontal)
+        split.setObjectName("MainSplitter")
+        split.addWidget(self.sidebar)
+        split.addWidget(center)
+        split.addWidget(self.tools)
+        split.setChildrenCollapsible(False)
+        split.setHandleWidth(5)
+        split.setStretchFactor(0, 0)
+        split.setStretchFactor(1, 1)
+        split.setStretchFactor(2, 0)
+        split.setSizes([SIDEBAR_W, 1480 - SIDEBAR_W - TOOLS_W, TOOLS_W])
+        self.split = split
+        self.setCentralWidget(split)
+        self._layout_restored = False      # restored on first show, when sizes are real
+        split.splitterMoved.connect(lambda *_: self._save_layout())
+
+    def showEvent(self, e) -> None:
+        super().showEvent(e)
+        if not self._layout_restored:
+            self._restore_layout()
+            self._layout_restored = True
+
+    def _restore_layout(self) -> None:
+        def width(key, default, lo, hi):
+            try:
+                return max(lo, min(hi, int(documents.value(key, default))))
+            except (TypeError, ValueError):
+                return default
+        left = width("window/sidebar_w", SIDEBAR_W, 180, 480)
+        right = width("window/tools_w", TOOLS_W, 200, 360)
+        total = max(self.width(), left + right + 400)
+        self.split.setSizes([left, total - left - right, right])
+        for key, act, w in (("window/sidebar", self.a_toggle_sidebar, self.sidebar),
+                            ("window/tools", self.a_toggle_tools, self.tools)):
+            shown = documents.value(key, True) not in (False, "false", "0", 0)
+            act.setChecked(shown)
+            w.setVisible(shown)
+
+    def _save_layout(self) -> None:
+        if not self._layout_restored:      # never overwrite the saved layout from an unshown window
+            return
+        left, _, right = self.split.sizes()
+        if self.sidebar.isVisibleTo(self) and left:
+            documents.set_value("window/sidebar_w", left)
+        if self.tools.isVisibleTo(self) and right:
+            documents.set_value("window/tools_w", right)
+        documents.set_value("window/sidebar", self.sidebar.isVisibleTo(self))
+        documents.set_value("window/tools", self.tools.isVisibleTo(self))
+
+    def _toggle_sidebar(self) -> None:
+        self.sidebar.setVisible(self.a_toggle_sidebar.isChecked())
+        self._save_layout()
+
+    def _toggle_tools(self) -> None:
+        self.tools.setVisible(self.a_toggle_tools.isChecked())
+        self._save_layout()
+
+    # ------------------------------------------------------------------ edited state
+
+    def display_name(self) -> str:
+        if self.path:
+            return os.path.splitext(os.path.basename(self.path))[0]
+        return "Untitled"
+
+    def _edited(self) -> None:
+        self.setWindowTitle(f"{self.display_name()}[*]")
+        self.setWindowFilePath(self.path or "")
+        self.setWindowModified(self.project.is_modified())
+        self.a_revert.setEnabled(bool(self.path) and self.project.is_modified())
+        if self.current is not None:
+            self.top.title.set_name(self.current.name)
+            self.top.subtitle.setText(self._describe(self.current))
+
+    def _undo_changed(self) -> None:
+        u = self.project.undo
+        self.a_undo.setEnabled(u.can_undo())
+        self.a_redo.setEnabled(u.can_redo())
+        self.a_undo.setText(f"Undo {u.undo_text()}" if u.can_undo() else "Undo")
+        self.a_redo.setText(f"Redo {u.redo_text()}" if u.can_redo() else "Redo")
+
+    # ------------------------------------------------------------------ files
+
+    def open_file(self) -> None:
+        start = os.path.dirname(self.path) if self.path else documents.last_dir()
+        path, _ = QFileDialog.getOpenFileName(self, "Open Project", start, documents.FILE_FILTER)
+        if path:
+            open_path(path, self)
+
+    def save(self) -> bool:
+        if self.path is None:
+            return self.save_as()
+        return self.save_to(self.path)
+
+    def save_as(self) -> bool:
+        start = self.path or os.path.join(documents.last_dir(),
+                                          self.display_name() + fileformat.EXTENSION)
+        path, _ = QFileDialog.getSaveFileName(self, "Save Project", start, documents.FILE_FILTER)
+        if not path:
+            return False
+        if not path.endswith(fileformat.EXTENSION):
+            path += fileformat.EXTENSION
+        return self.save_to(path)
+
+    def save_to(self, path: str) -> bool:
+        path = os.path.abspath(path)
+        try:
+            fileformat.save(self.project, path)
+        except OSError as e:
+            QMessageBox.critical(self, "Save Failed",
+                                 f"“{os.path.basename(path)}” could not be saved.\n\n{e.strerror or e}")
+            return False
+        self.path = path
+        self.project.mark_saved()
+        documents.add_recent(path)
+        documents.set_last_dir(path)
+        self.flash(f"Saved {os.path.basename(path)}")
+        self._edited()
+        return True
+
+    def revert(self) -> None:
+        if not self.path or not self.project.is_modified():
+            return
+        box = QMessageBox(QMessageBox.Warning, "Revert to Saved",
+                          f"Revert “{self.display_name()}” to the last saved version?",
+                          QMessageBox.Cancel, self)
+        box.setInformativeText("Your current changes will be lost.")
+        revert = box.addButton("Revert", QMessageBox.DestructiveRole)
+        box.exec()
+        if box.clickedButton() is revert:
+            self.project.mark_saved()          # don't ask again while replacing
+            if open_path(self.path, self, replace=True) is None:
+                self.project.touch()           # reopening failed: changes are still unsaved
+
+    def maybe_save(self) -> bool:
+        """True if the window may close (saved, discarded, or nothing to save)."""
+        if not self.project.is_modified():
+            return True
+        box = QMessageBox(QMessageBox.Warning, APP_NAME,
+                          f"Do you want to save the changes you made to “{self.display_name()}”?",
+                          QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, self)
+        box.setInformativeText("Your changes will be lost if you don’t save them.")
+        box.button(QMessageBox.Discard).setText("Don’t Save")
+        box.setDefaultButton(QMessageBox.Save)
+        choice = box.exec()
+        if choice == QMessageBox.Save:
+            return self.save()
+        return choice == QMessageBox.Discard
+
+    def closeEvent(self, e) -> None:
+        if self.maybe_save():
+            self._save_layout()
+            if self in _windows:
+                _windows.remove(self)
+            e.accept()
+        else:
+            e.ignore()
+
+    def flash(self, text: str, ms: int = 3000) -> None:
+        from PySide6.QtCore import QTimer
+        self.status.message.setText(text)
+        QTimer.singleShot(ms, lambda: self.status.message.text() == text and self.status.message.setText(""))
+
+    # ------------------------------------------------------------------ sheets
+
+    def _all_sheets(self) -> list[Sheet]:
+        return self.project.sheets()
+
+    def _widget_for(self, s: Sheet) -> QWidget:
+        w = self.widgets.get(id(s))
+        if w is None:
+            if isinstance(s, Table):
+                w = DataTableSheet(s, self.project)
+                w.setContextMenuPolicy(Qt.CustomContextMenu)
+                w.customContextMenuRequested.connect(lambda pos, w=w: self._table_menu(w, pos))
+                w.cellChanged.connect(lambda *_: self._update_status())
+                w.selectionModel().selectionChanged.connect(lambda *_: self._update_status())
+            elif isinstance(s, Graph):
+                w = GraphSheet(s, self.project)
+                w.formatGraphRequested.connect(lambda section, col: self.format_graph(section, col))
+                w.formatAxesRequested.connect(lambda section: self.format_graph(section))
+                w.selectionChanged.connect(self._sync_text_controls)
+                w.view.zoomChanged.connect(self._zoom_changed)
+            elif isinstance(s, Analysis):
+                w = ResultsSheet(s)
+            elif isinstance(s, InfoSheet):
+                w = InfoSheetView(s)
+            else:
+                w = PlaceholderSheet("Page layouts (several graphs on one page) arrive in a later milestone.")
+            self.widgets[id(s)] = w
+            self.stack.addWidget(w)
+        return w
+
+    def _describe(self, s: Sheet) -> str:
+        if isinstance(s, Table):
+            return s.describe()
+        if isinstance(s, Graph) and s.table.table_type not in GRAPHABLE_TYPES:
+            from ..doc.table import TYPE_NAMES
+            return f"Graph · {TYPE_NAMES[s.table.table_type]} graphs are not available yet"
+        if isinstance(s, Graph):
+            cols = [c for c in s.table.used_columns() if c not in s.spec.hidden]
+            kinds = {s.spec.style(c).appearance for c in cols} or {"scatter"}
+            names = dict((v, k) for k, v in APPEARANCES)
+            kind = names[kinds.pop()].lower() if len(kinds) == 1 else "mixed styles"
+            if s.table.table_type == "xy":
+                sts = [s.spec.style(c) for c in cols]
+                if sts and all(st.appearance == "bar" for st in sts):
+                    kind = "XY bars"
+                elif any(st.xy_show == "spaghetti" for st in sts):
+                    kind = "each replicate connected"
+                elif any(st.connect for st in sts):
+                    kind = "points and lines" if any(st.show_points for st in sts) else "lines"
+                else:
+                    kind = "XY points"
+                if any(a.result is not None and isinstance(getattr(a.result, "fit", None), dict)
+                       and a.result.fit.get("kind") in ("line", "curve") for a in s.analyses()):
+                    kind += " with fitted curve"
+            elif s.table.table_type == "grouped":
+                lay = s.spec.grouped_layout
+                kind = {"interleaved": f"{kind}, side by side", "separated": f"{kind}, separated",
+                        "stacked": "stacked bars", "stacked_pct": "stacked bars to 100%",
+                        "lines": "connected means", "heatmap": "heat map"}.get(lay, kind)
+            elif s.table.table_type == "nested":
+                kind = {"subjects": "subjects side by side", "pooled": "values coloured by subject",
+                        "superplot": "SuperPlot"}.get(s.spec.nested_layout, kind)
+            return f"Graph · {kind} · {len(cols)} data set{'s' if len(cols) != 1 else ''}"
+        if isinstance(s, Analysis):
+            return f"Results · from “{s.table.name}”"
+        if isinstance(s, InfoSheet):
+            return "Notes"
+        return "Layout"
+
+    def show_sheet(self, s: Sheet) -> None:
+        w = self._widget_for(s)
+        self.stack.setCurrentWidget(w)
+        self.current = s
+        self.sidebar.set_current(s)
+        self.top.title.set_name(s.name)
+        self.top.subtitle.setText(self._describe(s))
+        is_graph, is_table = isinstance(s, Graph), isinstance(s, Table)
+        self.status.zoom_w.setVisible(is_graph)
+        if is_graph:
+            self._zoom_changed(w.view.transform().m11())
+        if is_table:
+            w.setFocus()
+        self._sync_actions()
+        self._update_status()
+        self._sync_text_controls()
+
+    def _sync_actions(self) -> None:
+        kind = self.current.kind if self.current else None
+        if isinstance(self.current, Graph) and self.current.table.table_type not in GRAPHABLE_TYPES:
+            kind = "graph-placeholder"          # nothing to format or export yet
+        for a, kinds in self._enable_on.items():
+            if a in (self.a_undo, self.a_redo):
+                continue
+            a.setEnabled(kinds is None or kind in kinds)
+        t = self._family_table() if self.current is not None else None
+        for a, types in self._table_types.items():
+            a.setEnabled(a.isEnabled() and t is not None and t.table_type in types)
+        for wd in self.text_widgets:
+            wd.setEnabled(kind == "graph")
+        self.a_revert.setEnabled(bool(self.path) and self.project.is_modified())
+        self._undo_changed()
+
+    def _update_status(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, DataTableSheet):
+            self.status.left.setText("")
+            return
+        i = w.currentIndex()
+        key = w.key(i.column()) if i.isValid() else None
+        if isinstance(key, int):
+            ds, sub = w.t.split(key)
+            where = column_letter(ds) + (f" · {w.t.sub_label(ds, sub)}" if w.t.width() > 1 else "")
+        else:
+            where = {"row": "Row titles", "x": "X", "xerr": "X error"}.get(key, "")
+        text = f"Row {i.row() + 1}, {where}"
+        vals = [w.t.get(ix.row(), w.key(ix.column())) for ix in w.selectedIndexes()]
+        vals = [v for v in vals if isinstance(v, float)]
+        if len(vals) > 1:
+            text += f"   ·   Selection: n = {len(vals)}, mean = {np.mean(vals):.4g}"
+        self.status.left.setText(text)
+
+    def _structure_changed(self) -> None:
+        live = {id(s) for s in self._all_sheets()}
+        for k in [k for k in self.widgets if k not in live]:
+            w = self.widgets.pop(k)
+            self.stack.removeWidget(w)
+            w.deleteLater()
+        if self.current is not None and id(self.current) not in live:
+            sheets = self._all_sheets()
+            self.current = None
+            if sheets:
+                self.show_sheet(self.project.tables[0] if self.project.tables else sheets[0])
+            else:
+                self.top.title.set_name("")
+                self.top.subtitle.setText("")
+                self._sync_actions()
+
+    def _step_sheet(self, step: int) -> None:
+        sheets = self._all_sheets()
+        if self.current in sheets:
+            self.show_sheet(sheets[(sheets.index(self.current) + step) % len(sheets)])
+
+    def _rename_current(self, name: str) -> None:
+        if self.current is not None and name and name != self.current.name:
+            self.project.rename(self.current, name)
+        elif self.current is not None:
+            self.top.title.set_name(self.current.name)
+
+    def _family_table(self) -> Table | None:
+        s = self.current
+        if isinstance(s, Table):
+            return s
+        return getattr(s, "table", None) or (self.project.tables[0] if self.project.tables else None)
+
+    def _family_graph(self) -> tuple[Graph | None, GraphSheet | None]:
+        s = self.current
+        if not isinstance(s, Graph):
+            t = self._family_table()
+            s = next((g for g in self.project.graphs if g.home is t and g.source is None), None)
+            if s is None:
+                return None, None
+        return s, self._widget_for(s)
+
+    # ------------------------------------------------------------------ commands
+
+    def _command(self, cmd: str) -> None:
+        p = self.project
+        if cmd == "new_table":
+            self.new_table()
+        elif cmd == "new_graph":
+            t = self._family_table()
+            if t:
+                self.show_sheet(p.add_graph(t))
+        elif cmd == "new_info":
+            self.show_sheet(p.add_info())
+        elif cmd == "new_analysis":
+            self.analyze()
+        elif cmd == "new_layout":
+            self.show_sheet(p.add_layout())
+
+    def analyze(self) -> None:
+        t = self._family_table()
+        if t is None:
+            return
+        dlg = AnalyzeDialog(self.project, t, self)
+        if not dlg.exec() or not dlg.result:
+            return
+        key, table, cols = dlg.result
+        params = {}
+        from .dialogs.params import settings_dialog
+        sd = settings_dialog(key, None, table, cols, self)
+        if sd is not None:
+            if not sd.exec():
+                return
+            params = sd.params()
+        a = Analysis(key, table, cols, params)
+        self.project.add_analysis(a)
+        self._result_graph(a)
+        self.show_sheet(a)
+
+    def _quick(self, key: str) -> None:
+        """Run an analysis on every data set of the current table (settings first)."""
+        t = self._family_table()
+        if not t or not t.used_columns():
+            return
+        cols = t.used_columns()
+        if key == "anova1" and len(cols) < 3:
+            QMessageBox.information(self, "One-way ANOVA", "One-way ANOVA needs three or more "
+                                    "data sets with values.")
+            return
+        if key in ("anova2", "nested") and len(cols) < 2:
+            QMessageBox.information(self, "Analyze", "This analysis needs two or more data sets "
+                                    "with values.")
+            return
+        if key == "multiple_t" and len(cols) != 2:
+            self.analyze()          # let the user pick the two data sets
+            return
+        from .dialogs.params import settings_dialog
+        params = {}
+        sd = settings_dialog(key, None, t, cols, self)
+        if sd is not None:
+            if not sd.exec():
+                return
+            params = sd.params()
+        a = Analysis(key, t, cols, params)
+        self.project.add_analysis(a)
+        self._result_graph(a)
+        self.show_sheet(a)
+
+    def _result_graph(self, a: Analysis) -> None:
+        """Analyses whose output is itself graphed (frequency distributions) get a graph."""
+        if a.analysis_type == "frequency" and a.result is not None and not a.result.error:
+            self.project.add_sheets([self.project.new_result_graph(a)], "New Graph")
+
+    def change_params(self) -> None:
+        a = self.current
+        if not isinstance(a, Analysis):
+            return
+        from .dialogs.params import settings_dialog
+        dlg = settings_dialog(a.analysis_type, a.params, a.table, a.columns, self)
+        if dlg is not None and dlg.exec():
+            self.project.undo.push(ParamsCommand(a, dlg.params()))
+
+    def format_graph(self, section: str = "style", column=None) -> None:
+        g, w = self._family_graph()
+        if g:
+            if self.current is not g:
+                self.show_sheet(g)
+            FormatGraphDialog(g, self.project, section, column, w.auto_range, self).exec()
+
+    def graph_type(self) -> None:
+        from .dialogs.graph_type import GraphTypeDialog
+        g, _ = self._family_graph()
+        if g and g.table.table_type in GRAPHABLE_TYPES:
+            if self.current is not g:
+                self.show_sheet(g)
+            GraphTypeDialog(g, self.project, self).exec()
+            self._edited()
+
+    def _toggle_brackets(self) -> None:
+        g, _ = self._family_graph()
+        if g:
+            spec = copy.deepcopy(g.spec)
+            spec.show_brackets = not spec.show_brackets
+            self.project.undo.push(SpecCommand(g, spec, "Significance"))
+
+    def export(self, fmt: str) -> None:
+        g, _ = self._family_graph()
+        if not g:
+            return
+        filt = {"pdf": "PDF (*.pdf)", "svg": "SVG (*.svg)", "png": "PNG image (*.png)"}[fmt]
+        start = os.path.join(os.path.dirname(self.path) if self.path else documents.last_dir(),
+                             f"{g.name}.{fmt}")
+        path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", start, filt)
+        if not path:
+            return
+        {"pdf": gexport.export_pdf, "svg": gexport.export_svg, "png": gexport.export_png}[fmt](g, path)
+        self.flash(f"Exported {os.path.basename(path)}")
+
+    def _delete_sheet(self, s: Sheet | None = None) -> None:
+        s = s if isinstance(s, Sheet) else self.current
+        if s is None:
+            return
+        extra = ""
+        if isinstance(s, Table):
+            n = len(self.project.family(s)) - 1
+            extra = f" This also deletes its {n} linked sheet{'s' if n != 1 else ''}." if n else ""
+        box = QMessageBox(QMessageBox.Warning, "Delete Sheet", f"Delete “{s.name}”?",
+                          QMessageBox.Cancel, self)
+        box.setInformativeText(f"You can undo this.{extra}")
+        delete = box.addButton("Delete", QMessageBox.DestructiveRole)
+        box.exec()
+        if box.clickedButton() is delete:
+            self.project.delete(s)
+
+    def _table_op(self, op: str) -> None:
+        w = self.stack.currentWidget()
+        if isinstance(w, DataTableSheet):
+            if op == "cut":
+                w.copy()
+                w.clear_selection()
+            else:
+                getattr(w, op)()
+
+    def new_table(self) -> None:
+        from .dialogs.new_table import NewTableDialog
+        dlg = NewTableDialog(self)
+        if dlg.exec():
+            tt, fmt, example = dlg.choice()
+            self.show_sheet(self.project.add_table(table_type=tt, example=example, **fmt))
+
+    def show_start_screen(self) -> None:
+        """At launch: choose the first table's type (Cancel keeps an empty Column table)."""
+        from .dialogs.new_table import NewTableDialog
+        dlg = NewTableDialog(self, start=True)
+        if dlg.exec() and self.project.is_pristine():
+            tt, fmt, example = dlg.choice()
+            p = self.project
+            for sheet in list(p.sheets()):
+                p.take(sheet)
+            t = p.new_table(None, tt, **fmt)
+            if example:
+                from ..doc.table import fill_example
+                fill_example(t)
+            p.insert(t)
+            p.insert(p.new_graph(t))
+            p.undo.clear()
+            p.mark_saved()
+            self.show_sheet(t)
+
+    def table_format(self) -> None:
+        from ..doc.commands import TableEditCommand
+        from .dialogs.new_table import TableFormatDialog
+        t = self.current
+        if not isinstance(t, Table):
+            return
+        dlg = TableFormatDialog(t, self)
+        if dlg.exec():
+            vals = dlg.values()
+            self.project.undo.push(TableEditCommand(self.project, t, lambda tb: tb.reformat(**vals),
+                                                    "Change Table Format"))
+            self._edited()
+
+    def _table_menu(self, w: DataTableSheet, pos) -> None:
+        m = QMenu(self)
+        for a in (self.a_cut, self.a_copy, self.a_paste, None, self.a_insert_row, self.a_delete_row,
+                  self.a_insert_set, self.a_delete_set, None, self.a_exclude, None,
+                  self.a_table_format):
+            m.addSeparator() if a is None else m.addAction(a)
+        m.exec(w.viewport().mapToGlobal(pos))
+
+    def _font(self, **changes) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        fs = w.current_font()
+        if "bold" in changes and changes["bold"] is None:
+            changes["bold"] = not fs.bold
+        if "italic" in changes and changes["italic"] is None:
+            changes["italic"] = not fs.italic
+        w.apply_font(**changes)
+
+    def _sync_text_controls(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        fs = w.current_font()
+        for wd in self.text_widgets:
+            wd.blockSignals(True)
+        self.font_size.setCurrentText(f"{fs.size:g}")
+        self.font_family.setCurrentText(fs.family)
+        for wd in self.text_widgets:
+            wd.blockSignals(False)
+
+    def _zoom_slider(self, v: int) -> None:
+        w = self.stack.currentWidget()
+        if isinstance(w, GraphSheet):
+            w.set_zoom(v / 100)
+
+    def _zoom_changed(self, z: float) -> None:
+        self.status.zoom.blockSignals(True)
+        self.status.zoom.setValue(int(round(z * 100)))
+        self.status.zoom.blockSignals(False)
+        self.status.zoom_label.setText(f"{z * 100:.0f}%")
+
+    def _about(self) -> None:
+        from asterism import __version__
+        QMessageBox.about(self, APP_NAME, f"<b>{APP_NAME}</b> {__version__}"
+                          "<p>Scientific graphing and statistics.</p>")
+
+
+# ---------------------------------------------------------------------------
+# Window management (one window per project)
+# ---------------------------------------------------------------------------
+
+def windows() -> list[MainWindow]:
+    return list(_windows)
+
+
+def _show(w: MainWindow, origin: MainWindow | None = None, replace: bool = False) -> MainWindow:
+    reuse = origin is not None and (replace or (origin.path is None and origin.project.is_pristine()))
+    if reuse:
+        w.setGeometry(origin.geometry())
+    else:
+        w.resize(1480, 920)
+    _windows.append(w)
+    w.show()
+    w.raise_()
+    w.activateWindow()
+    if reuse:
+        origin.close()
+    return w
+
+
+def new_window(project: Project | None = None) -> MainWindow:
+    return _show(MainWindow(project))
+
+
+def open_sample() -> MainWindow:
+    return _show(MainWindow(sample_project(engine)))
+
+
+def open_path(path: str, origin: MainWindow | None = None, replace: bool = False) -> MainWindow | None:
+    """Open a project file in its own window (or bring its window forward)."""
+    path = os.path.abspath(path)
+    if not replace:
+        for w in _windows:
+            if w.path and os.path.exists(w.path) and os.path.samefile(w.path, path):
+                w.raise_()
+                w.activateWindow()
+                return w
+    name = os.path.basename(path)
+    try:
+        project = fileformat.load(path, engine)
+    except fileformat.ProjectFileError as e:
+        QMessageBox.warning(origin, "Can’t Open Project", f"“{name}” couldn’t be opened.\n\n{e}")
+        return None
+    except OSError as e:
+        documents.remove_recent(path)
+        QMessageBox.warning(origin, "Can’t Open Project",
+                            f"“{name}” couldn’t be opened.\n\n{e.strerror or e}")
+        return None
+    documents.add_recent(path)
+    documents.set_last_dir(path)
+    return _show(MainWindow(project, path), origin, replace)

@@ -245,14 +245,33 @@ def _two_group(sf: pd.DataFrame, factor: str, *, paired: bool,
     return res
 
 
-def _mann_whitney(x, y) -> StatResult:
-    """Two-sample Mann–Whitney U, matching Prism's exact/approximate choice.
+def exact_rank_sum_p(ranks: np.ndarray, n1: int) -> float:
+    """Exact two-sided P for the rank sum of the first n1 values, from the permutation
+    distribution of the (mid-)ranks: P(|R − E[R]| ≥ |R_obs − E[R]|). Handles ties exactly,
+    which is what Prism does (verified on tied golden cases)."""
+    r2 = np.rint(np.asarray(ranks, float) * 2).astype(np.int64)      # mid-ranks are halves
+    N = len(r2)
+    total_max = int(r2.sum())
+    dp = np.zeros((n1 + 1, total_max + 1))
+    dp[0, 0] = 1.0
+    for x in r2:
+        dp[1:, x:] = dp[1:, x:] + dp[:-1, :-x if x else None]
+    dist = dp[n1]
+    obs = int(r2[:n1].sum())
+    expected = n1 * (N + 1)                 # E[R] in half-rank units: n1·(N+1)/2 · 2
+    sums = np.arange(total_max + 1)
+    far = np.abs(sums - expected) >= abs(obs - expected) - 1e-9
+    return float(dist[far].sum() / dist.sum())
 
-    Prism (and this) compute the EXACT p when there are no ties and n is modest,
-    falling back to the normal approximation otherwise. pingouin's `mwu` always
-    uses the approximation — which disagrees with Prism by ~17× on a clean small
-    sample (found via the qPCR golden dataset). We also report the *minimum* U,
-    the convention Prism prints.
+
+def _mann_whitney(x, y) -> StatResult:
+    """Two-sample Mann–Whitney U, matching Prism.
+
+    Prism computes the EXACT P for modest samples — also when there are ties, from the
+    permutation distribution of the mid-ranks (golden-tested on tied lab data) — and the
+    normal approximation for large samples. pingouin's `mwu` always uses the
+    approximation, which disagreed with Prism ~17× on a small sample (qPCR golden case).
+    We report the *minimum* U, the convention Prism prints.
     """
     from scipy import stats
     xv = np.asarray(x, float)
@@ -261,18 +280,20 @@ def _mann_whitney(x, y) -> StatResult:
     n1, n2 = len(xv), len(yv)
     combined = np.concatenate([xv, yv])
     has_ties = len(np.unique(combined)) < len(combined)
-    use_exact = (not has_ties) and n1 <= 100 and n2 <= 100
-    method = "exact" if use_exact else "asymptotic"
-    u1, p = stats.mannwhitneyu(xv, yv, alternative="two-sided", method=method)
+    use_exact = n1 + n2 <= 100
+    u1, p_asym = stats.mannwhitneyu(xv, yv, alternative="two-sided", method="asymptotic")
+    if use_exact:
+        p = exact_rank_sum_p(stats.rankdata(combined), n1)
+        method = "exact"
+    else:
+        p, method = float(p_asym), "asymptotic"
     u_min = min(u1, n1 * n2 - u1)  # Prism prints the minimum U
     res = StatResult(design="", test="Mann–Whitney U", statistic_name="U",
                      statistic=float(u_min), p=float(p), parametric=False)
     res.settings["mwu_method"] = method
-    res.notes.append(
-        f"Mann–Whitney p by {method} method"
-        + (" (ties present → normal approximation)" if has_ties else "")
-        + "; matches Prism's exact/approximate selection."
-    )
+    res.notes.append(f"Mann–Whitney p by {method} method"
+                     + (" (exact with ties, from the permutation distribution of mid-ranks)"
+                        if has_ties and use_exact else "") + "; matches Prism.")
     return res
 
 

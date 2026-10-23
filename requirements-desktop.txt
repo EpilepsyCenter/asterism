@@ -1,7 +1,0 @@
-# Optional desktop-shell deps (native window). The browser launcher (python app.py)
-# does NOT need these. SPEC §11–12.
--r requirements.txt
-dash==4.1.0
-dash-bootstrap-components==2.0.4
-pywebview
-waitress

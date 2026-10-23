@@ -1,13 +1,13 @@
-"""Automated export QA (SPEC §10b).
+"""Automated export QA (SPEC §10).
 
 Cheap assertions run against an exported SVG to catch the silent regressions that
-break Affinity fidelity when a matplotlib version bump or a style edit flips one
-of the non-negotiable settings. Each check maps to one failure mode:
+break Affinity/Illustrator fidelity when a renderer change flips one of the
+non-negotiable properties. Each check maps to one failure mode:
 
-- <text> present & non-zero  → font wasn't outlined (svg.fonttype stayed 'none')
+- <text> present & non-zero  → text stayed live, not outlined to paths
 - no <image>                 → nothing was rasterized
-- canvas w/h match mm        → no bbox_inches='tight' silently resized the canvas
-- expected gids present      → set_gid names survived into the SVG
+- canvas w/h match mm        → the canvas is the requested physical size
+- expected gids present      → every element arrives as a named group
 
 These are assertions, not heuristics: a fail is a hard stop, because a silently
 rasterized or resized figure has no visible symptom until it prints wrong.
@@ -19,10 +19,10 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 
-from .style import MM_PER_INCH
+MM_PER_INCH = 25.4
 
 _SVG_NS = "{http://www.w3.org/2000/svg}"
-# SVG lengths matplotlib writes are in pt (1 pt = 1/72 in). Convert to mm.
+# SVG lengths are in pt (1 pt = 1/72 in). Convert to mm.
 _PT_PER_INCH = 72.0
 
 
@@ -52,7 +52,7 @@ def _parse_length_to_mm(value: str) -> float:
         return num * MM_PER_INCH
     if unit == "pt":
         return num / _PT_PER_INCH * MM_PER_INCH
-    # px: matplotlib SVG uses 72 px/in nominal
+    # px: our SVG writer uses 72 px/in nominal
     return num / _PT_PER_INCH * MM_PER_INCH
 
 
