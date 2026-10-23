@@ -236,64 +236,59 @@ class AnalyzeDialog(SectionDialog):
 # ---------------------------------------------------------------------------
 
 class DesignSketch(QWidget):
-    """Little data-table illustration: unpaired (two clouds) vs paired (matched rows)."""
+    """ASTERISM's own design illustration, drawn as data rather than as a table:
+    unpaired = two separate groups of different subjects (each its own symbol);
+    paired = the same subjects measured twice, each pair joined by a line."""
 
     def __init__(self):
         super().__init__()
         self.paired = False
-        self.setFixedSize(220, 160)
+        self.setFixedSize(240, 150)
+
+    # (value in group 1, value in group 2) for five subjects; same numbers both ways
+    VALUES = [(0.30, 0.52), (0.42, 0.66), (0.55, 0.71), (0.36, 0.60), (0.48, 0.80)]
 
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        x0, y0, cw, rh, rn = 4.0, 4.0, 80.0, 19.0, 24.0
-        grid, head = theme.mix("field", "text", 0.28), theme.color("sidebar")
-        ink, cell = theme.color("text"), theme.color("field")
+        w, h = self.width(), self.height()
+        ink, muted = theme.color("text"), theme.color("muted")
+        a_col, b_col = theme.color("accent"), theme.color("purple")
+        left, right, top, bottom = 34.0, w - 18.0, 10.0, h - 28.0
+        p.setPen(QPen(muted, 1.2))
+        p.drawLine(QPointF(left, top), QPointF(left, bottom))
+        p.drawLine(QPointF(left, bottom), QPointF(right, bottom))
         f = p.font()
         f.setPointSizeF(10)
         p.setFont(f)
-        p.fillRect(QRectF(x0, y0, rn + 2 * cw, rh * 3), head)
-        for i, (a, b) in enumerate((("Group A", "Group B"), ("Control", "Treated"), ("Y", "Y"))):
-            for j, s in enumerate((a, b)):
-                r = QRectF(x0 + rn + j * cw, y0 + i * rh, cw, rh)
-                p.setPen(grid)
-                p.drawRect(r)
-                p.setPen(ink)
-                p.drawText(r, Qt.AlignCenter, s)
-        for i in range(5):
-            r = QRectF(x0, y0 + (i + 3) * rh, rn, rh)
-            p.fillRect(r, head)
-            p.setPen(grid)
-            p.drawRect(r)
+        xa, xb = left + (right - left) * 0.3, left + (right - left) * 0.72
+        labels = ("Before", "After") if self.paired else ("Group 1", "Group 2")
+        for x, s_ in zip((xa, xb), labels):
             p.setPen(ink)
-            p.drawText(r, Qt.AlignCenter, str(i + 1))
-            for j in range(2):
-                p.setPen(grid)
-                p.setBrush(cell)
-                p.drawRect(QRectF(x0 + rn + j * cw, y0 + (i + 3) * rh, cw, rh))
-        green, purple = theme.color("accent"), theme.color("purple")
-        ytop = y0 + 3 * rh
-        if not self.paired:
-            p.setPen(QPen(green, 2.5))
-            p.setBrush(QColor(green.red(), green.green(), green.blue(), 50))
-            for j in range(2):
-                p.drawEllipse(QRectF(x0 + rn + j * cw + 10, ytop + 4, cw - 20, rh * 5 - 8))
-            p.setPen(QPen(purple, 2))
-            y = ytop + rh * 2.5
-            xa, xb = x0 + rn + cw / 2, x0 + rn + cw * 1.5
-            p.drawLine(QPointF(xa, y), QPointF(xb, y))
-            for xt, s in ((xa, 1), (xb, -1)):
-                p.setBrush(purple)
-                p.drawPolygon(QPolygonF([QPointF(xt, y), QPointF(xt + 7 * s, y - 4), QPointF(xt + 7 * s, y + 4)]))
+            p.drawText(QRectF(x - 40, bottom + 4, 80, 18), Qt.AlignCenter, s_)
+
+        def yv(v):
+            return bottom - v * (bottom - top)
+        if self.paired:
+            for i, (v1, v2) in enumerate(self.VALUES):
+                p.setPen(QPen(muted, 1.4))
+                p.drawLine(QPointF(xa, yv(v1)), QPointF(xb, yv(v2)))
+            for v1, v2 in self.VALUES:
+                for x, v in ((xa, v1), (xb, v2)):
+                    p.setPen(QPen(a_col.darker(115), 1.2))
+                    p.setBrush(a_col)
+                    p.drawEllipse(QPointF(x, yv(v)), 4.2, 4.2)
         else:
-            p.setPen(QPen(purple, 2))
-            for i in range(5):
-                y = ytop + rh * (i + 0.5)
-                xa, xb = x0 + rn + cw / 2, x0 + rn + cw * 1.5
-                p.setBrush(green)
-                p.drawLine(QPointF(xa, y), QPointF(xb, y))
-                p.drawEllipse(QPointF(xa, y), 3, 3)
-                p.drawEllipse(QPointF(xb, y), 3, 3)
+            offs = [-9, 6, -3, 10, 2]
+            for (v1, _), dx in zip(self.VALUES, offs):
+                p.setPen(QPen(a_col.darker(115), 1.2))
+                p.setBrush(a_col)
+                p.drawEllipse(QPointF(xa + dx, yv(v1)), 4.2, 4.2)
+            for (_, v2), dx in zip(self.VALUES, offs):
+                p.setPen(QPen(b_col.darker(115), 1.2))
+                p.setBrush(b_col)
+                s_ = 4.0
+                p.drawRect(QRectF(xb + dx - s_, yv(v2) - s_, 2 * s_, 2 * s_))
 
 
 TEST_CHOICES = {

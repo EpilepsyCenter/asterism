@@ -47,14 +47,19 @@ def main(argv: list[str] | None = None) -> int:
         from .shots import take_shots
         return take_shots(app, argv[argv.index("--shots") + 1])
 
-    from PySide6.QtCore import QTimer
-    from .main_window import new_window, open_path, windows
-    first = new_window()
+    from .dialogs.start import show_at_startup
+    from .main_window import new_window, open_path, run_start, windows
     files = [a for a in argv[1:] if not a.startswith("-")]
-    for path in files:
-        open_path(path, first)
-    if not windows():          # every file failed and the blank window was replaced
+    if files:
+        first = new_window()
+        for path in files:
+            open_path(path, first)
+        if not windows():          # every file failed and the blank window was replaced
+            new_window()
+    elif show_at_startup():
+        run_start(None)            # the Start window: new, empty, open, recent, sample
+    else:
+        new_window()               # an empty project (one Column table)
+    if not windows():
         new_window()
-    if not files:              # start screen: pick the first table's type
-        QTimer.singleShot(0, lambda: first in windows() and first.show_start_screen())
     return app.exec()

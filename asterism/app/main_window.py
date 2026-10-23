@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
                            QKeySequence.SaveAs)
         self.a_revert = A("Revert to Saved", "arrow.counterclockwise", self.revert)
         self.a_sample = A("Open Sample Project", "doc.text", open_sample)
+        self.a_start = A("Start Window…", "rectangle.grid.1x2", lambda: run_start(self))
         self.a_undo = A("Undo", "arrow.uturn.backward", self.project.undo.undo, QKeySequence.Undo)
         self.a_redo = A("Redo", "arrow.uturn.forward", self.project.undo.redo, QKeySequence.Redo)
         self.a_print = L("Print…", "printer", "M11")
@@ -230,7 +231,7 @@ class MainWindow(QMainWindow):
 
         self.recent_menu = QMenu("Open Recent", self)
         self.recent_menu.aboutToShow.connect(self._fill_recent)
-        menu("File", [self.a_new, self.a_open, self.recent_menu, self.a_sample, None, self.a_close,
+        menu("File", [self.a_new, self.a_open, self.recent_menu, self.a_sample, self.a_start, None, self.a_close,
                       self.a_save, self.a_save_as, self.a_revert, None, *self.export_actions,
                       None, self.a_print])
         menu("Edit", [self.a_undo, self.a_redo, None, self.a_cut, self.a_copy, self.a_paste, None,
@@ -324,6 +325,30 @@ class MainWindow(QMainWindow):
         if not self._layout_restored:
             self._restore_layout()
             self._layout_restored = True
+
+    # Window size and position are remembered (saved shortly after each move or resize).
+    def moveEvent(self, e) -> None:
+        super().moveEvent(e)
+        self._geometry_changed()
+
+    def resizeEvent(self, e) -> None:
+        super().resizeEvent(e)
+        self._geometry_changed()
+
+    def _geometry_changed(self) -> None:
+        if not getattr(self, "_layout_restored", False):
+            return
+        if not hasattr(self, "_geom_timer"):
+            from PySide6.QtCore import QTimer
+            self._geom_timer = QTimer(self)
+            self._geom_timer.setSingleShot(True)
+            self._geom_timer.setInterval(400)
+            self._geom_timer.timeout.connect(self._save_geometry)
+        self._geom_timer.start()
+
+    def _save_geometry(self) -> None:
+        if self.isVisible() and not (self.isMinimized() or self.isFullScreen()):
+            documents.set_value("window/geometry", self.saveGeometry())
 
     def _restore_layout(self) -> None:
         def width(key, default, lo, hi):
@@ -454,6 +479,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, e) -> None:
         if self.maybe_save():
             self._save_layout()
+            self._save_geometry()
             if self in _windows:
                 _windows.remove(self)
             e.accept()
@@ -864,12 +890,43 @@ def windows() -> list[MainWindow]:
     return list(_windows)
 
 
+def _place(w: MainWindow) -> None:
+    """Where a new window goes: offset from the frontmost window, else where the last
+    window was (saved size and position), else a default size centred on the screen."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QGuiApplication
+    others = [x for x in _windows if x.isVisible()]
+    if others:
+        g = others[-1].geometry().translated(28, 28)
+        scr = QGuiApplication.screenAt(g.center()) or QGuiApplication.primaryScreen()
+        if scr is not None and not scr.availableGeometry().contains(g):
+            a = scr.availableGeometry()            # ran off the screen: start again top-left
+            g.moveTopLeft(a.topLeft() + QPoint(20, 20))
+            if not a.contains(g):
+                g.moveTopLeft(a.topLeft())
+            if not a.contains(g):
+                g = g.intersected(a)               # bigger than the screen: shrink to fit
+        w.setGeometry(g)
+        return
+    saved = documents.value("window/geometry")
+    if saved is not None and w.restoreGeometry(saved):
+        g = w.geometry()
+        if any(s.availableGeometry().intersects(g) for s in QGuiApplication.screens()):
+            return
+    w.resize(1480, 920)
+    scr = QGuiApplication.primaryScreen()
+    if scr is not None:
+        a = scr.availableGeometry()
+        w.resize(min(1480, a.width() - 40), min(920, a.height() - 40))
+        w.move(a.center() - w.rect().center())
+
+
 def _show(w: MainWindow, origin: MainWindow | None = None, replace: bool = False) -> MainWindow:
     reuse = origin is not None and (replace or (origin.path is None and origin.project.is_pristine()))
     if reuse:
         w.setGeometry(origin.geometry())
     else:
-        w.resize(1480, 920)
+        _place(w)
     _windows.append(w)
     w.show()
     w.raise_()
@@ -883,8 +940,31 @@ def new_window(project: Project | None = None) -> MainWindow:
     return _show(MainWindow(project))
 
 
-def open_sample() -> MainWindow:
-    return _show(MainWindow(sample_project(engine)))
+def open_sample(origin: MainWindow | None = None) -> MainWindow:
+    return _show(MainWindow(sample_project(engine)), origin if isinstance(origin, MainWindow) else None)
+
+
+def run_start(origin: MainWindow | None = None) -> MainWindow | None:
+    """The Start window: new project (choose the first table), empty project, open a file
+    or the sample. Closing it starts an empty project. A file that fails to open brings the
+    Start window back."""
+    from .dialogs.start import StartDialog
+    while True:
+        dlg = StartDialog(origin)
+        dlg.exec()
+        kind, *rest = dlg.result_choice()
+        if kind == "open":
+            w = open_path(rest[0], origin)
+            if w is None:
+                continue
+            return w
+        if kind == "sample":
+            return open_sample(origin)
+        reuse = origin is not None and origin.path is None and origin.project.is_pristine()
+        w = origin if reuse else new_window()
+        if kind == "new":
+            w.show_start_screen()
+        return w
 
 
 def open_path(path: str, origin: MainWindow | None = None, replace: bool = False) -> MainWindow | None:

@@ -164,7 +164,7 @@ Prism's eight table types, each with its sub-column formats:
 Common features: column titles above group names (Group A, B, …), row titles, excluded
 values (shown in blue italics, ignored by analyses and graphs), paste from Excel (TSV),
 Enter moves down, every edit undoable, columns and rows insert/delete, unlimited growth.
-The **New Table** dialog (also shown on the start screen) picks the table type, sub-column
+The **New Table** dialog (also opened by "New project…" in the Start window) picks the table type, sub-column
 format and a starter graph, in ASTERISM's own layout: table types in the dialog's section
 sidebar, a live preview of the empty table and its graph beside them.
 
@@ -259,6 +259,18 @@ Status: ✅ done · ◐ partly done · blank = to do.
 7. ✅ Floating bars: min to max
 8. ✅ Aligned dot plot (frequency dot plot: M5 with frequency-distribution graphs)
 9. ✅ Significance brackets from multiple comparisons, stars or exact P, stacked
+   - Formatting (requested 2026-10-23; scheduled with M9). Format Graph › Significance:
+     - **Shape:** bracket with end ticks or a plain line; tick length; line thickness and colour.
+     - **Label:** stars or exact P ("P = 0.012", "P < 0.0001", or just the number); font and
+       size of the stars separately from P text; gap between line and label.
+     - **Which comparisons:** every comparison from the linked analysis listed with a show/hide
+       tick; quick choices: significant only, all, only against a control, none; per-bracket
+       hide from its context menu.
+     - **When to draw stars:** star thresholds (Prism's default 0.0332 / 0.0021 / 0.0002 /
+       < 0.0001, or the classic 0.05 / 0.01 / 0.001 / 0.0001), how many stars at most,
+       "ns" shown or hidden, the significance level that counts.
+     - **Placement:** stacking order (shortest first or table order), spacing between levels,
+       distance above the data; brackets stay draggable.
 
 **Grouped (M4)**
 10. ✅ Interleaved bars, separated bars, with optional points
@@ -374,6 +386,12 @@ bitmap flavour a receiving app might silently prefer). On Windows, users export 
   boxed fields, filled-accent default button, segmented tabs, accent-filled sidebar
   selection, NED-Net's cool dark mode. Follows the system light/dark setting live.
   If NED-Net's tokens change, mirror them in `theme.py`. Never hardcode colours elsewhere.
+- **Start window** (at launch without a file; File › Start Window…; can be switched off):
+  a side panel with the wordmark and New project… (then the New Table dialog), Empty
+  project (one Column table), Open…, Sample project; recent projects on the right (name,
+  folder, when edited; missing files greyed). Closing it starts an empty project.
+- **Windows remember their size and position** (saved shortly after each move or resize,
+  and on close); a new window opens offset from the frontmost one, and always on screen.
 - **Window structure (NED-Net's):**
   - *Project sidebar*, full window height: the ASTERISM wordmark at the top (where NED-Net
     shows its name), a search field, then the Data / Notes / Layouts sections (§5) as
@@ -595,7 +613,8 @@ Graph Type dialog.
 
 **M8 — Layouts** and layout export.
 
-**M9 — Graph polish:** colour schemes, Copy formatting, drawing tools, right Y axis, axis breaks.
+**M9 — Graph polish:** colour schemes, Copy formatting, drawing tools, right Y axis, axis breaks,
+significance bracket formatting (§8a item 9).
 
 **M10 — Import:** CSV/Excel, `.pzfx`, `.prism`, lab importers into typed tables.
 
