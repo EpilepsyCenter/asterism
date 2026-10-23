@@ -54,9 +54,15 @@ class ProjectSidebar(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        mark = QLabel("ASTERISM")
+        from .logo import Logo
+        mark = QWidget()
         mark.setObjectName("Wordmark")
         mark.setFixedHeight(52)
+        ml = QHBoxLayout(mark)
+        ml.setContentsMargins(18, 6, 8, 4)
+        self.logo = Logo(24, dipper=False)       # the wordmark alone: the Dipper is too small here
+        ml.addWidget(self.logo, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        ml.addStretch(1)
         v.addWidget(mark)
         body = QVBoxLayout()
         body.setContentsMargins(10, 0, 8, 8)

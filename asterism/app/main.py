@@ -42,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     app.setOrganizationName("ASTERISM")
     from . import theme
     theme.install(app)
+    from PySide6.QtGui import QIcon
+    from .logo import ASSETS
+    app.setWindowIcon(QIcon(os.path.join(ASSETS, "icon.svg")))     # Dock and window icon
 
     if "--shots" in argv:
         from .shots import take_shots

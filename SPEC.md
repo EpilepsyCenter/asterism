@@ -386,15 +386,21 @@ bitmap flavour a receiving app might silently prefer). On Windows, users export 
   boxed fields, filled-accent default button, segmented tabs, accent-filled sidebar
   selection, NED-Net's cool dark mode. Follows the system light/dark setting live.
   If NED-Net's tokens change, mirror them in `theme.py`. Never hardcode colours elsewhere.
+- **Logo** ("Dipper pours into the i"): `asterism/app/assets/{logo,wordmark}-{light,dark}.svg`,
+  built by `tools/make_logo.py` from the design reference (IBM Plex Sans 500 letters stored as
+  outlines, so the app needs no font). Full logo with the Big Dipper on the Start window; the
+  wordmark alone where it would be small. Light ink `#15171b` / accent `#007d93`; dark ink
+  `#f3f2ee` / accent `#acdae6`. App icon (`icon.svg`, `asterism.icns` for a macOS bundle):
+  the Dipper pouring into the star on a dark rounded square, set as the Dock/window icon.
 - **Start window** (at launch without a file; File › Start Window…; can be switched off):
-  a side panel with the wordmark and New project… (then the New Table dialog), Empty
+  a side panel with the logo and New project… (then the New Table dialog), Empty
   project (one Column table), Open…, Sample project; recent projects on the right (name,
   folder, when edited; missing files greyed). Closing it starts an empty project.
 - **Windows remember their size and position** (saved shortly after each move or resize,
   and on close); a new window opens offset from the frontmost one, and always on screen.
 - **Window structure (NED-Net's):**
-  - *Project sidebar*, full window height: the ASTERISM wordmark at the top (where NED-Net
-    shows its name), a search field, then the Data / Notes / Layouts sections (§5) as
+  - *Project sidebar*, full window height: the asterism wordmark at the top (where NED-Net
+    shows its name; the logo's small form, the star dotting the i, without the Dipper), a search field, then the Data / Notes / Layouts sections (§5) as
     rounded rows; each section header has a "+" button to add a sheet. Analyses and
     graphs sit indented under their table.
   - *Top bar* above the sheet only (not across the sidebar): the sheet's name (click to

@@ -132,3 +132,27 @@ def test_moving_the_window_saves_its_place(app, cleanup):
     w.move(w.x() + 15, w.y() + 10)
     w._geom_timer.timeout.emit()            # the debounce timer firing
     assert documents.value("window/geometry") is not None
+
+
+def test_logo_assets_and_widgets(app):
+    import os
+    from PySide6.QtSvg import QSvgRenderer
+    from asterism.app.logo import Logo, svg_path
+    for dipper in (True, False):
+        for dark in (True, False):
+            path = svg_path(dipper, dark)
+            assert os.path.exists(path) and QSvgRenderer(path).isValid()
+            assert "<text" not in open(path).read()            # letters are outlines: no font needed
+    big, small = Logo(88, dipper=True), Logo(24, dipper=False)
+    assert big.height() == 88 and big.width() > 88
+    assert small.height() == 24 and small.width() > 3 * 24
+    assert not small.grab().isNull()
+
+
+def test_app_icon(app):
+    import os
+    from PySide6.QtGui import QIcon
+    from asterism.app.logo import ASSETS
+    ico = QIcon(os.path.join(ASSETS, "icon.svg"))
+    assert not ico.isNull() and not ico.pixmap(64, 64).isNull()
+    assert os.path.exists(os.path.join(ASSETS, "asterism.icns"))

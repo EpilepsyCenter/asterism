@@ -102,9 +102,10 @@ class StartDialog(QDialog):
         sl = QVBoxLayout(side)
         sl.setContentsMargins(22, 26, 22, 18)
         sl.setSpacing(6)
-        mark = QLabel("ASTERISM")
-        mark.setObjectName("StartWordmark")
-        sl.addWidget(mark)
+        from ..logo import Logo
+        self.logo = Logo(88, dipper=True)
+        sl.addWidget(self.logo, 0, Qt.AlignLeft)
+        sl.addSpacing(6)
         from asterism import __version__
         tag = QLabel(f"Graphs and statistics · {__version__}")
         tag.setObjectName("StartTagline")
