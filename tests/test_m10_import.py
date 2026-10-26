@@ -361,13 +361,14 @@ def test_prism_graph_binary_structure():
                                            + rec(0x0071, b"\x34\0\0\0" + (b"\1" if vertical else b"\0") + b"\0\0\0")
                                            + rec(0x802b, b"\0" * 4) + rec(0x002c, s.encode()) + end(0x802b) + end(0x8020))
 
-    def dataset(lo, hi, bars, shape, fill):
+    def dataset(lo, hi, bars, shape, fill, dash=0):
         st = bytearray(317)
         st[15] = 0x10 if bars else 0
         st[28], st[34], st[81] = 3, shape, 3
         st[208:212] = b"\xff" + bytes.fromhex(fill)
         st[224:228] = b"\xff\0\0\0"
         rng = struct.pack("<6d", 0, 0, 0, 0, lo, hi)[:16] + b"\0" * 10 + struct.pack("<4d", 0, 0, lo, hi)
+        rng += b"\0" * 8 + bytes([dash]) + b"\0" * 20                     # byte 66: line pattern
         return (rec(0x8020, b"\0" * 30) + rec(0x8028, rng) + rec(0x009c, bytes(st)) + end(0x8028) + end(0x8020))
     body = (rec(0x8012, b"3\0") + rec(0x8012, b"x\0")                    # a plain record with the 0x8000 bit
             + rec(0x0017, axis(1, 3)) + rec(0x0017, axis(-2, 3)) + rec(0x0017, axis(0, 100))
@@ -375,7 +376,7 @@ def test_prism_graph_binary_structure():
             + b"".join(rec(0x8025, seg(iv)) + end(0x8025) for iv in (1, 1, 1, 50, 1, 1, 1, 1, 1))
             + text(2, (100, 50, 300, 80), "My graph", False, b"\x33\x03") + text(2, (100, 900, 300, 940), "Day", False)
             + text(2, (10, 300, 40, 700), "Cells", True) + text(2, (10, 300, 40, 700), "Y1Title", True)
-            + dataset(5.0, 9.0, bars=True, shape=10, fill="999999") + dataset(1.0, 2.0, bars=False, shape=4, fill="ffffff")
+            + dataset(5.0, 9.0, bars=True, shape=10, fill="999999") + dataset(1.0, 2.0, bars=False, shape=4, fill="ffffff", dash=1)
             + end(0x8012))
     buf = b"PCFFGRA4" + rec(0x8001, b"\0" * 12) + body + end(0x8001)
     nodes, stop = parse(buf)
@@ -388,7 +389,7 @@ def test_prism_graph_binary_structure():
     assert gf.axes["y"].length_mm == pytest.approx(50.8)   # 1200/600 inch
     a, b = gf.sets
     assert (a.ymin, a.ymax, a.bars, a.shape, a.fill, a.error) == (5.0, 9.0, True, 10, "#999999", 3)
-    assert (b.ymin, b.ymax, b.bars, b.shape) == (1.0, 2.0, False, 4)
+    assert (b.ymin, b.ymax, b.bars, b.shape, b.dash, a.dash) == (1.0, 2.0, False, 4, 1, 0)
 
 
 def test_prism_graph_styles_onto_spec():
@@ -413,3 +414,17 @@ def test_prism_graph_styles_onto_spec():
     assert s1.line_at == "mean_sd"
     assert not g.spec.show_title and g.spec.show_legend
     assert g.spec.y_len_mm == 45.0 and g.spec.col_width_mm == 15.0
+
+
+def test_real_prism_dashed_line():
+    """A solid/dashed pair saved in Prism: data set B dashed, empty X plotted by row number."""
+    from asterism.io.prism import into_project, read
+    from asterism.analysis import engine
+    from asterism.doc.model import Project
+    from asterism.app.graph.xy_layout import row_x
+    path = _need("dash_dashed.prism")
+    p = Project(engine)
+    into_project(read(str(path)), p)
+    g = p.graphs[0]
+    assert [g.spec.style(c).line_dash for c in (0, 1)] == ["solid", "dash"]
+    assert row_x(g.table) == [1.0, 2.0, 3.0, 4.0, 5.0]

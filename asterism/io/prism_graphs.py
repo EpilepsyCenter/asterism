@@ -22,8 +22,10 @@ The format is undocumented; this reading of it comes from comparing the lab's ow
   error type (2 SD, 3 SEM); byte 34 = symbol shape (0 none, 4 diamond, 5 circle, 10 open circle);
   byte 81 = symbol size; colours as flag + R G B at 204 (connecting line), 208 (bar fill), 212
   (bar border), 224 (symbol border), 228 (symbol fill).
+* Line pattern: byte 66 of the 0x8028 data-set record, 0 solid, 1 dashed (from a solid/dashed
+  pair saved for the purpose; other patterns unseen, read as dashed).
 * Text visibility: bit 0x02 of the role byte = hidden. Legend entries are kind 12 texts.
-* Not decoded yet: line dash patterns, fonts, axis gaps, free-text annotations' placement.
+* Not decoded yet: fonts, axis gaps, free-text annotations' placement.
 
 Anything not understood is left alone (the graph keeps ASTERISM's defaults).
 """
@@ -113,6 +115,7 @@ class SetStyle:
     border: str = "#000000"
     symbol_border: str = "#000000"
     symbol_fill: str = "#000000"
+    dash: int = 0
 
 
 @dataclass
@@ -189,7 +192,8 @@ def decode(buf: bytes) -> GraphFormat:
                       ymax=_d(dsn.payload, 50), connect=st[8] == 1, spaghetti=bool(st[12] & 0x40),
                       stacked=bool(st[13] & 0x02), error_bars=bool(st[14] & 0x01), bars=bool(st[15] & 0x10),
                       error=st[28], shape=st[34], size=st[81] if len(st) > 81 else 3, line=rgb(204), fill=rgb(208),
-                      border=rgb(212), symbol_border=rgb(224), symbol_fill=rgb(228))
+                      border=rgb(212), symbol_border=rgb(224), symbol_fill=rgb(228),
+                      dash=dsn.payload[66] if len(dsn.payload) > 66 else 0)
         gf.sets.append(ss)
     gf.legend = any(t[1] == 12 for t in gf.texts)
     titles = [t for t in gf.texts if t[1] == 2 and t[4][:1] in (b"\x30", b"\x31", b"\x32", b"\x33")
@@ -256,6 +260,7 @@ def apply_styles(gf: GraphFormat, spec, table) -> None:
         st.symbol_color = s.symbol_border if shape in OPEN else s.symbol_fill
         if s.error in (2, 3):
             st.line_at = "mean_sd" if s.error == 2 else "mean_sem"
+        st.line_dash = "dash" if s.dash else "solid"
         if tt == "xy":
             st.connect = s.connect
             st.xy_show = "spaghetti" if s.spaghetti else st.xy_show

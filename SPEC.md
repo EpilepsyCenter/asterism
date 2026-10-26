@@ -812,10 +812,11 @@ curves the template volume is greyed out unless quantities are reported per µL 
   exponents), major tick intervals, log scale, axis lengths (graph size), which data sets each
   graph plots, and per data set (matched to its column by data range): bars or points, bar
   fill and border colours, symbol shape, size and colour (solid/open), SD or SEM, connecting
-  lines, spaghetti, stacked bars, before-after lines (column and grouped), legend on/off.
+  lines (solid or dashed), spaghetti, stacked bars, before-after lines (column and grouped),
+  legend on/off. XY tables with an empty X column plot against row number, as in Prism.
   Checked against the lab's PNG exports of Seizure_data and Ephys_summary. Each Prism graph
   becomes an ASTERISM graph of its table (tables without one get a default graph). Not yet:
-  line dash patterns, fonts, axis gaps, extra lines (e.g. a dotted line at 0), free text placement.
+  fonts, axis gaps, extra lines (e.g. a dotted line at 0), free text placement.
 
 **M11 — Product:** autosave and recovery, preferences, help, Windows icon set, packaging,
 signing, file associations, sample projects.

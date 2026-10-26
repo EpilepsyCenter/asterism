@@ -76,11 +76,20 @@ def x_range(spec, xs: list[float], date: bool = False) -> AxisRange:
     return nice_range(lo, hi)
 
 
+def row_x(t):
+    """X for each row; an entirely empty X column plots against row number (as Prism does)."""
+    xs = [t.x_value(r) for r in range(t.nrows_used())]
+    if all(v is None for v in xs) and not any(t.get(r, "x") not in (None, "") for r in range(t.nrows_used())):
+        return [float(r + 1) for r in range(len(xs))]
+    return xs
+
+
 def series(t, c: int, st) -> list[dict]:
     """Per row: x, center, lo, hi (error), reps [(sub-column, value)], xerr."""
     out = []
+    xs = row_x(t)
     for r in range(t.nrows_used()):
-        x = t.x_value(r)
+        x = xs[r]
         if x is None:
             continue
         xe = t.get(r, "xerr") if t.x_format == "numbers_err" else None
@@ -233,8 +242,7 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
         runs = [pts_mean]
         if st.gaps and len(rows) > 1:          # break the line where a value is missing
             present = {r_["row"] for r_ in rows}
-            missing = sorted(xv for r in range(t.nrows_used()) if r not in present
-                             and (xv := t.x_value(r)) is not None)
+            missing = sorted(xv for r, xv in enumerate(row_x(t)) if r not in present and xv is not None)
             runs, cur = [], [pts_mean[0]]
             for (a_, pa), (b_, pb) in zip(zip(rows, pts_mean), zip(rows[1:], pts_mean[1:])):
                 if any(a_["x"] < m < b_["x"] for m in missing):

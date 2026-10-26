@@ -193,7 +193,7 @@ def read_prism(path: Path) -> PrismImport:
         if out.graphs:
             out.notes.append(f"{len(out.graphs)} graph{'s' if len(out.graphs) != 1 else ''}: titles, axis titles, axis "
                              "ranges, tick intervals, log scales, the data sets shown, bars or points, colours, "
-                             "symbols, error bars and legends come across; line dash patterns and fonts don't yet.")
+                             "symbols, error bars, dashed lines and legends come across; fonts don't yet.")
         if unmatched:
             out.notes.append(f"{unmatched} graph{'s' if unmatched != 1 else ''} of analysis results: ASTERISM's own "
                              "graphs of those results are used.")

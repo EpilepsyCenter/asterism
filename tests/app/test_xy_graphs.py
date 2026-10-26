@@ -152,3 +152,11 @@ def test_excluded_x_is_struck_through(app):
     p, t, g = _dose(app)
     t.set_excluded([(0, "x")], True)
     assert t.is_excluded(0, "x") and t.x_value(0) is None
+
+
+def test_ticks_stop_at_axis_end(app):
+    """An axis ending between ticks (0 to 5.5 every 1) gets no tick past its end."""
+    from asterism.app.graph.layout import AxisRange, YMap
+    from asterism.doc.spec import AxisSpec
+    ym = YMap(AxisSpec(auto=False, vmin=0, vmax=5.5, interval=1), AxisRange(0, 5.5, 1), 100.0)
+    assert ym.majors() == [0, 1, 2, 3, 4, 5]

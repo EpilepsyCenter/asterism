@@ -123,7 +123,7 @@ class YMap:
         if self.log:
             k0, k1 = round(math.log10(self.r.vmin)), round(math.log10(self.r.vmax))
             return [10.0 ** k for k in range(k0, k1 + 1)]
-        n = int(round((self.r.vmax - self.r.vmin) / self.r.interval))
+        n = int(math.floor((self.r.vmax - self.r.vmin) / self.r.interval + 1e-9))   # never past the end
         return [self.r.vmin + i * self.r.interval for i in range(n + 1)]
 
     def minors(self) -> list[float]:
@@ -1243,7 +1243,7 @@ def _legend(spec, table, plan: Plan, x0: float, y0: float) -> Element:
     dx, dy = spec.offsets.get("legend", (0.0, 0.0))
     x0, y0 = x0 + dx, y0 + dy
     row_h = max(TM.ascent(fs) + TM.descent(fs), 9.0) + 4.0
-    sw = 12.0
+    sw = 18.0 if plan.swatch == "line" else 12.0        # long enough to show a dash pattern
     entries = []
     shown = [c for c in plan.legend if spec.style(c).legend]
     for i, c in enumerate(shown):
@@ -1262,8 +1262,10 @@ def _legend(spec, table, plan: Plan, x0: float, y0: float) -> Element:
                 cv.rect(x0, yc - 4.5, sw, 9.0, fill=st.bar_fill,
                         stroke=st.bar_border_color if st.bar_border > 0 else None, width=max(st.bar_border, 0.25))
             elif kind == "line":
-                cv.line(x0, yc, x0 + sw, yc, st.symbol_color, max(st.error_width, 1.0), "butt")
-                draw_symbol(cv, st.symbol_shape, x0 + sw / 2, yc, max(1.0, st.symbol_size * 2.0), st.symbol_color)
+                cv.line(x0, yc, x0 + sw, yc, st.symbol_color, max(st.error_width, 1.0), "butt",
+                        None if st.line_dash == "solid" else st.line_dash)
+                if st.show_points:
+                    draw_symbol(cv, st.symbol_shape, x0 + sw / 2, yc, max(1.0, st.symbol_size * 2.0), st.symbol_color)
             else:
                 draw_symbol(cv, st.symbol_shape, x0 + sw / 2, yc, max(1.0, st.symbol_size * 2.0) * 1.3, st.symbol_color)
             cv.text(x0 + sw + 5.0, yc + TM.cap_height(fs) / 2, s, fs, anchor="start")
