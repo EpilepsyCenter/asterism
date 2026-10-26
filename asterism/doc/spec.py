@@ -30,7 +30,7 @@ class DataSetStyle:
     bar_border_color: str = "#000000"
     show_points: bool = True         # draw individual values (box: all points, else only outliers)
     symbol_color: str = "#000000"
-    symbol_shape: str = "circle"     # circle | square | triangle | diamond | open_circle | open_square
+    symbol_shape: str = "circle"     # circle | square | triangle | diamond | open_circle | open_square | cross | plus
     symbol_size: int = 3
     errors: bool = True
     error_color: str = "#000000"
@@ -72,11 +72,12 @@ class AxisSpec:
     ticks_len: str = "normal"        # very_short | short | normal | long | very_long
     minor: int = 0                   # minor ticks between majors
     numbering: bool = True
-    fmt: str = "decimal"             # decimal | scientific
+    fmt: str = "decimal"             # decimal | scientific | power (3×10¹³) | antilog (values are log10: 10ⁿ)
     decimals: int = -1               # -1 = auto
     prefix: str = ""
     suffix: str = ""
     label_rotation: int = 0          # X axis only: 0 | 45 | 90
+    date_fmt: str = "%d %b"          # X axis of a date column: strftime pattern, or "days"
     grid: bool = False               # grid lines at the major ticks
     grid_color: str = "#d9d9d9"
     grid_width: float = 0.5

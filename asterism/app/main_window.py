@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         self._enable_on: dict[QAction, set[str] | None] = {}
         self._table_types: dict[QAction, set[str]] = {}    # actions that need a table type
 
+        self.setAcceptDrops(True)
         self._make_actions()
         self._make_menus()
         self._make_layout()
@@ -100,6 +101,10 @@ class MainWindow(QMainWindow):
         # Project
         self.a_new = A("New Project", "doc.badge.plus", new_window, QKeySequence.New, "accent")
         self.a_open = A("Open…", "folder", self.open_file, QKeySequence.Open)
+        self.a_import = A("Import Data…", "square.and.arrow.down.on.square", self.import_data, "Ctrl+Shift+I",
+                          tip="Spreadsheets (CSV, Excel), lab exports (NED-Net, TRACER, QuantStudio) and Prism files")
+        self.a_import_settings = A("Import Settings…", "slider.horizontal.3", lambda: self.import_settings(),
+                                   tip="Change how this table was imported (its tables update in place)")
         self.a_close = A("Close", "xmark", self.close, QKeySequence.Close)
         self.a_save = A("Save", "square.and.arrow.down", self.save, QKeySequence.Save)
         self.a_save_as = A("Save As…", "square.and.arrow.down.on.square", self.save_as,
@@ -295,7 +300,9 @@ class MainWindow(QMainWindow):
 
         self.recent_menu = QMenu("Open Recent", self)
         self.recent_menu.aboutToShow.connect(self._fill_recent)
-        menu("File", [self.a_new, self.a_open, self.recent_menu, self.a_sample, self.a_start, None, self.a_close,
+        menu("File", [self.a_new, self.a_open, self.recent_menu, self.a_sample, self.a_start, None, self.a_import,
+                      self.a_import_settings,
+                      None, self.a_close,
                       self.a_save, self.a_save_as, self.a_revert, None, *self.export_actions,
                       None, self.a_print])
         menu("Edit", [self.a_undo, self.a_redo, None, self.a_cut, self.a_copy, self.a_paste, None,
@@ -304,7 +311,7 @@ class MainWindow(QMainWindow):
         self.tag_menu = QMenu("Colour Label", self)
         self.tag_menu.aboutToShow.connect(self._fill_tag_menu)
         menu("Sheet", [self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info,
-                       None, self.a_table_format, None, self.a_duplicate, self.a_delete, None,
+                       None, self.a_table_format, self.a_import_settings, None, self.a_duplicate, self.a_delete, None,
                        self.tag_menu, None, self.a_prev, self.a_next])
         menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_anova,
                          self.a_normality, self.a_freq, self.a_outliers, None, self.a_anova2,
@@ -360,6 +367,7 @@ class MainWindow(QMainWindow):
         self.sidebar.renameRequested.connect(lambda s, name: self.project.rename(s, name))
         self.sidebar.deleteRequested.connect(self._delete_sheet)
         self.sidebar.overviewRequested.connect(self.show_overview)
+        self.sidebar.importSettingsRequested.connect(self.import_settings)
         self.sidebar.labelNamesRequested.connect(self.edit_label_names)
         self.sidebar.overview_btn.setCheckable(True)
         self.sidebar.setMinimumWidth(180)
@@ -470,7 +478,7 @@ class MainWindow(QMainWindow):
     def display_name(self) -> str:
         if self.path:
             return os.path.splitext(os.path.basename(self.path))[0]
-        return "Untitled"
+        return getattr(self, "suggested_name", None) or "Untitled"
 
     def _edited(self) -> None:
         self.setWindowTitle(f"{self.display_name()}[*]")
@@ -495,6 +503,178 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Open Project", start, documents.FILE_FILTER)
         if path:
             open_path(path, self)
+
+    # --- importing ------------------------------------------------------------------------
+
+    OPENABLE = (".asterism", ".prism", ".pzfx", ".csv", ".tsv", ".txt", ".xlsx", ".xlsm", ".xls")
+
+    def dragEnterEvent(self, e) -> None:
+        if any(u.toLocalFile().lower().endswith(self.OPENABLE) or os.path.isdir(u.toLocalFile())
+               for u in e.mimeData().urls()):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e) -> None:
+        sheets_like = []
+        for u in e.mimeData().urls():
+            path = u.toLocalFile()
+            ext = os.path.splitext(path)[1].lower()
+            if os.path.isdir(path) or ext in (".csv", ".tsv", ".txt", ".xlsx", ".xlsm", ".xls"):
+                sheets_like.append(path)              # imported together (one export, several files)
+            elif ext in self.OPENABLE:
+                open_path(path, self)
+        if sheets_like:
+            self.import_data(sheets_like if len(sheets_like) > 1 else sheets_like[0])
+        e.acceptProposedAction()
+
+    def import_data(self, path=None) -> None:
+        """One file, several files (e.g. an export written as separate CSVs) or a folder of them."""
+        if not path:
+            paths, _ = QFileDialog.getOpenFileNames(self, "Import Data", documents.last_dir(), documents.IMPORT_FILTER)
+            if not paths:
+                return
+            path = paths if len(paths) > 1 else paths[0]
+        if isinstance(path, (list, tuple)):
+            paths = list(path)
+            path = paths[0]
+        else:
+            paths = [path]
+        documents.set_last_dir(path)
+        ext = os.path.splitext(path)[1].lower() if not os.path.isdir(path) else ""
+        if ext in (".prism", ".pzfx"):
+            self.import_prism(path)
+            return
+        from .dialogs.import_data import ImportDialog
+        try:
+            d = ImportDialog(paths, self)
+        except Exception as e:
+            QMessageBox.warning(self, "Can’t Import", f"“{os.path.basename(path)}” couldn’t be read.\n\n{e}")
+            return
+        if not d.exec():
+            return
+        try:
+            tables, notes = d.result()
+        except Exception as e:
+            QMessageBox.warning(self, "Can’t Import", str(e))
+            return
+        self._remember_import(d, tables, paths)
+        self.add_imported(tables)
+        n = len(tables)
+        self.statusBar().showMessage(f"Imported {n} table{'s' if n != 1 else ''} from {os.path.basename(path)}.", 6000)
+
+    def _imported_table(self):
+        """The table the current sheet shows (a table, or a graph's / analysis's table) — no fallback."""
+        s = self.current
+        if isinstance(s, Table):
+            return s
+        return getattr(s, "table", None) if isinstance(s, (Graph, Analysis)) else None
+
+    def _remember_import(self, dialog, tables: list, paths: list) -> None:
+        """Keep the source data and the choices, so Import Settings… can change them later."""
+        import datetime
+        import uuid
+        from ..io.sheets import to_jsonable
+        sid = uuid.uuid4().hex[:12]
+        self.project.imports[sid] = {"source": [os.path.basename(str(p)) for p in paths],
+                                     "sheets": to_jsonable(dialog.used_sheets()), "state": dialog.state(),
+                                     "when": datetime.datetime.now().isoformat(timespec="seconds")}
+        for t in tables:
+            t.import_ref = {"session": sid, "key": getattr(t, "import_key", t.name)}
+
+    def import_settings(self, table=None) -> None:
+        """Reopen an imported table's import window with its choices; the tables of that import
+        are updated in place (analyses and graphs stay linked), as one undo step."""
+        from ..doc.commands import TableEditCommand
+        from ..doc.undo import Macro
+        from ..io.sheets import from_jsonable
+        from .dialogs.import_data import ImportDialog
+        t = table if table is not None else self._imported_table()
+        ref = getattr(t, "import_ref", None) if t is not None else None
+        sess = self.project.imports.get(ref["session"]) if ref else None
+        if sess is None:
+            QMessageBox.information(self, "Import Settings", "This table wasn't imported (or its import "
+                                    "settings weren't kept).")
+            return
+        try:
+            d = ImportDialog(sess["source"] or ["import"], self, sheets=from_jsonable(sess["sheets"]))
+            d.apply_state(sess["state"])
+        except Exception as e:
+            QMessageBox.warning(self, "Import Settings", f"The import couldn't be reopened.\n\n{e}")
+            return
+        d.setWindowTitle("Import Settings")
+        d.ok.setText("Update")
+        if not d.exec():
+            return
+        try:
+            new_tables, _notes = d.result()
+        except Exception as e:
+            QMessageBox.warning(self, "Import Settings", str(e))
+            return
+        sid = ref["session"]
+        existing = {x.import_ref["key"]: x for x in self.project.tables
+                    if getattr(x, "import_ref", None) and x.import_ref.get("session") == sid}
+        cmds, added = [], []
+        for nt in new_tables:
+            key = getattr(nt, "import_key", nt.name)
+            old = existing.get(key)
+            if old is None:
+                nt.import_ref = {"session": sid, "key": key}
+                added.append(nt)
+                continue
+            st = nt.state()
+            cmds.append(TableEditCommand(self.project, old, lambda tbl, st=st: tbl.set_state(st),
+                                         "Update Import"))
+        if cmds:
+            self.project.undo.push(Macro("Change Import Settings", cmds))
+        if added:
+            self.add_imported(added)
+        sess["state"] = d.state()
+        self.statusBar().showMessage(f"Updated {len(cmds)} table{'s' if len(cmds) != 1 else ''}"
+                                     + (f", added {len(added)}" if added else "") + ".", 6000)
+
+    def add_imported(self, tables: list) -> None:
+        if not tables:
+            return
+        sheets = []
+        taken = {x.name for x in self.project.tables}
+        for t in tables:
+            base, k = t.name, 2
+            while t.name in taken:                      # keep the file's name unless it's taken
+                t.name = f"{base} {k}"
+                k += 1
+            taken.add(t.name)
+            g = self.project.new_graph(t)
+            xt, yt = getattr(t, "axis_titles", (None, None)) or (None, None)
+            if xt and t.table_type in ("xy", "survival"):
+                g.spec.x.title = xt
+            if yt:
+                g.spec.y.title = yt
+            for axis, fields in (getattr(t, "axis_formats", None) or {}).items():
+                for k, v in fields.items():
+                    setattr(getattr(g.spec, axis), k, v)
+            for col, fields in (getattr(t, "dataset_styles", None) or {}).items():
+                st = g.spec.style(col)
+                for k, v in fields.items():
+                    setattr(st, k, v)
+            for k, v in (getattr(t, "graph_options", None) or {}).items():
+                setattr(g.spec, k, v)
+            sheets += [t, g]
+            for kind, cols, params in getattr(t, "import_analyses", []) or []:
+                from ..doc.model import Analysis
+                sheets.append(Analysis(kind, t, cols, params))      # e.g. a standard curve's regression
+        self.project.add_sheets(sheets, "Import Data")
+        self.show_sheet(tables[0])
+
+    def import_prism(self, path: str) -> None:
+        from ..io.prism import into_project, read
+        try:
+            imp = read(path)
+        except Exception as e:
+            QMessageBox.warning(self, "Can’t Import", f"“{os.path.basename(path)}” couldn’t be read.\n\n{e}")
+            return
+        into_project(imp, self.project)
+        if imp.tables:
+            self.show_sheet(imp.tables[0])
+        prism_report(self, path, imp)
 
     def save(self) -> bool:
         if self.path is None:
@@ -803,6 +983,9 @@ class MainWindow(QMainWindow):
         for wd in self.text_widgets:
             wd.setEnabled(kind == "graph")
         self.a_revert.setEnabled(bool(self.path) and self.project.is_modified())
+        ft = self._imported_table()
+        ref = getattr(ft, "import_ref", None) if ft is not None else None
+        self.a_import_settings.setEnabled(bool(ref) and ref.get("session") in self.project.imports)
         self._undo_changed()
 
     def _update_status(self) -> None:
@@ -1478,6 +1661,21 @@ def run_start(origin: MainWindow | None = None) -> MainWindow | None:
             return w
         if kind == "sample":
             return open_sample(origin)
+        if kind == "import":
+            paths = rest[0]
+            if len(paths) == 1 and os.path.splitext(paths[0])[1].lower() in (".prism", ".pzfx"):
+                w = open_prism(paths[0], origin)
+                if w is None:
+                    continue
+                return w
+            reuse = origin is not None and origin.path is None and origin.project.is_pristine()
+            w = origin if reuse else new_window()
+            w.import_data(paths if len(paths) > 1 else paths[0])
+            if not w.project.tables and not reuse:        # nothing imported: back to the Start window
+                w.project.mark_saved()
+                w.close()
+                continue
+            return w
         reuse = origin is not None and origin.path is None and origin.project.is_pristine()
         w = origin if reuse else new_window()
         if kind == "new":
@@ -1485,9 +1683,51 @@ def run_start(origin: MainWindow | None = None) -> MainWindow | None:
         return w
 
 
+def prism_report(parent, path: str, imp) -> None:
+    """What came across from a Prism file, and what didn't (never dropped silently)."""
+    n_t, n_a = len(imp.tables), len(imp.analyses)
+    box = QMessageBox(QMessageBox.Information, "Prism File Imported",
+                      f"From “{os.path.basename(path)}”: {n_t} data table{'s' if n_t != 1 else ''} and "
+                      f"{n_a} analys{'is' if n_a == 1 else 'es'}.", QMessageBox.Ok, parent)
+    if imp.notes:
+        box.setInformativeText("Not carried over:\n• " + "\n• ".join(imp.notes))
+    else:
+        box.setInformativeText("Everything came across.")
+    if parent is not None and not os.environ.get("ASTERISM_NO_MODAL"):
+        box.exec()
+
+
+def open_prism(path: str, origin: MainWindow | None = None) -> MainWindow | None:
+    """A Prism file opens as a new, unsaved ASTERISM project."""
+    from ..io.prism import into_project, read
+    try:
+        imp = read(path)
+    except Exception as e:
+        QMessageBox.warning(origin, "Can’t Open", f"“{os.path.basename(path)}” couldn’t be read.\n\n{e}")
+        return None
+    project = Project(engine)
+    into_project(imp, project)
+    project.undo.clear()
+    project.mark_saved()
+    w = MainWindow(project)
+    w.suggested_name = os.path.splitext(os.path.basename(path))[0]
+    w._edited()
+    documents.set_last_dir(path)
+    shown = _show(w, origin)
+    prism_report(shown, path, imp)
+    return shown
+
+
 def open_path(path: str, origin: MainWindow | None = None, replace: bool = False) -> MainWindow | None:
     """Open a project file in its own window (or bring its window forward)."""
     path = os.path.abspath(path)
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (".prism", ".pzfx"):
+        return open_prism(path, origin)
+    if ext in (".csv", ".tsv", ".txt", ".xlsx", ".xlsm", ".xls"):
+        w = origin if isinstance(origin, MainWindow) else new_window()
+        w.import_data(path)
+        return w
     if not replace:
         for w in _windows:
             if w.path and os.path.exists(w.path) and os.path.samefile(w.path, path):

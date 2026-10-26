@@ -8,6 +8,7 @@ pingouin==0.6.1
 statsmodels==0.14.6
 PyYAML==6.0.3        # importer recipes
 openpyxl==3.1.5      # Excel import (lab importers)
+xlrd==2.0.1          # old .xls files (QuantStudio exports)
 # dev
 pytest
 pypdf==6.21.2        # export QA reads PDFs

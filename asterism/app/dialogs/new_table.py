@@ -134,9 +134,11 @@ class FormatOptions(QWidget):
             g = FormGrid()
             self.x_num = QRadioButton("Numbers")
             self.x_err = QRadioButton("Numbers with error bars (X ± error)")
+            self.x_date = QRadioButton("Dates (or dates and times)")
             self.x_num.setChecked(True)
             g.add((None, self.x_num))
             g.add((None, self.x_err))
+            g.add((None, self.x_date))
             self.row_titles = QCheckBox("Add a row-title column")
             g.add((None, self.row_titles))
             v.addLayout(g)
@@ -225,13 +227,14 @@ class FormatOptions(QWidget):
         if out["y_format"] == "replicates" and self.reps is not None:
             out["replicates"] = self.reps.value()
         if tt == "xy":
-            out["x_format"] = "numbers_err" if self.x_err.isChecked() else "numbers"
+            out["x_format"] = ("numbers_err" if self.x_err.isChecked() else
+                               "date" if self.x_date.isChecked() else "numbers")
             out["row_titles"] = self.row_titles.isChecked()
         return out
 
     def set_values(self, y_format: str, replicates: int, x_format: str, row_titles: bool) -> None:
         if self.table_type == "xy":
-            (self.x_err if x_format == "numbers_err" else self.x_num).setChecked(True)
+            {"numbers_err": self.x_err, "date": self.x_date}.get(x_format, self.x_num).setChecked(True)
             self.row_titles.setChecked(row_titles)
         for b in self.g_y.buttons():
             fmt = b.property("fmt")

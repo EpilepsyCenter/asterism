@@ -142,7 +142,7 @@ class DataTable:
         return self.y_format in SUMMARY_FORMATS
 
     def has_x(self) -> bool:
-        return self.x_format in ("numbers", "numbers_err")
+        return self.x_format in ("numbers", "numbers_err", "date")
 
     def _column(self, key) -> list:
         if key == "x":

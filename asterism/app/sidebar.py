@@ -92,6 +92,7 @@ class _SectionHeader(QWidget):
 
 class ProjectSidebar(QWidget):
     overviewRequested = Signal()
+    importSettingsRequested = Signal(object)
     labelNamesRequested = Signal()
     sheetActivated = Signal(object)
     commandRequested = Signal(str)
@@ -310,6 +311,9 @@ class ProjectSidebar(QWidget):
             m.exec(self.tree.viewport().mapToGlobal(pos))
             return
         m.addAction("Rename", lambda: self.rename(s))
+        ref = getattr(s, "import_ref", None)
+        if ref and ref.get("session") in self.project.imports:
+            m.addAction("Import Settings…", lambda: self.importSettingsRequested.emit(s))
         dup = m.addAction("Duplicate")
         dup.setEnabled(False)
         dup.setToolTip("Arrives with the data tables (M2)")

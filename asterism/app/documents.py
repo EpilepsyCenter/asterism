@@ -8,7 +8,10 @@ from PySide6.QtCore import QSettings
 
 from ..doc.fileformat import EXTENSION
 
-FILE_FILTER = f"ASTERISM Project (*{EXTENSION})"
+FILE_FILTER = (f"ASTERISM and Prism files (*{EXTENSION} *.prism *.pzfx);;ASTERISM Project (*{EXTENSION});;"
+               "Prism files (*.prism *.pzfx)")
+IMPORT_FILTER = ("Data files (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls *.prism *.pzfx);;"
+                 "Spreadsheets (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls);;Prism files (*.prism *.pzfx)")
 MAX_RECENT = 10
 
 

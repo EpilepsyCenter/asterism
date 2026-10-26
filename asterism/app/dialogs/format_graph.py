@@ -36,9 +36,11 @@ WHISKERS = [("Minimum to maximum", "minmax"), ("Tukey (1.5 × IQR)", "tukey"), (
             ("1st–99th percentile", "p1")]
 THICK = [("None", 0.0), ("¼ pt", 0.25), ("½ pt", 0.5), ("1 pt", 1.0), ("1½ pt", 1.5),
          ("2 pt", 2.0), ("3 pt", 3.0)]
+NUMBER_FORMATS = [("Decimal (1500)", "decimal"), ("Power of ten (1.5×10³)", "power"),
+                  ("Scientific (1.5e+03)", "scientific"), ("Antilog: values are log10 (10³)", "antilog")]
 TICK_LEN = [("Very short", "very_short"), ("Short", "short"), ("Medium", "normal"),
             ("Long", "long"), ("Very long", "very_long")]
-SHAPES = ["circle", "square", "triangle", "diamond", "open_circle", "open_square"]
+SHAPES = ["circle", "square", "triangle", "diamond", "open_circle", "open_square", "cross", "plus"]
 
 # Old section names (graph view, main window) → section keys.
 GROUPED_ARRANGEMENTS = [("Side by side (data sets next to each other in each row)", "interleaved"),
@@ -873,6 +875,17 @@ class FormatGraphDialog(SectionDialog):
             self.x_auto.toggled.connect(lambda on: [w.setEnabled(not on) for w in (self.x_min, self.x_max, self.x_step)])
             for w in (self.x_min, self.x_max, self.x_step):
                 w.setEnabled(not x.auto)
+            g = FormGrid()
+            self.x_fmt = combo(NUMBER_FORMATS, x.fmt)
+            g.add(("Numbers:", self.x_fmt))
+            pl.addLayout(g)
+            self.x_datefmt = None
+            if self.graph.table.x_format == "date":
+                from ...doc.dates import FORMATS
+                g = FormGrid()
+                self.x_datefmt = combo([(v, k) for k, v in FORMATS.items()], x.date_fmt)
+                g.add(("Dates as:", self.x_datefmt))
+                pl.addLayout(g)
             pl.addWidget(Section("Title"))
             g = FormGrid()
             self.x_title = QLineEdit(x.title)
@@ -993,7 +1006,7 @@ class FormatGraphDialog(SectionDialog):
 
         pl.addWidget(Section("Number format"))
         g = FormGrid()
-        w["fmt"] = combo([("Decimal", "decimal"), ("Scientific", "scientific")], ax.fmt)
+        w["fmt"] = combo(NUMBER_FORMATS, ax.fmt)
         w["dec"] = combo([("Automatic", -1)] + [(str(i), i) for i in range(0, 6)], ax.decimals)
         w["prefix"], w["suffix"] = QLineEdit(ax.prefix), QLineEdit(ax.suffix)
         w["prefix"].setFixedWidth(80)
@@ -1179,6 +1192,9 @@ class FormatGraphDialog(SectionDialog):
             s.x.scale = self.x_scale.currentData()
             s.x.auto = self.x_auto.isChecked()
             s.x.title = self.x_title.text().strip()
+            s.x.fmt = self.x_fmt.currentData()
+            if getattr(self, "x_datefmt", None) is not None:
+                s.x.date_fmt = self.x_datefmt.currentData()
 
             def fx(e, default):
                 try:

@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M9b done; M10 (import) next.** The Qt spike (M0) passed on
+Status: **M1–M10 done; M11 (product) next.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -369,9 +369,10 @@ bitmap flavour a receiving app might silently prefer). On Windows, users export 
   first; analyses and graph formatting where they map cleanly. Report what could not be
   carried over; never drop it silently.
 - **Spreadsheet import:** CSV/TSV/Excel into a chosen table type, with a preview.
-- **Lab importers** (`asterism/core/importer`, pre-existing): TRACER `cohort_summary.xlsx`,
-  NED-Net `results_graph_data.xlsx`, QuantStudio qPCR (ΔΔCt with visible settings), and
-  the manual template. These go through the column inventory and role guessing (every
+- **Lab importers** (`asterism/core/importer`, pre-existing, and `asterism/io`): TRACER
+  `cohort_summary.xlsx`, NED-Net `results_graph_data.xlsx` and QuantStudio qPCR runs (ΔΔCt
+  with visible settings). (The manual template was dropped on 2026-10-26: a plain
+  spreadsheet import covers it.) These go through the column inventory and role guessing (every
   guess shown and overridable), then land in typed tables.
   The importer's long-format data contract (`value | metric | unit | subject | replicate
   | factors… | batch | source_file`) stays as the intermediate form; `subject` remains
@@ -744,7 +745,52 @@ Finder tags folders, to recognise them at a glance.
   selected card, ⌘A selects all, Shift- and ⌘-click extend the selection; labels can be set
   from the overview's right-click menu and the ⌃0–⌃7 shortcuts act on selected cards too.
 
-**M10 — Import:** CSV/Excel, `.pzfx`, `.prism`, lab importers into typed tables.
+**M10 — Import. Done (2026-10-26).** File › Import Data (⌘⇧I), "Import data…" on the Start
+window, File › Open for Prism files, and files or folders dropped on the window. Several files
+(or an export folder of separate CSVs, as QuantStudio sometimes writes) import together as one
+workbook; the preview shows any of the tables that will be made. **Import Settings…** (File and
+Sheet menus, the sidebar's menu on an imported table) reopens the import window as it was left —
+the sheets it read are kept in the project file — and updates that import's tables in place
+(analyses and graphs stay linked; one undo step); newly ticked tables are added. For standard
+curves the template volume is greyed out unless quantities are reported per µL or per mL
+(titre = quantity per reaction × dilution [× 2] ÷ template µL [× 1000 per mL]).
+- Spreadsheets: CSV / TSV / text (delimiter and decimal commas detected), Excel `.xlsx` and
+  old `.xls`; sheet and header row (guessed, changeable), raw preview. Wide layout (each
+  column a data set; same-named columns become replicates; row-title, X and X-error
+  columns) or long layout (value, groups, second factor, subject, X, event columns) into any
+  table type: subjects become nested sub-columns, keep their own sub-column across rows in
+  grouped / XY tables (repeated measures line up), or are averaged to one value each;
+  contingency tables count combinations; survival tables take time, event and group.
+  A live preview of the table, with notes on everything skipped.
+- Lab exports, recognised by their sheets' headers: NED-Net (per-animal measures → column
+  tables, one value per animal, excluded animals reported; day-by-day and circadian sheets
+  → grouped tables with each animal in its own sub-column, or XY; ISI distributions → XY),
+  TRACER (per-cell measures → nested tables, animals as sub-columns, or per-animal means),
+  QuantStudio (the Results table → relative expression 2^−ΔΔCt, ΔCt or mean Ct; reference
+  gene(s) and reference sample read from the run's own file, groups guessed from sample
+  names, all shown and editable; relative to a control group's mean or to one reference
+  sample; NTC, omitted and undetermined wells counted). Checked on a real QuantStudio 5
+  export: relative to its reference sample, our values equal QuantStudio's RQ column. With no
+  endogenous control in the file and no housekeeping-gene name, nothing is pre-ticked.
+  Standard-curve runs (absolute quantification, e.g. AAV titres): the curve is fitted here
+  (Cq on log10 quantity: slope, intercept, R², efficiency — matching QuantStudio's within the
+  CSV's rounding) → an XY table per target with its linear regression attached (fitted to the
+  standards only) and every unknown well placed on the curve as a cross, one colour per sample
+  (so extrapolated samples show at a glance), and the
+  unknowns' quantities (samples × targets, technical replicates side by side), optionally
+  × dilution, × 2 for single-stranded genomes on a plasmid standard, per µL or mL of sample;
+  wells outside the standards' range are counted. Imported tables' graphs get axis titles
+  from the data (measure names, "Copies per reaction (log scale)" / "Cq", units); titres and quantities on log axes in powers of ten (3×10¹³), standard curves labelled 10⁵ … 10⁹, and very large or small numbers in tables shown the same way.
+- Prism `.prism` (10/11): every data table (titles, row titles, X, replicates, excluded
+  values), info sheets, and analyses that map cleanly (t tests and their nonparametric
+  forms, multiple t tests, two-way ANOVA, normality, linear regression, correlation,
+  contingency, frequency distributions), recomputed — on the lab's files they reproduce
+  Prism's results. Prism `.pzfx`: data tables and info sheets. A report lists what didn't
+  come across (graph formatting and layouts for now; each table gets a default graph).
+- Dates: X columns of dates (typed or imported), shown as dates in tables and labelled on
+  axes as "26 Oct", ISO dates, months, or days since the first date.
+- Open: Prism graph formatting and layouts; `.pzfx` analyses; TRACER wide-sheet tag
+  columns (group only for now).
 
 **M11 — Product:** autosave and recovery, preferences, help, Windows icon set, packaging,
 signing, file associations, sample projects.

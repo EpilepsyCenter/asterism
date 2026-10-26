@@ -9,6 +9,8 @@ Excluded values stay visible, struck through in muted italics.
 
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication,
@@ -30,9 +32,18 @@ def blend(a: QColor, b: QColor, t: float) -> QColor:
                   round(a.blue() + (b.blue() - a.blue()) * t))
 
 
-def fmt_cell(v) -> str:
+_SUP = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def fmt_cell(v, display: bool = False) -> str:
+    """A cell's text. Shown (display=True), very large or very small numbers read as powers of
+    ten (1.503×10¹³); edited, they stay plain numbers that can be typed back."""
     if isinstance(v, str):
         return v
+    if display and v != 0 and (abs(v) >= 1e7 or abs(v) < 1e-4):
+        e = math.floor(math.log10(abs(v)))
+        m = f"{v / 10 ** e:.4f}".rstrip("0").rstrip(".")
+        return f"{m}×10{str(e).translate(_SUP)}"
     return f"{v:.10g}"
 
 
@@ -43,6 +54,11 @@ def parse_cell(table: Table, key, text: str):
         return None
     if key == "row":
         return s
+    if key == "x" and table.x_format == "date":
+        from ..doc.dates import parse
+        d = parse(s)
+        if d is not None:
+            return d
     try:
         v = float(s.replace(",", "."))
     except ValueError:
@@ -114,7 +130,10 @@ class TableModel(QAbstractTableModel):
         key = self.keys[idx.column()]
         if role in (Qt.DisplayRole, Qt.EditRole):
             v = self.t.get(idx.row(), key)
-            return "" if v is None else fmt_cell(v)
+            if key == "x" and self.t.x_format == "date" and isinstance(v, (int, float)):
+                from ..doc.dates import fmt
+                return fmt(v)
+            return "" if v is None else fmt_cell(v, display=role == Qt.DisplayRole)
         if role == Qt.TextAlignmentRole:
             v = self.t.get(idx.row(), key)
             left = key == "row" or isinstance(v, str)

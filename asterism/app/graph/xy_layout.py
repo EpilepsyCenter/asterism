@@ -27,8 +27,36 @@ class XMap(YMap):
         return self.h - super().__call__(v)
 
 
-def x_range(spec, xs: list[float]) -> AxisRange:
+class DateXMap(XMap):
+    """A date X axis: day numbers placed as usual, labelled as dates (or days since the first)."""
+
+    def __init__(self, ax, rng, w, first: float):
+        super().__init__(ax, rng, w)
+        self.first = first
+
+    def label(self, v: float) -> str:
+        from ...doc.dates import fmt
+        if self.ax.date_fmt == "days":
+            d = v - self.first
+            return f"{d:g}"
+        return fmt(v, self.ax.date_fmt)
+
+    def minors(self) -> list[float]:
+        return []
+
+
+def x_range(spec, xs: list[float], date: bool = False) -> AxisRange:
     ax = spec.x
+    if date and ax.auto:
+        from ...doc.dates import nice_steps
+        vals = [v for v in xs if v is not None and math.isfinite(v)]
+        if not vals:
+            return AxisRange(0.0, 7.0, 1.0)
+        if ax.date_fmt == "days":
+            first = min(vals)
+            r = nice_range(0.0, max(vals) - first)
+            return AxisRange(first + r.vmin, first + r.vmax, r.interval)
+        return AxisRange(*nice_steps(min(vals), max(vals)))
     if not ax.auto:
         if ax.scale == "log10":
             return AxisRange(max(ax.vmin, 1e-12), max(ax.vmax, ax.vmin * 10), ax.interval)
@@ -133,8 +161,9 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
     xs_all = [row["x"] for c in cols for row in data[c]]
     xs_all += [row["x"] - (row["xerr"] or 0) for c in cols for row in data[c] if row["xerr"]]
     xs_all += [row["x"] + (row["xerr"] or 0) for c in cols for row in data[c] if row["xerr"]]
-    xr = x_range(spec, xs_all)
-    xm = XMap(spec.x, xr, pw)
+    is_date = t.x_format == "date"
+    xr = x_range(spec, xs_all, date=is_date)
+    xm = DateXMap(spec.x, xr, pw, min(xs_all) if xs_all else 0.0) if is_date else XMap(spec.x, xr, pw)
     right = {c for c in cols if spec.style(c).axis == "right"}
     summaries, summaries2 = {}, {}
     k = 0

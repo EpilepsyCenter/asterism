@@ -115,6 +115,8 @@ class StartDialog(QDialog):
         for key, text, ico, tip in (
                 ("new", "New project…", "tablecells.badge.ellipsis", "Choose the kind of data table to start with"),
                 ("empty", "Empty project", "doc", "Start with an empty Column table"),
+                ("import", "Import data…", "square.and.arrow.down.on.square",
+                 "Spreadsheets (CSV, Excel), lab exports (NED-Net, TRACER, QuantStudio) or Prism files"),
                 ("browse", "Open…", "folder", "Open a project file"),
                 ("sample", "Sample project", "doc.text", "Explore a project with example data")):
             b = QPushButton(text)
@@ -205,11 +207,16 @@ QListWidget#StartRecent::item {{ padding: 6px 6px; border-radius: 6px; }}
     def _pick(self, key: str) -> None:
         if key == "browse":
             start = documents.last_dir()
-            path, _ = QFileDialog.getOpenFileName(self, "Open Project", start,
-                                                  "ASTERISM projects (*.asterism);;All files (*)")
+            path, _ = QFileDialog.getOpenFileName(self, "Open Project", start, documents.FILE_FILTER)
             if not path:
                 return
             self._choice = ("open", path)
+        elif key == "import":
+            paths, _ = QFileDialog.getOpenFileNames(self, "Import Data", documents.last_dir(),
+                                                    documents.IMPORT_FILTER)
+            if not paths:
+                return
+            self._choice = ("import", paths)
         else:
             self._choice = (key,)
         self.accept()

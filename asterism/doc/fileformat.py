@@ -63,7 +63,14 @@ def project_to_dict(p: Project) -> dict:
         "figures": [{"id": f.id, "name": f.name, **f.state()} for f in p.figures],
         "labels": {sh.id: sh.tag for sh in [*p.sheets(), *p.analysis_outputs()] if sh.tag},
         "label_names": {str(k): v for k, v in p.label_names.items() if v},
+        "imports": _live_imports(p),
     }
+
+
+def _live_imports(p) -> dict:
+    """Only imports that still have a table in the project."""
+    used = {getattr(t, "import_ref", {}).get("session") for t in p.tables if getattr(t, "import_ref", None)}
+    return {k: v for k, v in p.imports.items() if k in used}
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +144,7 @@ def project_from_dict(d: dict, engine: AnalysisEngine | None = None) -> Project:
         if sh.id in labels:
             sh.tag = int(labels[sh.id])
     p.label_names = {int(k): v for k, v in (d.get("label_names") or {}).items() if v}
+    p.imports = dict(d.get("imports") or {})
     p.undo.clear()
     p.mark_saved()
     return p
@@ -182,6 +190,7 @@ def _table_to_dict(t: Table) -> dict:
         "y": [list(c) for c in t.y], "x": list(t.x), "x_err": list(t.x_err),
         "row_titles": list(t.row_title_values),
         "excluded": [list(rc) for rc in sorted(t.excluded, key=lambda rc: (rc[0], str(rc[1])))],
+        **({"import": dict(t.import_ref)} if getattr(t, "import_ref", None) else {}),
     }
 
 
@@ -209,6 +218,8 @@ def _table_from_dict(td: dict) -> Table:
     t.row_title_values = [v if isinstance(v, str) or v is None else str(v)
                           for v in td.get("row_titles", [])]
     t.excluded = {(int(r), c if c == "x" else int(c)) for r, c in td.get("excluded", [])}
+    if td.get("import"):
+        t.import_ref = dict(td["import"])
     return t
 
 

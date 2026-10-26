@@ -301,6 +301,8 @@ class Project:
         self.undo = UndoStack()
         self._touched = False
         self.label_names: dict[int, str] = {}  # the project's own names for colour labels
+        # imports whose settings can be changed later: id → {"source", "sheets", "state", "when"}
+        self.imports: dict[str, dict] = {}
         self.structure_changed = Signal()     # sheets added / removed / reordered
         self.analysis_changed = Signal()      # (analysis) recomputed or removed
         self.edited = Signal()                # modified state may have changed

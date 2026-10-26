@@ -53,7 +53,10 @@ The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
 - **M9b — Finding your way:** done. All graphs at a glance (live thumbnails grouped by table,
   search, filters, sort, multi-select actions) and Finder-style colour labels on sheets
   (sidebar dots, a filter strip, nameable labels, shortcuts).
-- **Next — M10:** import (CSV/Excel, `.pzfx`, `.prism`, the lab's importers).
+- **M10 — Import:** done. CSV/TSV/Excel into any table type (wide or long, live preview), lab
+  exports (NED-Net, TRACER, QuantStudio with ΔΔCt), Prism `.prism` and `.pzfx` files with
+  their analyses re-created, and date X columns.
+- **Next — M11:** product (autosave and recovery, preferences, help, packaging).
 
 ## Run
 

@@ -148,7 +148,11 @@ class YMap:
 
     def label(self, v: float) -> str:
         ax = self.ax
-        if self.log:
+        if ax.fmt == "antilog":                   # values are log10 of something: show 10^v
+            s = power_label(10.0 ** v, ax.decimals, bare_powers=True)
+        elif ax.fmt == "power":
+            s = power_label(v, ax.decimals, bare_powers=self.log)
+        elif self.log:
             d = max(0, -int(round(math.log10(v)))) if ax.decimals < 0 else ax.decimals
             s = f"{v:.{d}f}"
         elif ax.fmt == "scientific":
@@ -160,6 +164,27 @@ class YMap:
             if s.startswith("-") and float(s) == 0:
                 s = s[1:]
         return f"{ax.prefix}{s}{ax.suffix}"
+
+
+_SUP = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def power_label(v: float, decimals: int = -1, bare_powers: bool = False) -> str:
+    """3×10¹³ (powers of ten with superscripts). With bare_powers, 1×10ⁿ is written 10ⁿ
+    (log axes). decimals < 0: up to three significant digits, trailing zeros dropped."""
+    if v == 0 or not math.isfinite(v):
+        return "0" if v == 0 else str(v)
+    e = int(math.floor(math.log10(abs(v)) + 1e-12))
+    m = v / 10 ** e
+    if abs(round(m, 6)) >= 10:
+        m, e = m / 10, e + 1
+    ms = f"{m:.{decimals}f}" if decimals >= 0 else f"{m:.2f}".rstrip("0").rstrip(".")
+    if e == 0:
+        return ms
+    sup = str(e).translate(_SUP)
+    if bare_powers and ms in ("1", "-1"):
+        return ("−" if ms == "-1" else "") + f"10{sup}"
+    return f"{ms.replace('-', '−')}×10{sup}"
 
 
 def y_range(graph: Graph, summaries: dict[int, dict], ax: AxisSpec | None = None) -> AxisRange:
@@ -356,6 +381,15 @@ def draw_symbol(cv, shape: str, x: float, y: float, d: float, color: str) -> Non
         cv.polygon([(x, y - r * 1.1), (x + r * 1.05, y + r * 0.75), (x - r * 1.05, y + r * 0.75)], fill=color)
     elif shape == "diamond":
         cv.polygon([(x, y - r * 1.2), (x + r * 1.2, y), (x, y + r * 1.2), (x - r * 1.2, y)], fill=color)
+    elif shape in ("cross", "plus"):
+        w = max(1.0, d * 0.2)
+        k = r * (0.95 if shape == "cross" else 1.15)
+        if shape == "cross":
+            cv.line(x - k, y - k, x + k, y + k, color, w, "round")
+            cv.line(x - k, y + k, x + k, y - k, color, w, "round")
+        else:
+            cv.line(x - k, y, x + k, y, color, w, "round")
+            cv.line(x, y - k, x, y + k, color, w, "round")
 
 
 def _text_rect(x, y, s, fs: FontSpec, anchor="middle", rotate=0.0) -> QRectF:
