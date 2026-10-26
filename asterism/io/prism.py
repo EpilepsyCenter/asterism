@@ -38,6 +38,7 @@ class PrismImport:
     tables: list = field(default_factory=list)          # Table
     infos: list = field(default_factory=list)           # InfoSheet
     analyses: list = field(default_factory=list)        # (type, table, columns, params, title)
+    graphs: list = field(default_factory=list)          # (table, title, GraphFormat | None, shown columns)
     notes: list = field(default_factory=list)           # what didn't come across, and why
 
 
@@ -163,10 +164,43 @@ def read_prism(path: Path) -> PrismImport:
         for cls, k in sorted(skipped.items()):
             out.notes.append(f"{k} analys{'is' if k == 1 else 'es'} of type {cls.replace('_', ' ').lower()} "
                              f"not carried over (no matching ASTERISM analysis yet, or its data table is missing).")
-        ng, nl = len(sheets.get("graphs", [])), len(sheets.get("layouts", []))
-        if ng or nl:
-            out.notes.append(f"{ng} graph{'s' if ng != 1 else ''} and {nl} layout{'s' if nl != 1 else ''}: Prism's "
-                             "graph formatting isn't read yet; each table gets ASTERISM's default graph.")
+        # graphs: matched to their table through the data sets they plot
+        from .prism_graphs import decode
+        set_owner = {}
+        for t in out.tables:
+            for k, su in enumerate(getattr(t, "_prism_sets", [])):
+                set_owner[su] = (t, k)
+        unmatched = failed = 0
+        for gid in sheets.get("graphs", []):
+            n = f"graphs/{gid}/sheet.json"
+            if n not in names:
+                continue
+            gs = load(n)
+            hits = [set_owner[u] for u in gs.get("inputDataSets", []) if u in set_owner]
+            if not hits:
+                unmatched += 1
+                continue
+            table = max({h[0] for h in hits}, key=lambda tb: sum(1 for h in hits if h[0] is tb))
+            cols = sorted({k for tb, k in hits if tb is table})
+            gf = None
+            if f"graphs/{gid}/data.bin" in names:
+                try:
+                    gf = decode(z.read(f"graphs/{gid}/data.bin"))
+                except Exception:
+                    failed += 1
+            out.graphs.append((table, _plain(gs.get("title"), table.name), gf, cols))
+        nl = len(sheets.get("layouts", []))
+        if out.graphs:
+            out.notes.append(f"{len(out.graphs)} graph{'s' if len(out.graphs) != 1 else ''}: titles, axis titles, axis "
+                             "ranges, tick intervals, log scales, the data sets shown, bars or points, colours, "
+                             "symbols, error bars and legends come across; line dash patterns and fonts don't yet.")
+        if unmatched:
+            out.notes.append(f"{unmatched} graph{'s' if unmatched != 1 else ''} of analysis results: ASTERISM's own "
+                             "graphs of those results are used.")
+        if failed:
+            out.notes.append(f"{failed} graph{'s' if failed != 1 else ''} couldn't be read.")
+        if nl:
+            out.notes.append(f"{nl} layout{'s' if nl != 1 else ''} not carried over (make figures in ASTERISM).")
     return out
 
 
@@ -212,6 +246,7 @@ def _prism_table(z, names, load, sh):
                     t.set(i, "xerr", n, emit=False)
             j += 1
     width = t.width()
+    t._prism_sets = list(set_uids)
     excluded = []
     for ds, su in enumerate(set_uids):
         sd = load(f"data/sets/{su}.json") if f"data/sets/{su}.json" in names else {}
@@ -447,10 +482,23 @@ def read_pzfx(path: Path) -> PrismImport:
 def into_project(imp: PrismImport, project, engine=None) -> None:
     """Add the imported tables (each with its default graph), info sheets and analyses."""
     from ..doc.model import Analysis
+    from .prism_graphs import apply
     sheets = []
+    by_table: dict = {}
+    for table, title, gf, cols in imp.graphs:
+        by_table.setdefault(id(table), []).append((title, gf, cols))
     for t in imp.tables:
         sheets.append(t)
-        sheets.append(project.new_graph(t))
+        made = by_table.get(id(t)) or [(None, None, None)]
+        for title, gf, cols in made:
+            g = project.new_graph(t)
+            if title:
+                g.name, g.auto_name = title, False
+            if cols:
+                g.spec.hidden = {c for c in t.used_columns() if c not in cols}
+            if gf is not None:
+                apply(gf, g.spec, t.table_type, t)
+            sheets.append(g)
     sheets += imp.infos
     for kind, t, cols, params, title in imp.analyses:
         sheets.append(Analysis(kind, t, cols, params))

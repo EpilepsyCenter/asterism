@@ -40,6 +40,16 @@ SIDEBAR_W, TOOLS_W = 250, 232
 
 _windows: list["MainWindow"] = []
 # Analyses whose result table gets its own graph when they are created (as Prism does).
+def _install_graph_defaults() -> None:
+    """New graphs follow the user's settings (once per process)."""
+    from ..doc import model as _model
+    from . import prefs as _prefs
+    if _prefs.style_new_graph not in _model.NEW_GRAPH_HOOKS:
+        _model.NEW_GRAPH_HOOKS.append(_prefs.style_new_graph)
+
+
+_install_graph_defaults()
+
 OUTPUT_GRAPHED = {"frequency", "transform", "normalize", "baseline", "prune", "smooth", "fraction"}
 
 
@@ -59,6 +69,12 @@ class MainWindow(QMainWindow):
         self._table_types: dict[QAction, set[str]] = {}    # actions that need a table type
 
         self.setAcceptDrops(True)
+        from . import recovery
+        from PySide6.QtCore import QTimer
+        self._autosave_key = recovery.new_key()
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self.autosave)
+        self.apply_autosave_prefs()
         self._make_actions()
         self._make_menus()
         self._make_layout()
@@ -261,6 +277,8 @@ class MainWindow(QMainWindow):
             a.setCheckable(True)
             a.setChecked(True)
         self.a_help = A("ASTERISM Help", "questionmark.circle", self._about)
+        self.a_settings = A("Settings…", "gearshape", self.open_settings, "Ctrl+,")
+        self.a_settings.setMenuRole(QAction.PreferencesRole)
 
         self.top_groups = [
             [self.a_new, self.a_open, self.a_save, self.a_undo, self.a_redo, self.a_print],
@@ -301,7 +319,7 @@ class MainWindow(QMainWindow):
         self.recent_menu = QMenu("Open Recent", self)
         self.recent_menu.aboutToShow.connect(self._fill_recent)
         menu("File", [self.a_new, self.a_open, self.recent_menu, self.a_sample, self.a_start, None, self.a_import,
-                      self.a_import_settings,
+                      self.a_import_settings, None, self.a_settings,
                       None, self.a_close,
                       self.a_save, self.a_save_as, self.a_revert, None, *self.export_actions,
                       None, self.a_print])
@@ -676,6 +694,33 @@ class MainWindow(QMainWindow):
             self.show_sheet(imp.tables[0])
         prism_report(self, path, imp)
 
+    def open_settings(self) -> None:
+        from .dialogs.settings import SettingsDialog
+        if SettingsDialog(self).exec():
+            for w in list(_windows):
+                w.apply_autosave_prefs()
+
+    # --- autosave ---------------------------------------------------------------------
+
+    def apply_autosave_prefs(self) -> None:
+        from . import prefs
+        if prefs.get("autosave.enabled"):
+            self._autosave_timer.start(max(1, int(prefs.get("autosave.minutes"))) * 60_000)
+        else:
+            self._autosave_timer.stop()
+
+    def autosave(self) -> bool:
+        """Snapshot unsaved changes into the recovery folder (never over the project's own file)."""
+        from . import recovery
+        if not self.project.is_modified():
+            return False
+        try:
+            recovery.write(self._autosave_key, self.project, self.display_name(), self.path)
+        except OSError as e:
+            self.flash(f"Autosave failed: {e.strerror or e}")
+            return False
+        return True
+
     def save(self) -> bool:
         if self.path is None:
             return self.save_as()
@@ -701,6 +746,8 @@ class MainWindow(QMainWindow):
             return False
         self.path = path
         self.project.mark_saved()
+        from . import recovery
+        recovery.clear(self._autosave_key)          # saved: the autosaved copy isn't needed
         documents.add_recent(path)
         documents.set_last_dir(path)
         self.flash(f"Saved {os.path.basename(path)}")
@@ -738,6 +785,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, e) -> None:
         if self.maybe_save():
+            from . import recovery
+            recovery.clear(self._autosave_key)
+            self._autosave_timer.stop()
             self._save_layout()
             self._save_geometry()
             if self in _windows:
@@ -1078,9 +1128,10 @@ class MainWindow(QMainWindow):
         if not dlg.exec() or not dlg.result:
             return
         key, table, cols = dlg.result
-        params = {}
+        from . import prefs
         from .dialogs.params import settings_dialog
-        sd = settings_dialog(key, None, table, cols, self)
+        params = prefs.analysis_defaults(key)
+        sd = settings_dialog(key, dict(params) or None, table, cols, self)
         if sd is not None:
             if not sd.exec():
                 return
@@ -1107,9 +1158,10 @@ class MainWindow(QMainWindow):
         if key == "multiple_t" and len(cols) != 2:
             self.analyze()          # let the user pick the two data sets
             return
+        from . import prefs
         from .dialogs.params import settings_dialog
-        params = {}
-        sd = settings_dialog(key, None, t, cols, self)
+        params = prefs.analysis_defaults(key)
+        sd = settings_dialog(key, dict(params) or None, t, cols, self)
         if sd is not None:
             if not sd.exec():
                 return
@@ -1681,6 +1733,37 @@ def run_start(origin: MainWindow | None = None) -> MainWindow | None:
         if kind == "new":
             w.show_start_screen()
         return w
+
+
+def offer_recovery(origin: MainWindow | None = None) -> list[MainWindow]:
+    """At launch: projects whose changes weren't saved last time can be restored."""
+    from . import recovery
+    from .dialogs.recovery import RecoveryDialog
+    snaps = recovery.pending()
+    if not snaps:
+        return []
+    d = RecoveryDialog(snaps, origin)
+    restored = []
+    if d.exec():
+        for snap in d.chosen():
+            try:
+                project = recovery.load(snap, engine)
+            except Exception as e:
+                QMessageBox.warning(origin, "Can’t Restore", f"“{snap.name}” couldn’t be restored.\n\n{e}")
+                continue
+            project.touch()                         # restored changes are unsaved changes
+            path = snap.original if snap.original and os.path.exists(os.path.dirname(snap.original)) else None
+            w = MainWindow(project, path)
+            if path is None:
+                w.suggested_name = f"{snap.name} (recovered)"
+            w._edited()
+            restored.append(_show(w, None))
+            recovery.clear(snap.key)                 # the new window autosaves under its own name
+        # snapshots not ticked are kept for next time
+    elif d.discarded:
+        for snap in snaps:
+            recovery.clear(snap.key)
+    return restored
 
 
 def prism_report(parent, path: str, imp) -> None:

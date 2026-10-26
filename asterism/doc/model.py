@@ -32,6 +32,9 @@ class AnalysisEngine(Protocol):
 # Sheets
 # ---------------------------------------------------------------------------
 
+# Functions called on every new graph (the app installs one that applies the user's settings).
+NEW_GRAPH_HOOKS: list = []
+
 # Colour labels (like Finder tags): 0 = none, 1–7; projects may rename them.
 LABEL_NAMES = {1: "Red", 2: "Orange", 3: "Yellow", 4: "Green", 5: "Blue", 6: "Purple", 7: "Grey"}
 
@@ -454,6 +457,11 @@ class Project:
             g.spec.x.title = "X"
             g.spec.default_style.line_at = "mean_sem"
             g.spec.default_style.symbol_size = 3
+        for hook in NEW_GRAPH_HOOKS:
+            try:
+                hook(g)
+            except Exception:                    # settings must never stop a graph being made
+                pass
         return g
 
     def new_result_graph(self, a: "Analysis") -> Graph:

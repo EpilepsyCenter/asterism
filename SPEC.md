@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M10 done; M11 (product) next.** The Qt spike (M0) passed on
+Status: **M1–M10 and M11a done; M11 (help, packaging, Windows) last.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -791,6 +791,31 @@ curves the template volume is greyed out unless quantities are reported per µL 
   axes as "26 Oct", ISO dates, months, or days since the first date.
 - Open: Prism graph formatting and layouts; `.pzfx` analyses; TRACER wide-sheet tag
   columns (group only for now).
+
+**M11a — Safety and settings. Done (2026-10-26).**
+- Autosave and recovery: while a project has unsaved changes, a recovery copy is written every
+  few minutes (Settings › General) into ASTERISM's own data folder — not beside the file, so
+  synced folders stay clean — and removed on save or close. At launch, copies left by an
+  ASTERISM that is no longer running are offered: restore (they open with unsaved changes,
+  under their original file if it still exists), keep for later, or discard.
+- Settings (⌘,): autosave; the Start window; how new graphs start (font and size, axis
+  thickness, frame, plot height, column width, colour scheme, significance thresholds, label
+  and shape); where new analyses start (Student's or Welch's t test, one-way ANOVA
+  comparisons, confidence level, α); import defaults (ΔΔCt relative to a control group or a
+  reference sample; the lab's titration settings for standard curves). They apply only to
+  graphs and analyses made from then on, never to saved ones; defaults equal the built-in
+  ones, so nothing changes until a setting does.
+- Prism graph formatting (user's decision 2026-10-26: decode it, from the lab's own files only —
+  never Prism's program): the graph binary (`graphs/<uid>/data.bin`, "PCFFGRA4") is a stream of
+  tag/length records with containers closed by end markers (`asterism/io/prism_graphs.py`).
+  Read: graph title (and whether Prism hides it), axis titles, axis ranges (log axes as
+  exponents), major tick intervals, log scale, axis lengths (graph size), which data sets each
+  graph plots, and per data set (matched to its column by data range): bars or points, bar
+  fill and border colours, symbol shape, size and colour (solid/open), SD or SEM, connecting
+  lines, spaghetti, stacked bars, before-after lines (column and grouped), legend on/off.
+  Checked against the lab's PNG exports of Seizure_data and Ephys_summary. Each Prism graph
+  becomes an ASTERISM graph of its table (tables without one get a default graph). Not yet:
+  line dash patterns, fonts, axis gaps, extra lines (e.g. a dotted line at 0), free text placement.
 
 **M11 — Product:** autosave and recovery, preferences, help, Windows icon set, packaging,
 signing, file associations, sample projects.

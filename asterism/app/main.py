@@ -51,8 +51,11 @@ def main(argv: list[str] | None = None) -> int:
         return take_shots(app, argv[argv.index("--shots") + 1])
 
     from .dialogs.start import show_at_startup
-    from .main_window import new_window, open_path, run_start, windows
+    from .main_window import new_window, offer_recovery, open_path, run_start, windows
     files = [a for a in argv[1:] if not a.startswith("-")]
+    restored = offer_recovery()                  # unsaved work from a session that didn't end normally
+    if restored and not files:
+        return app.exec()
     if files:
         first = new_window()
         for path in files:

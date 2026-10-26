@@ -95,7 +95,7 @@ class YMap:
                 return top_len - (v - b["hf"]) / (hi - b["hf"]) * top_len
             return (h - b["hl"]) - (v - b["lt"]) / (b["hf"] - b["lt"]) * b["gap"]
         if self.log:
-            v = math.log10(max(v, 1e-300))
+            v = math.log10(max(v, lo))            # zero or negative (e.g. mean − SD) stops at the axis
             lo, hi = math.log10(lo), math.log10(hi)
         return self.h - (v - lo) / (hi - lo) * self.h
 
@@ -514,7 +514,8 @@ def plan_grouped(graph, cols: list[int], colw: float) -> Plan:
                                   force_bar=True, error_dir="above"))
                 base = top
             labels.append((xc, t.row_label(r)))
-        return Plan(slots, len(rows) * (bw + gap), labels, legend=list(cols), swatch="bar")
+        # legend top to bottom like the stack
+        return Plan(slots, len(rows) * (bw + gap), labels, legend=list(reversed(cols)), swatch="bar")
     if lay == "pyramid":                     # two data sets back to back: the first leftwards (or down)
         bw = colw * 1.6
         step = bw + gap
@@ -838,7 +839,9 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
     elements: list[Element] = []
 
     # --- data sets (one selectable element per data set, however many slots) ---------
-    aligned = spec.connect_rows and table.table_type == "column"
+    joined = spec.connect_rows and not table.is_summary() and (
+        table.table_type == "column" or (table.table_type == "grouped" and spec.grouped_layout == "interleaved"))
+    aligned = joined
     geoms: list[_SlotGeom] = []
     by_col: dict[int, list[_SlotGeom]] = {}
     for sl in plan.slots:
@@ -879,10 +882,25 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
         elements.append(Element("error-bars", "errors", eb, draw_errs, QPainterPath(), {}))
 
     # --- lines joining each row's values across data sets (before-after) -----
-    if spec.connect_rows and len(cols) > 1 and table.table_type == "column" and not table.is_summary():
-        xpos = {sl.column: sl.x for sl in plan.slots}
+    if joined and len(cols) > 1:
         lines = []
-        for r in range(table.nrows_used()):
+        if table.table_type == "grouped":         # each replicate, across the data sets of a group
+            xpos = {sl.keys[0]: sl.x for sl in plan.slots}
+            for r in sorted({k[0] for k in xpos}):
+                for sub in range(table.width()):
+                    pts = []
+                    for c in cols:
+                        v = table._ok(r, table.flat(c, sub))
+                        if v is not None and (r, c) in xpos:
+                            pts.append((xpos[(r, c)], ymap(c)[0](float(v))))
+                        elif pts:
+                            if len(pts) > 1:
+                                lines.append(pts)
+                            pts = []
+                    if len(pts) > 1:
+                        lines.append(pts)
+        xpos = {sl.column: sl.x for sl in plan.slots}
+        for r in range(table.nrows_used() if table.table_type == "column" else 0):
             pts = []
             for c in cols:
                 v = table.row_values(r, c)

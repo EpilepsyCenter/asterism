@@ -117,6 +117,12 @@ class ImportDialog(SectionDialog):
             self.per = combo([("Per reaction (as measured)", "reaction"), ("Per µL of sample", "ul"),
                               ("Per mL of sample", "ml")])
             self.ss = QCheckBox("Single-stranded genomes against a double-stranded (plasmid) standard: × 2")
+            from .. import prefs                      # the lab's titration settings (Settings › Import)
+            self.dilution.setText(f"{prefs.get('import.titre_dilution'):g}")
+            if prefs.get("import.titre_volume_ul"):
+                self.volume.setText(f"{prefs.get('import.titre_volume_ul'):g}")
+            self.per.setCurrentIndex(max(self.per.findData(prefs.get("import.titre_per")), 0))
+            self.ss.setChecked(prefs.get("import.titre_ss"))
             g.add(("Dilution factor:", self.dilution), ("Template volume:", self.volume))
             g.add(("Report quantities:", self.per))
             pl.addLayout(g)
@@ -157,7 +163,8 @@ class ImportDialog(SectionDialog):
         g = FormGrid()
         self.rel_group = QRadioButton("The mean of a control group")
         self.rel_sample = QRadioButton("One reference sample (as QuantStudio reports RQ)")
-        self.rel_group.setChecked(True)
+        from .. import prefs
+        (self.rel_sample if prefs.get("import.qpcr_relative_to") == "sample" else self.rel_group).setChecked(True)
         self.ctrl = QComboBox()
         self.ref_sample = QComboBox()
         for smp in d["samples"]:

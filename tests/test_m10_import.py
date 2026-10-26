@@ -221,7 +221,16 @@ def test_prism_file_tables_exclusions_and_analyses():
     assert any("graph" in n for n in imp.notes)
     p = Project(engine)
     into_project(imp, p)
-    assert len(p.graphs) == 37 and not [a for a in p.analyses if a.result is None or a.result.error]
+    assert not [a for a in p.analyses if a.result is None or a.result.error]
+    # Prism's graphs: one ASTERISM graph each (titles, ranges, intervals, log scale), plus a default
+    # graph for tables Prism had none for
+    assert len(imp.graphs) == 37 and len(p.graphs) == 39
+    log = next(g for g in p.graphs if g.name == "Seizures/day log10")
+    assert log.spec.y.scale == "log10" and log.spec.y.vmin == pytest.approx(0.01) and log.spec.y.title == "Seizures/day"
+    lin = next(g for g in p.graphs if g.name == "% change from week 1 (old)")
+    assert (lin.spec.y.vmin, lin.spec.y.vmax, lin.spec.y.interval, lin.spec.y.auto) == (-500, 2500, 500, False)
+    daily = next(g for g in p.graphs if g.name == "Daily seizures")
+    assert daily.spec.y.title == "Events/animal-hour"
     corr = next(a for a in p.analyses if a.analysis_type == "correlation")
     rows = {r[0]: r[1] for r in corr.result.pages[0].rows if r[1]}
     assert rows["Spearman r"] == ["-0.7714", "0.6845"]          # Prism: −0.7714, 0.6845
@@ -337,3 +346,70 @@ def test_real_standard_curve_matches_quantstudio():
     assert cv["ITR"]["efficiency"] == pytest.approx(92.292274, abs=0.05)
     q = Q.quantify(sh)["quantities"]
     assert q[("#175 Vale 1", "CMV")][0] == pytest.approx(1.0557656e7, rel=2e-3)
+
+
+
+def test_prism_graph_binary_structure():
+    """The record structure of Prism's graph files (containers with end markers, plain records)."""
+    import struct
+    from asterism.io.prism_graphs import decode, parse
+    rec = lambda tag, pl=b"": struct.pack("<HI", tag, len(pl)) + pl
+    end = lambda tag: struct.pack("<H", (tag & 0x3fff) | 0x4000)
+    axis = lambda lo, hi: struct.pack("<5d", 0, 0, lo, hi, lo) + b"\0" * 20
+    seg = lambda iv: b"\0" * 30 + struct.pack("<H", 1200) + b"\0" * 22 + struct.pack("<d", iv) + b"\0" * 72
+    text = lambda kind, box, s, vertical, role=b"\x30\x03": (rec(0x8020, struct.pack("<H4h", kind, *box) + b"\0" * 18 + role)
+                                           + rec(0x0071, b"\x34\0\0\0" + (b"\1" if vertical else b"\0") + b"\0\0\0")
+                                           + rec(0x802b, b"\0" * 4) + rec(0x002c, s.encode()) + end(0x802b) + end(0x8020))
+
+    def dataset(lo, hi, bars, shape, fill):
+        st = bytearray(317)
+        st[15] = 0x10 if bars else 0
+        st[28], st[34], st[81] = 3, shape, 3
+        st[208:212] = b"\xff" + bytes.fromhex(fill)
+        st[224:228] = b"\xff\0\0\0"
+        rng = struct.pack("<6d", 0, 0, 0, 0, lo, hi)[:16] + b"\0" * 10 + struct.pack("<4d", 0, 0, lo, hi)
+        return (rec(0x8020, b"\0" * 30) + rec(0x8028, rng) + rec(0x009c, bytes(st)) + end(0x8028) + end(0x8020))
+    body = (rec(0x8012, b"3\0") + rec(0x8012, b"x\0")                    # a plain record with the 0x8000 bit
+            + rec(0x0017, axis(1, 3)) + rec(0x0017, axis(-2, 3)) + rec(0x0017, axis(0, 100))
+            + rec(0x00a5, b"\0" * 64 + b"\0" * 4) + rec(0x00a5, b"\0" * 64 + b"\1\0\1\0") + rec(0x00a5, b"\0" * 68)
+            + b"".join(rec(0x8025, seg(iv)) + end(0x8025) for iv in (1, 1, 1, 50, 1, 1, 1, 1, 1))
+            + text(2, (100, 50, 300, 80), "My graph", False, b"\x33\x03") + text(2, (100, 900, 300, 940), "Day", False)
+            + text(2, (10, 300, 40, 700), "Cells", True) + text(2, (10, 300, 40, 700), "Y1Title", True)
+            + dataset(5.0, 9.0, bars=True, shape=10, fill="999999") + dataset(1.0, 2.0, bars=False, shape=4, fill="ffffff")
+            + end(0x8012))
+    buf = b"PCFFGRA4" + rec(0x8001, b"\0" * 12) + body + end(0x8001)
+    nodes, stop = parse(buf)
+    assert stop == len(buf) and nodes[0].tag == 0x8001
+    gf = decode(buf)
+    assert (gf.title, gf.x_title, gf.y_title) == ("My graph", "Day", "Cells")
+    assert gf.axes["y"].log and gf.axes["y"].vmin == pytest.approx(0.01) and gf.axes["y"].vmax == pytest.approx(1000)
+    assert gf.axes["x"].vmin == 1 and gf.axes["x"].vmax == 3 and gf.axes["x"].interval == 1
+    assert not gf.title_visible                         # role bit 0x02: hidden in Prism
+    assert gf.axes["y"].length_mm == pytest.approx(50.8)   # 1200/600 inch
+    a, b = gf.sets
+    assert (a.ymin, a.ymax, a.bars, a.shape, a.fill, a.error) == (5.0, 9.0, True, 10, "#999999", 3)
+    assert (b.ymin, b.ymax, b.bars, b.shape) == (1.0, 2.0, False, 4)
+
+
+def test_prism_graph_styles_onto_spec():
+    """Decoded styles land on the matching data sets of an ASTERISM graph."""
+    from asterism.analysis import engine
+    from asterism.doc.model import Project
+    from asterism.io.prism_graphs import AxisFormat, GraphFormat, SetStyle, apply
+    p = Project(engine)
+    t = p.new_table("T", "column")
+    for c, vals in ((0, [1, 2, 3]), (1, [10, 20, 30])):
+        for r, v in enumerate(vals):
+            t.set(r, c, v)
+    g = p.new_graph(t)
+    gf = GraphFormat(title="T", title_visible=False, legend=True,
+                     axes={"y": AxisFormat(0, 40, 10, False, 45.0), "x": AxisFormat(length_mm=30.0)},
+                     sets=[SetStyle(ymin=10, ymax=30, bars=False, shape=10, symbol_border="#123456", error=2),
+                           SetStyle(ymin=1, ymax=3, bars=True, fill="#999999", shape=5)])
+    apply(gf, g.spec, "column", t)
+    s0, s1 = g.spec.style(0), g.spec.style(1)
+    assert s0.appearance == "bar" and s0.bar_fill == "#999999" and s0.symbol_shape == "circle"
+    assert s1.appearance == "scatter" and s1.symbol_shape == "open_circle" and s1.symbol_color == "#123456"
+    assert s1.line_at == "mean_sd"
+    assert not g.spec.show_title and g.spec.show_legend
+    assert g.spec.y_len_mm == 45.0 and g.spec.col_width_mm == 15.0

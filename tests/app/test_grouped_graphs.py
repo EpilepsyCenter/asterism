@@ -224,3 +224,18 @@ def test_settings_dialogs_offer_the_missing_values_choice(app):
     t = p.add_table(table_type="column", example=True)
     d1 = AnovaParamsDialog({"design": "rm"}, t, [0, 1, 2])
     assert d1.params()["rm_method"] == "auto"
+
+
+def test_grouped_before_after_and_stacked_legend(app):
+    """Joining rows on a grouped graph links each replicate across the data sets of a group;
+    stacked bars list the legend top segment first."""
+    from asterism.app.graph.layout import build, plan_grouped
+    p, t, g = _grouped(app)
+    assert "connecting-lines" not in _ids(g)
+    g.spec.connect_rows = True
+    els = {e.id: e for e in build(g)[0]}
+    assert "connecting-lines" in els
+    g.spec.grouped_layout = "stacked"
+    cols = t.used_columns()
+    assert plan_grouped(g, cols, 20.0).legend == list(reversed(cols))
+    assert "connecting-lines" not in _ids(g)          # only on side-by-side groups
