@@ -119,6 +119,15 @@ class GraphSpec:
     nested_layout: str = "subjects"  # subjects (side by side) | pooled | superplot
     show_legend: bool = True
     x_len_mm: float = 60.0           # XY graphs: length of the X axis
+    # Parts of whole
+    parts_layout: str = "pie"        # pie | donut | stacked100
+    parts_labels: str = "percent"    # percent | value | none
+    donut_hole: float = 0.5
+    # Survival
+    surv_percent: bool = True        # Y as percent (else fraction)
+    surv_death: bool = False         # plot deaths (1 − survival) instead
+    surv_ci: str = "none"            # none | dashed | shaded
+    surv_ticks: bool = True          # mark censored subjects
     heat_low: str = "#f7fbff"
     heat_high: str = "#08306b"
 
@@ -183,7 +192,8 @@ def spec_to_dict(s: GraphSpec) -> dict:
     }
 
 
-_EXTRA = ("palette", "grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "x_len_mm")
+_EXTRA = ("palette", "grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "x_len_mm",
+          "parts_layout", "parts_labels", "donut_hole", "surv_percent", "surv_death", "surv_ci", "surv_ticks")
 
 
 def spec_from_dict(d: dict | None) -> GraphSpec:

@@ -123,7 +123,7 @@ def test_start_screen_replaces_the_empty_project(app, close_later, monkeypatch):
 
 
 def test_graph_placeholder_for_types_without_graphs_yet(app, close_later):
-    w = _window(app, "survival")
+    w = _window(app, "multivar")
     close_later(w)
     g = w.project.graphs[0]
     gs = w._widget_for(g)
@@ -148,7 +148,7 @@ def test_summary_column_table_graphs_entered_error(app):
 
 
 def test_placeholder_graph_disables_graph_tools(app, close_later):
-    w = _window(app, "survival")
+    w = _window(app, "multivar")
     close_later(w)
     w.show_sheet(w.project.graphs[0])
     assert not w.a_fmt_graph.isEnabled() and not w.a_export_pdf.isEnabled()

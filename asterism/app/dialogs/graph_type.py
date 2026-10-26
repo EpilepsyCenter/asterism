@@ -81,11 +81,32 @@ XY_PRESETS = [
     ("xy_area", "Line with shaded area", S(XYBASE, connect=True, fill=True, show_points=False, errors=False), S()),
     ("xy_bars", "Bars at each X, mean ± SD", S(XYBASE, appearance="bar", bars=True, line_at="mean_sd"), S()),
 ]
+CBAR = S(appearance="bar", bars=True, line_at="mean", errors=False, show_points=False)
+CONT_PRESETS = [
+    ("c_bars", "Bars side by side (counts)", CBAR, S(grouped_layout="interleaved")),
+    ("c_separated", "Separated bars", CBAR, S(grouped_layout="separated")),
+    ("c_stacked", "Stacked bars (counts)", CBAR, S(grouped_layout="stacked")),
+    ("c_stacked_pct", "Stacked to 100% (percentages)", CBAR, S(grouped_layout="stacked_pct")),
+    ("c_heat", "Heat map", S(), S(grouped_layout="heatmap")),
+]
+PARTS_PRESETS = [
+    ("p_pie", "Pie chart", S(), S(parts_layout="pie")),
+    ("p_donut", "Donut chart", S(), S(parts_layout="donut")),
+    ("p_stack", "Bar stacked to 100%", S(), S(parts_layout="stacked100")),
+]
+SURV_PRESETS = [
+    ("s_steps", "Survival curves with censoring ticks", S(), S(surv_ci="none", surv_death=False, surv_ticks=True)),
+    ("s_dashed", "With confidence bands (dashed)", S(), S(surv_ci="dashed", surv_death=False)),
+    ("s_shaded", "With confidence bands (shaded)", S(), S(surv_ci="shaded", surv_death=False)),
+    ("s_death", "Cumulative deaths", S(), S(surv_ci="none", surv_death=True)),
+]
 PRESETS = {"column": [(k, n, f, S(connect_rows=k == "before_after")) for k, n, f in COLUMN_PRESETS],
-           "grouped": GROUPED_PRESETS, "nested": NESTED_PRESETS, "xy": XY_PRESETS}
+           "grouped": GROUPED_PRESETS, "nested": NESTED_PRESETS, "xy": XY_PRESETS,
+           "contingency": CONT_PRESETS, "parts": PARTS_PRESETS, "survival": SURV_PRESETS}
 SECTIONS = {"column": ("Column graphs", "chart.bar"), "grouped": ("Grouped graphs", "square.grid.3x2"),
             "nested": ("Nested graphs", "square.stack.3d.down.right"),
-            "xy": ("XY graphs", "chart.xyaxis.line")}
+            "xy": ("XY graphs", "chart.xyaxis.line"), "contingency": ("Contingency graphs", "tablecells"),
+            "parts": ("Parts of whole", "chart.pie"), "survival": ("Survival graphs", "waveform.path.ecg")}
 
 
 def apply_preset(spec: GraphSpec, key: str, columns: list[int]) -> GraphSpec:

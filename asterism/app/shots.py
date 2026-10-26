@@ -222,6 +222,43 @@ def take_shots(app, out: str) -> int:
     shot(dlg, "53_format_xy_style")
     dlg.close()
 
+    # Contingency, survival, parts of whole (M6).
+    from .dialogs.params_counts import ContingencyParamsDialog
+    t8 = p.add_table("Response to treatment", table_type="contingency", example=True)
+    a12 = p.add_analysis(_A("contingency", t8, t8.used_columns(), {}))
+    w.show_sheet(a12)
+    shot(w, "54_contingency_results")
+    w._widget_for(a12).tabs.setCurrentIndex(1)
+    shot(w, "55_contingency_effects")
+    dlg = ContingencyParamsDialog(a12.params, True, w)
+    dlg.show_section("intervals")
+    dlg.show()
+    shot(dlg, "56_contingency_settings")
+    dlg.close()
+    w.show_sheet(next(g for g in p.graphs if g.home is t8))
+    shot(w, "57_contingency_graph")
+    t9 = p.add_table("Seizure-free survival", table_type="survival", example=False)
+    rng9 = _np.random.default_rng(4)
+    for r in range(40):
+        grp = r % 2
+        t9.set(r, "x", float(round(rng9.exponential(12 if grp == 0 else 24), 1)), emit=False)
+        t9.set(r, t9.flat(grp), 0.0 if rng9.random() < 0.25 else 1.0, emit=False)
+    t9.titles[:2] = ["Vehicle", "Treated"]
+    t9.changed.emit()
+    g9 = next(g for g in p.graphs if g.home is t9)
+    g9.spec.x.title = "Days"
+    g9.spec.surv_ci = "shaded"
+    w.show_sheet(g9)
+    shot(w, "58_survival_graph")
+    a13 = p.add_analysis(_A("survival", t9, [0, 1], {}))
+    w.show_sheet(a13)
+    shot(w, "59_survival_results")
+    t10 = p.add_table("Cell types", table_type="parts", example=True)
+    g10 = next(g for g in p.graphs if g.home is t10)
+    g10.spec.parts_layout = "donut"
+    w.show_sheet(g10)
+    shot(w, "60_donut")
+
     # Dark mode: a fresh window after switching the app's colour scheme.
     try:
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)

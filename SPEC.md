@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and layouts, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1, M1b, M2, M3, M4 and M5 done; M6 (contingency, survival, parts of whole) next.** The Qt spike (M0) passed on
+Status: **M1–M6 done; M7 (transforms and result tables) next.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -297,10 +297,10 @@ Status: ✅ done · ◐ partly done · blank = to do.
 25. ✅ Frequency distribution: histogram and cumulative, as a graph of the analysis's results (live)
 
 **Survival, contingency, parts of whole (M6)**
-26. Kaplan-Meier staircase with censor ticks, CI bands or error bars, % or fraction, survival or death
-27. Contingency: interleaved and stacked bars of counts / percentages
-28. Pie and donut charts
-29. 100% stacked bar and percentage dot plot (waffle)
+26. ✅ Kaplan-Meier staircase with censor ticks, CI bands (dashed or shaded), % or fraction, survival or death (CI as error bars: M9)
+27. ✅ Contingency: interleaved, separated and stacked bars of counts, stacked to 100%, heat map
+28. ✅ Pie and donut charts (labels by percent or value, readable on any slice colour)
+29. ◐ 100% stacked bar done; percentage dot plot (waffle) in M9
 
 **Graphs created by analyses (with each analysis, M3–M7)**
 30. Estimation plots (t test: Gardner-Altman; one-way ANOVA: Cumming)
@@ -613,7 +613,28 @@ Graph Type dialog.
   function and discontinuous lines (M9), residual plots as graphs (with M7's result
   tables), smoothing / derivatives (M7 transforms).
 
-**M6 — Contingency, survival, parts of whole.**
+**M6 — Contingency, survival, parts of whole. Done (2026-10-26).**
+- Contingency: Fisher's exact test (2 × 2, golden-tested against Prism 11 on Seizure_data;
+  larger tables by the Freeman-Halton enumeration, = R), chi-square with or without Yates'
+  correction, chi-square test for trend (Cochran-Armitage, = R prop.trend.test); 2 × 2
+  effect sizes with Prism 11's recommended methods (read from a saved Prism analysis):
+  proportions and diagnostic measures by hybrid Wilson/Brown (= DescTools "modified
+  wilson"), relative risk by Koopman (= PropCIs riskscoreci), difference by Newcombe/Wilson
+  with or without continuity correction (= DescTools), odds ratio by Baptista-Pike (no
+  reference implementation; checked to sit exactly on its rejection boundary), NNT,
+  phi / Cramér's V with a noncentral chi-square interval. Older methods (Katz, Woolf,
+  Clopper-Pearson) available.
+- Survival: Kaplan-Meier with Greenwood SEs; log-log (default, as Prism) or symmetric
+  clipped intervals (= R survfit); median survival and its interval from the log-log bands
+  (= R); log-rank (= R survdiff, k − 1 df), Gehan-Breslow-Wilcoxon (= SAS LIFETEST's
+  Wilcoxon on the Freireich data), log-rank test for trend; hazard ratio by Mantel-Haenszel
+  and log-rank methods; ratio of medians with an interval assuming exponential survival.
+- Parts of whole: fraction of total (column / row / grand total, percent or fraction,
+  Wilson/Brown intervals for counts).
+- Graphs: §8a items 26–29 as marked; Format Graph arrangement pages; galleries.
+- Open: Prism golden values for survival and the 2 × 2 effect sizes
+  (`tests/golden/REQUESTS.md`). Deferred: McNemar's test, comparing observed and expected
+  counts (with M7's column tools), survival tables entered as percentages.
 
 **M7 — Transforms** producing result tables.
 

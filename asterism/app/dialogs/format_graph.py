@@ -106,9 +106,10 @@ class FormatGraphDialog(SectionDialog):
         self.add_section("fonts", "Titles and fonts", self._fonts_page(), "textformat")
         self.add_section("significance", "Significance", self._significance_page(), "asterisk")
         tt = graph.table.table_type
-        if tt in ("grouped", "nested"):
+        if tt in ("grouped", "nested", "contingency", "parts", "survival"):
             self.add_section("arrangement", "Arrangement", self._arrangement_page(tt),
-                             "square.grid.3x2" if tt == "grouped" else "square.stack.3d.down.right")
+                             {"nested": "square.stack.3d.down.right", "parts": "chart.pie",
+                              "survival": "waveform.path.ecg"}.get(tt, "square.grid.3x2"))
         self.add_group("Data sets")
         self.add_section("style", "Style", self._style_page(), "circle.grid.2x2")
         self.add_section("datasets", "Show and order", self._datasets_page(), "eye")
@@ -136,8 +137,9 @@ class FormatGraphDialog(SectionDialog):
             self._load()
             self.connect.setChecked(self.spec.connect_rows)
             if hasattr(self, "arrangement"):
-                set_combo(self.arrangement, self.spec.grouped_layout
-                          if self.graph.table.table_type == "grouped" else self.spec.nested_layout)
+                tt = self.graph.table.table_type
+                set_combo(self.arrangement, {"nested": self.spec.nested_layout, "parts": self.spec.parts_layout}
+                          .get(tt, self.spec.grouped_layout))
 
     # --- data-set picker (shown above the data-set sections) -------------------
 
@@ -244,7 +246,49 @@ class FormatGraphDialog(SectionDialog):
         page, pl = tab_page()
         s = self.spec
         g = FormGrid()
-        if tt == "grouped":
+        if tt == "parts":
+            self.arrangement = combo([("Pie chart", "pie"), ("Donut chart", "donut"),
+                                      ("Bar stacked to 100%", "stacked100")], s.parts_layout)
+            self.parts_labels = combo([("Percentages", "percent"), ("Values", "value"), ("No labels", "none")],
+                                      s.parts_labels)
+            self.hole = QDoubleSpinBox()
+            self.hole.setRange(10, 90)
+            self.hole.setDecimals(0)
+            self.hole.setSuffix(" % of the radius")
+            self.hole.setValue(s.donut_hole * 100)
+            g.add(("Draw as:", self.arrangement))
+            g.add(("Label the slices with:", self.parts_labels))
+            g.add(("Donut hole:", self.hole))
+            pl.addLayout(g)
+            self.legend = QCheckBox("Show a legend for the slices")
+            self.legend.setChecked(s.show_legend)
+            pl.addWidget(self.legend)
+            pl.addStretch(1)
+            return page
+        if tt == "survival":
+            self.surv_y = combo([("Percent surviving", "pct"), ("Fraction surviving", "frac"),
+                                 ("Percent with the event (deaths)", "pct_death"),
+                                 ("Fraction with the event", "frac_death")],
+                                ("pct" if s.surv_percent else "frac") + ("_death" if s.surv_death else ""))
+            self.surv_ci = combo([("No confidence bands", "none"), ("Dashed lines", "dashed"),
+                                  ("Shaded band", "shaded")], s.surv_ci)
+            g.add(("Plot:", self.surv_y))
+            g.add(("Confidence intervals:", self.surv_ci))
+            pl.addLayout(g)
+            self.surv_ticks = QCheckBox("Mark censored subjects with a tick")
+            self.surv_ticks.setChecked(s.surv_ticks)
+            pl.addWidget(self.surv_ticks)
+            self.legend = QCheckBox("Show a legend for the groups")
+            self.legend.setChecked(s.show_legend)
+            pl.addWidget(self.legend)
+            note = QLabel("Confidence bands use the log-log transform, as the survival analysis does by "
+                          "default.")
+            note.setWordWrap(True)
+            note.setEnabled(False)
+            pl.addWidget(note)
+            pl.addStretch(1)
+            return page
+        if tt in ("grouped", "contingency"):
             self.arrangement = combo(GROUPED_ARRANGEMENTS, s.grouped_layout)
             g.add(("Arrange as:", self.arrangement))
             pl.addLayout(g)
@@ -690,7 +734,22 @@ class FormatGraphDialog(SectionDialog):
         s.axis_color = self.axis_c.color()
         s.show_title = self.show_title.isChecked()
         tt = self.graph.table.table_type
-        if tt == "grouped":
+        if tt == "parts":
+            s.parts_layout = self.arrangement.currentData()
+            s.parts_labels = self.parts_labels.currentData()
+            s.donut_hole = self.hole.value() / 100
+            s.show_legend = self.legend.isChecked()
+        elif tt == "survival":
+            k = self.surv_y.currentData()
+            s.surv_percent, s.surv_death = k.startswith("pct"), k.endswith("death")
+            s.surv_ci = self.surv_ci.currentData()
+            s.surv_ticks = self.surv_ticks.isChecked()
+            s.show_legend = self.legend.isChecked()
+            auto = ("Percent survival", "Fraction survival", "Percent death", "Fraction death", "")
+            if self.t_ytitle.text().strip() in auto:          # a title the user hasn't changed: follow
+                self.t_ytitle.setText(("Percent " if s.surv_percent else "Fraction ")
+                                      + ("death" if s.surv_death else "survival"))
+        elif tt in ("grouped", "contingency"):
             s.grouped_layout = self.arrangement.currentData()
             s.show_legend = self.legend.isChecked()
             s.heat_low, s.heat_high = self.heat_low.color(), self.heat_high.color()

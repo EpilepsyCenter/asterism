@@ -359,6 +359,14 @@ def settings_dialog(kind: str, params: dict | None, table, columns: list[int], p
     from .params_grouped import MultipleTParamsDialog, NestedParamsDialog, TwoWayParamsDialog
     if kind == "anova2":
         return TwoWayParamsDialog(params, table, parent)
+    from .params_counts import ContingencyParamsDialog, FractionParamsDialog, SurvivalParamsDialog
+    if kind == "contingency":
+        rows = sum(1 for r in range(table.nrows_used()) if any(table.get(r, table.flat(c)) is not None for c in columns))
+        return ContingencyParamsDialog(params, rows == 2 and len(columns) == 2, parent)
+    if kind == "survival":
+        return SurvivalParamsDialog(params, parent)
+    if kind == "fraction":
+        return FractionParamsDialog(params, parent)
     from .params_xy import AucParamsDialog, CorrelationParamsDialog, LinRegParamsDialog, NonlinParamsDialog
     if kind == "linreg":
         return LinRegParamsDialog(params, parent)

@@ -54,3 +54,16 @@ exactly on the lab's data. Prism's own numbers are still wanted for:
    whether Prism still reports an exact P (ASTERISM: exact up to 16 pairs).
 4. Save the projects as `.prism` into `sample_data/` and send them; the harvester will be
    extended for NONLINEAR_REGRESSION and IDENTIFY_OUTLIERS.
+
+## Survival and 2 × 2 effect sizes (M6)
+
+Fisher's exact test already matches Prism on the lab's data; the methods below match R
+(and SAS for Gehan-Breslow-Wilcoxon) but not yet Prism itself:
+1. Open the Prism sample **Survival → "Comparing two survival curves"** (or any two-group
+   survival table) and run Survival analysis with default settings. Also run a three-group
+   one for the log-rank test for trend.
+2. In the lab's contingency table "All seizures increase/decrease", tick Relative risk,
+   Difference between proportions and Odds ratio (default interval methods) and re-run.
+3. Save as `.prism` into `sample_data/` and send; the harvester will be extended for
+   SURVIVAL_ANALYSIS and the contingency effect sizes (especially the Baptista-Pike odds
+   ratio interval, which has no reference implementation outside Prism).

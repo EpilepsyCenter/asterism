@@ -116,7 +116,7 @@ def _xy(z: zipfile.ZipFile, sheet_uid: str) -> dict:
 
 def harvest(path: Path) -> dict[str, list]:
     out: dict[str, list] = {"normality": [], "frequency": [], "two_way": [], "multiple_tests": [],
-                            "linear_regression": [], "correlation": []}
+                            "linear_regression": [], "correlation": [], "contingency": []}
     with zipfile.ZipFile(path) as z:
         names = set(z.namelist())
         for n in sorted(names):
@@ -220,6 +220,16 @@ def harvest(path: Path) -> dict[str, list]:
                                           "p": v["pValue"]["value"],
                                           "p_exact": v.get("pValueExact", {}).get("value"),
                                           "p_approx": v.get("pValueApproximate", {}).get("value")}})
+            elif cls == "CONTINGENCY_TABLE":
+                sheet_uid = sheet["inputSheets"][0]["uid"]
+                cols_ = _table_columns(z, sheet_uid)
+                table = [[c[r] for c in cols_[1:]] for r in range(len(cols_[0]))]     # col 0 = row titles
+                prism = {}
+                for key, v in results.items():
+                    if isinstance(v, dict) and "pValue" in v:
+                        prism[key] = v["pValue"]["value"]
+                out["contingency"].append({"method": params.get("calc", {}).get("method"), "table": table,
+                                           "prism": prism})
             elif cls == "FREQUENCY_DISTRIBUTION":
                 calc = params.get("calc", {})
                 views = [m for m in names if m.startswith(f"{base}/result_sheets/") and m.endswith(".json")]
@@ -241,7 +251,7 @@ def harvest(path: Path) -> dict[str, list]:
 def main(paths: list[str]) -> None:
     golden = json.loads(GOLDEN.read_text())
     harvested: dict[str, list] = {"normality": [], "frequency": [], "two_way": [], "multiple_tests": [],
-                                  "linear_regression": [], "correlation": []}
+                                  "linear_regression": [], "correlation": [], "contingency": []}
     for p in paths:
         h = harvest(Path(p))
         for k in harvested:

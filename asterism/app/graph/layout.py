@@ -200,7 +200,7 @@ def violin_curve(x: np.ndarray, smooth: str, n: int = 81) -> list[tuple[float, f
     return list(zip(grid.tolist(), dens.tolist()))
 
 
-GRAPHABLE_TYPES = {"column", "grouped", "nested", "xy"}   # table types with graphs so far
+GRAPHABLE_TYPES = {"column", "grouped", "nested", "xy", "contingency", "parts", "survival"}
 
 
 def summarize_entered(sm: dict | None, st: DataSetStyle) -> dict:
@@ -664,14 +664,20 @@ def _key_id(k) -> str:
 
 def build(graph: Graph) -> tuple[list[Element], AxisRange]:
     spec, table = graph.spec, graph.table
-    if table.table_type == "grouped" and spec.grouped_layout == "heatmap":
+    if table.table_type in ("grouped", "contingency") and spec.grouped_layout == "heatmap":
         return build_heatmap(graph)
     if table.table_type == "xy":
         from .xy_layout import build_xy
         return build_xy(graph)
+    if table.table_type == "parts":
+        from .parts_survival_layout import build_parts
+        return build_parts(graph)
+    if table.table_type == "survival":
+        from .parts_survival_layout import build_survival
+        return build_survival(graph)
     cols = [c for c in table.used_columns() if c not in spec.hidden]
     colw = spec.col_width_mm * MM
-    if table.table_type == "grouped":
+    if table.table_type in ("grouped", "contingency"):     # counts: rows × outcomes, as grouped bars
         plan = plan_grouped(graph, cols, colw)
     elif table.table_type == "nested":
         plan = plan_nested(graph, cols, colw)
@@ -683,7 +689,7 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
     yx, xy = -off, ph + off                     # where the Y and X axis lines sit
 
     rng = y_range(graph, {i: sl.summary for i, sl in enumerate(plan.slots)})
-    if table.table_type == "grouped" and spec.grouped_layout == "stacked_pct" and spec.y.auto:
+    if table.table_type in ("grouped", "contingency") and spec.grouped_layout == "stacked_pct" and spec.y.auto:
         rng = AxisRange(0.0, 100.0, 20.0)
     ym = YMap(spec.y, rng, ph)
     elements: list[Element] = []
@@ -701,7 +707,7 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
         g = _SlotGeom(sl, st, ym, rng, spec, aligned or st.spread == "aligned")
         geoms.append(g)
         by_col.setdefault(sl.column, []).append(g)
-    stacked = table.table_type == "grouped" and spec.grouped_layout in ("stacked", "stacked_pct")
+    stacked = table.table_type in ("grouped", "contingency") and spec.grouped_layout in ("stacked", "stacked_pct")
     for c, gs in by_col.items():
         st = spec.style(c)
         pts = plan.lines.get(c, [])

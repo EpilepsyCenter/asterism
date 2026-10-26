@@ -315,6 +315,21 @@ class Project:
         elif table.table_type == "nested":
             g.spec.default_style.line_at = "mean_sem"
             g.spec.col_width_mm = 24.0
+        elif table.table_type == "contingency":
+            g.spec.palette = True
+            st = g.spec.default_style
+            st.appearance, st.bars, st.line_at, st.errors, st.show_points = "bar", True, "mean", False, False
+            g.spec.col_width_mm = 9.0
+            g.spec.y.title = "Number of subjects"
+        elif table.table_type == "parts":
+            g.spec.palette = True
+            g.spec.y.title = ""
+        elif table.table_type == "survival":
+            g.spec.palette = True
+            g.spec.x.ticks_dir = "out"
+            g.spec.x.title = "Time"
+            g.spec.y.title = "Percent survival"
+            g.spec.default_style.line_width = 1.5
         elif table.table_type == "xy":
             g.spec.palette = True
             g.spec.x.ticks_dir = "out"

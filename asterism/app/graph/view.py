@@ -203,8 +203,7 @@ class GraphSheet(QWidget):
 
     def _show_placeholder(self) -> None:
         from ...doc.table import TYPE_NAMES
-        milestone = {"grouped": "M4", "nested": "M4", "xy": "M5", "contingency": "M6",
-                     "survival": "M6", "parts": "M6"}.get(self.graph.table.table_type, "a later milestone")
+        milestone = {"multivar": "M9"}.get(self.graph.table.table_type, "a later milestone")
         kind = TYPE_NAMES[self.graph.table.table_type]
         t = self.scene.addText(f"Graphs of {kind} tables arrive in {milestone}.\n"
                                "The data table and file are ready now.")

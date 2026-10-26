@@ -152,6 +152,12 @@ class MainWindow(QMainWindow):
                           lambda: self._quick("nonlin"), kinds=T)
         self.a_corr = A("Correlation…", "chart.dots.scatter", lambda: self._quick("correlation"), kinds=T)
         self.a_auc = A("Area Under the Curve…", "waveform.path.ecg", lambda: self._quick("auc"), kinds=T)
+        self.a_cont = A("Chi-square or Fisher's Test…", "tablecells", lambda: self._quick("contingency"), kinds=T)
+        self.a_surv = A("Survival Analysis…", "waveform.path.ecg", lambda: self._quick("survival"), kinds=T)
+        self.a_frac = A("Fraction of Total…", "chart.pie", lambda: self._quick("fraction"), kinds=T)
+        self._table_types[self.a_cont] = {"contingency"}
+        self._table_types[self.a_surv] = {"survival"}
+        self._table_types[self.a_frac] = {"parts", "column", "grouped", "contingency"}
         for a_ in (self.a_linreg, self.a_nonlin, self.a_auc):
             self._table_types[a_] = {"xy"}
         self._table_types[self.a_corr] = {"xy", "column"}
@@ -161,7 +167,7 @@ class MainWindow(QMainWindow):
         self._table_types[self.a_anova2] = {"grouped", "xy"}
         self._table_types[self.a_multi_t] = {"grouped", "xy"}
         self._table_types[self.a_nested] = {"nested"}
-        analyze_later = [self.a_nonlin, self.a_linreg, self.a_corr, self.a_auc,
+        analyze_later = [self.a_cont, self.a_surv, self.a_frac, self.a_nonlin, self.a_linreg, self.a_corr, self.a_auc,
                          self.a_anova, self.a_anova2, self.a_multi_t, self.a_nested,
                          self.a_normality, self.a_freq, self.a_outliers,
                          L("Transform…", "x.squareroot", "M7"), L("Normalize…", "percent", "M7")]
@@ -243,7 +249,7 @@ class MainWindow(QMainWindow):
         menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_anova,
                          self.a_normality, self.a_freq, self.a_outliers, None, self.a_anova2,
                          self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
-                         self.a_corr, self.a_auc])
+                         self.a_corr, self.a_auc, None, self.a_cont, self.a_surv, self.a_frac])
         menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket])
         menu("View", [self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
@@ -545,7 +551,12 @@ class MainWindow(QMainWindow):
                 if any(a.result is not None and isinstance(getattr(a.result, "fit", None), dict)
                        and a.result.fit.get("kind") in ("line", "curve") for a in s.analyses()):
                     kind += " with fitted curve"
-            elif s.table.table_type == "grouped":
+            elif s.table.table_type == "parts":
+                kind = {"pie": "pie chart", "donut": "donut chart", "stacked100": "bar stacked to 100%"}.get(
+                    s.spec.parts_layout, "pie chart")
+            elif s.table.table_type == "survival":
+                kind = "cumulative deaths" if s.spec.surv_death else "survival curves"
+            elif s.table.table_type in ("grouped", "contingency"):
                 lay = s.spec.grouped_layout
                 kind = {"interleaved": f"{kind}, side by side", "separated": f"{kind}, separated",
                         "stacked": "stacked bars", "stacked_pct": "stacked bars to 100%",

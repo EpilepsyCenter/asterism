@@ -34,7 +34,12 @@ The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
   lab data; nonlinear regression with 30 models, global fits, model comparison,
   profile-likelihood intervals and ROUT (checked against R); area under the curve; XY graphs
   with fitted curves and bands; frequency-distribution histograms.
-- **Next — M6:** contingency, survival and parts-of-whole tables.
+- **M6 — Contingency, survival, parts of whole:** done. Fisher's exact test matches Prism on
+  real lab data; chi-square and trend tests, relative risk, odds ratio and diagnostic measures
+  with Prism's recommended intervals (checked against R); Kaplan-Meier, log-rank,
+  Gehan-Breslow-Wilcoxon and hazard ratios (checked against R and SAS); fraction of total;
+  contingency bars, survival curves, pie and donut charts.
+- **Next — M7:** transforms and result tables (normalise, baseline, smoothing, residual plots).
 
 ## Run
 

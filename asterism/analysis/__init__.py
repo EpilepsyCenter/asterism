@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from . import anova, anova2, column, frequency, multiple_t, nested, nonlin, normality, onesample, xy
+from . import (anova, anova2, column, contingency, frequency, multiple_t, nested, nonlin, normality,
+               onesample, parts, survival, xy)
 from .results import AnalysisResult, ResultPage
 
 _RUNNERS: dict[str, tuple[Callable, Callable[[dict], str]]] = {
@@ -29,6 +30,10 @@ _RUNNERS: dict[str, tuple[Callable, Callable[[dict], str]]] = {
                     else "Pearson correlation"),
     "auc": (xy.area_under_curve, lambda p: "Area under the curve"),
     "nonlin": (nonlin.nonlinear, nonlin.title),
+    "contingency": (contingency.contingency, lambda p: "Fisher's exact test" if p.get("test") == "fisher"
+                    else "Chi-square test" if p.get("test") == "chi2" else "Contingency analysis"),
+    "fraction": (parts.fraction_of_total, lambda p: "Fraction of total"),
+    "survival": (survival.survival, lambda p: "Survival analysis"),
     "frequency": (frequency.frequency, lambda p: "Cumulative frequency distribution"
                   if p.get("cumulative") else "Frequency distribution"),
 }

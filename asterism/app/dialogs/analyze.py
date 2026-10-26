@@ -63,10 +63,17 @@ CATALOGUE = [
         ("Area under the curve", "auc", "Total area, its confidence interval, and the peaks above a baseline."),
     ]),
     ("contingency", "Counts", "tablecells", [
-        ("Chi-square and Fisher's exact test", None, "Association in a contingency table."),
+        ("Chi-square and Fisher's exact test", "contingency",
+         "Is the outcome associated with the group? Fisher's exact or chi-square test, test for trend, "
+         "relative risk, odds ratio, sensitivity and specificity."),
     ]),
     ("survival", "Survival", "waveform.path.ecg", [
-        ("Kaplan-Meier survival analysis", None, "Survival curves, log-rank test, hazard ratios."),
+        ("Kaplan-Meier survival analysis", "survival",
+         "Survival curves and median survival; log-rank and Gehan-Breslow-Wilcoxon tests, test for trend, "
+         "hazard ratios."),
+    ]),
+    ("parts", "Parts of whole", "chart.pie", [
+        ("Fraction of total", "fraction", "Each value as a fraction or percentage of its column, row or grand total."),
     ]),
     ("transform", "Transform and normalize", "function", [
         ("Transform values", None, "Logarithms, reciprocals, powers and other transforms."),
@@ -140,7 +147,7 @@ class AnalyzeDialog(SectionDialog):
         self.ok.setText("Analyze")
         self._fill_sets()
         start = {"grouped": "grouped", "xy": "xy", "contingency": "contingency",
-                 "survival": "survival", "nested": "nested"}.get(table.table_type, "column")
+                 "survival": "survival", "nested": "nested", "parts": "parts"}.get(table.table_type, "column")
         self.show_section(start)
         self.lists[start].setCurrentRow(0)
         self.resize(820, 620)
@@ -193,7 +200,8 @@ class AnalyzeDialog(SectionDialog):
         if key == "ttest" and table.table_type != "column":
             QMessageBox.information(self, "Analyze", "The t test works on a Column table.")
             return
-        if key not in ("ttest", "linreg", "nonlin", "auc") and table.is_summary():
+        if key not in ("ttest", "linreg", "nonlin", "auc", "contingency", "survival", "fraction") \
+                and table.is_summary():
             QMessageBox.information(self, "Analyze", "This analysis needs raw values; this table "
                                     "holds means and errors calculated elsewhere.")
             return
@@ -205,7 +213,9 @@ class AnalyzeDialog(SectionDialog):
             QMessageBox.warning(self, "Analyze", "A t test compares exactly two data sets. Choose two.")
             return
         need = {"anova2": ("grouped", "xy"), "multiple_t": ("grouped", "xy"), "nested": ("nested",),
-                "linreg": ("xy",), "nonlin": ("xy",), "auc": ("xy",), "correlation": ("xy", "column")}
+                "linreg": ("xy",), "nonlin": ("xy",), "auc": ("xy",), "correlation": ("xy", "column"),
+                "contingency": ("contingency", "grouped"), "survival": ("survival",),
+                "fraction": ("parts", "column", "grouped", "contingency")}
         if key in need and table.table_type not in need[key]:
             QMessageBox.information(self, "Analyze", {
                 "anova2": "Two-way ANOVA works on a Grouped table.",
@@ -214,7 +224,10 @@ class AnalyzeDialog(SectionDialog):
                 "linreg": "Linear regression works on an XY table.",
                 "nonlin": "Nonlinear regression works on an XY table.",
                 "auc": "Area under the curve works on an XY table.",
-                "correlation": "Correlation works on an XY or Column table."}[key])
+                "correlation": "Correlation works on an XY or Column table.",
+                "contingency": "This analysis works on a Contingency table of counts.",
+                "survival": "Survival analysis works on a Survival table.",
+                "fraction": "Fraction of total works on Parts of whole, Column or Grouped tables."}[key])
             return
         if key in ("ttest", "anova1", "onesample", "normality", "frequency", "outliers", "descriptive") \
                 and table.table_type == "nested":
