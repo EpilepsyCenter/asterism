@@ -553,6 +553,14 @@ def nonlinear(an) -> AnalysisResult:
         pg = ResultPage("Residuals", ["X", "Y", "Fitted Y", "Residual"], rrows)
         pg.first_column = "Data set"
         pages.append(pg)
+    if p.get("residual_plot"):
+        from .xy import residual_table
+        series = []
+        for c, d in zip(keep_cols, datas):
+            f_, j = lookup[c]
+            if isinstance(f_, Fit):
+                series.append((c, t.label(c), d.x, d.y - f_.predict(j, d.x)))
+        res.out_table = residual_table(an.name, series)
     res.pages = pages
     res.p = None
     return res

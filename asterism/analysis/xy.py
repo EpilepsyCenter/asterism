@@ -328,8 +328,32 @@ def linear_regression(an) -> AnalysisResult:
         pages.append(ResultPage("Compare lines", ["Comparison"], crow))
     if p.get("interpolate"):
         pages.append(_interpolate_page(t, cols, fits, conf))
+    if p.get("residual_plot"):
+        res.out_table = residual_table(an.name, [(c, t.label(c), data[c][0],
+                                                  data[c][1] - (fits[c]["intercept"] + fits[c]["slope"] * data[c][0]))
+                                                 for c in fits])
     res.pages = pages
     return res
+
+
+def residual_table(name: str, series: list) -> "object":
+    """An XY table of residuals (X, and each data set's residuals as replicates of their X)."""
+    from asterism.doc.model import Table
+    xs = sorted({float(v) for _, _, x, _ in series for v in x})
+    index = {v: i for i, v in enumerate(xs)}
+    width = max([max([list(x).count(v) for v in set(x)], default=1) for _, _, x, _ in series] or [1])
+    out = Table(name, "xy", "replicates" if width > 1 else "single", replicates=width, ncols=max(1, len(series)))
+    for i, v in enumerate(xs):
+        out.set(i, "x", v, emit=False)
+    for j, (_, label, x, r) in enumerate(series):
+        out.titles[j] = label
+        used: dict[int, int] = {}
+        for a, b in zip(x, r):
+            i = index[float(a)]
+            k = used.get(i, 0)
+            used[i] = k + 1
+            out.set(i, out.flat(j, k), float(b), emit=False)
+    return out
 
 
 def _interpolate_page(t, cols, fits, conf) -> ResultPage:

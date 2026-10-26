@@ -22,7 +22,11 @@ class ContingencyParamsDialog(SectionDialog):
         pl.addWidget(Section("Test"))
         self.g_test = _radio_group(self, pl, [("fisher", "Fisher's exact test" +
                                                ("" if is22 else " (extended to larger tables)")),
-                                              ("chi2", "Chi-square test")], p["test"])
+                                              ("chi2", "Chi-square test"),
+                                              ("mcnemar", "McNemar's test (the same subjects measured twice; 2 × 2)")],
+                                   p["test"])
+        if not is22:
+            self.g_test.buttons()[2].setEnabled(False)
         self.c_yates = QCheckBox("Yates' continuity correction (chi-square, 2 × 2 only)")
         self.c_yates.setChecked(p["yates"])
         self.c_yates.setEnabled(is22)

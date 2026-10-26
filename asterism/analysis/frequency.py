@@ -88,6 +88,18 @@ def frequency(an) -> AnalysisResult:
     result = AnalysisResult(pages=[page, ResultPage("Bins", [t.label(c) for c in cols], info)])
     result.table = {"centers": centers.tolist(), "values": [v.tolist() for v in tables], "width": float(w),
                     "what": what}
+    from asterism.doc.model import Table
+    out = Table(an.name, "xy", "single", ncols=max(1, len(cols)))
+    for r, cx in enumerate(centers):
+        out.set(r, "x", float(cx), emit=False)
+    for j, vals in enumerate(tables):
+        for r, v in enumerate(vals):
+            out.set(r, out.flat(j), float(v), emit=False)
+    for j, c in enumerate(cols):
+        out.titles[j] = t.label(c)
+    out.bin_width = float(w)
+    out.cumulative = bool(cumulative)
+    result.out_table = out
     return result
 
 

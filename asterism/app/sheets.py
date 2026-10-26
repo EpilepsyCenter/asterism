@@ -1,4 +1,4 @@
-"""Results, Info and Layout sheets."""
+"""Results, Info and Figure sheets."""
 
 from __future__ import annotations
 

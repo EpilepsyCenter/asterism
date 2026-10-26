@@ -15,7 +15,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .model import (Analysis, AnalysisEngine, Table, Graph, InfoSheet, LayoutSheet,
+from .model import (Analysis, AnalysisEngine, Table, Graph, InfoSheet, FigureSheet,
                     Project)
 from .spec import spec_from_dict, spec_to_dict
 
@@ -60,7 +60,7 @@ def project_to_dict(p: Project) -> dict:
             **({"source": g.source.id} if g.source is not None else {}),
             "spec": spec_to_dict(g.spec),
         } for g in p.graphs],
-        "layouts": [{"id": lay.id, "name": lay.name} for lay in p.layouts],
+        "figures": [{"id": f.id, "name": f.name} for f in p.figures],
     }
 
 
@@ -90,17 +90,32 @@ def project_from_dict(d: dict, engine: AnalysisEngine | None = None) -> Project:
         info.notes = idd.get("notes", "")
         p.insert(info)
     analyses: dict[str, Analysis] = {}
-    for ad in d.get("analyses", []):
-        t = tables.get(ad.get("table"))
-        if t is None:
-            continue                      # orphan: its table is gone
-        a = Analysis(ad.get("type", ""), t, ad.get("columns", []), ad.get("params", {}),
-                     id=ad.get("id"), name=ad.get("name", ""))
-        a.auto_name = bool(ad.get("auto_name", True))
-        p.insert(a)
-        analyses[a.id] = a
+
+    def resolve(tid):
+        """A data table, or an analysis's output table ("<analysis id>.out")."""
+        if tid in tables:
+            return tables[tid]
+        if isinstance(tid, str) and tid.endswith(".out") and tid[:-4] in analyses:
+            return analyses[tid[:-4]].output_table()
+        return None
+    pending = list(d.get("analyses", []))
+    while pending:                        # analyses of other analyses' results come after them
+        progress = False
+        for ad in list(pending):
+            t = resolve(ad.get("table"))
+            if t is None:
+                continue
+            a = Analysis(ad.get("type", ""), t, ad.get("columns", []), ad.get("params", {}),
+                         id=ad.get("id"), name=ad.get("name", ""))
+            a.auto_name = bool(ad.get("auto_name", True))
+            p.insert(a)
+            analyses[a.id] = a
+            pending.remove(ad)
+            progress = True
+        if not progress:
+            break                         # orphans: their table is gone
     for gd in d.get("graphs", []):
-        t = tables.get(gd.get("table"))
+        t = resolve(gd.get("table"))
         if t is None:
             continue
         src = analyses.get(gd["source"]) if gd.get("source") else None
@@ -109,8 +124,8 @@ def project_from_dict(d: dict, engine: AnalysisEngine | None = None) -> Project:
         g = Graph(gd.get("name", ""), t, spec_from_dict(gd.get("spec")), id=gd.get("id"), source=src)
         g.auto_name = bool(gd.get("auto_name", False))
         p.insert(g)
-    for ld in d.get("layouts", []):
-        p.insert(LayoutSheet(ld.get("name", ""), id=ld.get("id")))
+    for ld in d.get("figures", d.get("layouts", [])):     # "layouts": files before the rename
+        p.insert(FigureSheet(ld.get("name", ""), id=ld.get("id")))
     p.undo.clear()
     p.mark_saved()
     return p

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QComboBox, QFileDialog, QFontComboBox, QLabel, QM
 from ..analysis import engine
 from ..doc import fileformat
 from ..doc.commands import ParamsCommand, SpecCommand
-from ..doc.model import (Analysis, Table, Graph, InfoSheet, LayoutSheet, Project, Sheet,
+from ..doc.model import (Analysis, Table, Graph, InfoSheet, FigureSheet, Project, Sheet,
                          column_letter)
 from ..doc.sample import blank_project, sample_project
 from . import documents, theme
@@ -39,6 +39,8 @@ APP_NAME = "ASTERISM"
 SIDEBAR_W, TOOLS_W = 250, 232
 
 _windows: list["MainWindow"] = []
+# Analyses whose result table gets its own graph when they are created (as Prism does).
+OUTPUT_GRAPHED = {"frequency", "transform", "normalize", "baseline", "prune", "smooth", "fraction"}
 
 
 class MainWindow(QMainWindow):
@@ -111,7 +113,7 @@ class MainWindow(QMainWindow):
         # Sheet
         self.a_new_table = A("New Data Table…", "tablecells.badge.ellipsis", lambda: self._command("new_table"), accent="accent")
         self.a_new_graph = A("New Graph", "chart.line.uptrend.xyaxis", lambda: self._command("new_graph"), accent="accent")
-        self.a_new_layout = A("New Layout", "rectangle.split.2x2", lambda: self._command("new_layout"), accent="accent")
+        self.a_new_figure = A("New Figure", "rectangle.split.2x2", lambda: self._command("new_figure"), accent="accent")
         self.a_new_info = A("New Notes", "note.text.badge.plus", lambda: self._command("new_info"), accent="accent")
         self.a_duplicate = L("Duplicate Sheet", "plus.square.on.square", "M2")
         self.a_delete = A("Delete Sheet", "trash", self._delete_sheet, accent="red")
@@ -152,6 +154,10 @@ class MainWindow(QMainWindow):
                           lambda: self._quick("nonlin"), kinds=T)
         self.a_corr = A("Correlation…", "chart.dots.scatter", lambda: self._quick("correlation"), kinds=T)
         self.a_auc = A("Area Under the Curve…", "waveform.path.ecg", lambda: self._quick("auc"), kinds=T)
+        self.a_transform = A("Transform…", "x.squareroot", lambda: self._quick("transform"), kinds=T)
+        self.a_normalize = A("Normalize…", "percent", lambda: self._quick("normalize"), kinds=T)
+        for a_ in (self.a_transform, self.a_normalize):
+            self._table_types[a_] = {"xy", "column", "grouped"}
         self.a_cont = A("Chi-square or Fisher's Test…", "tablecells", lambda: self._quick("contingency"), kinds=T)
         self.a_surv = A("Survival Analysis…", "waveform.path.ecg", lambda: self._quick("survival"), kinds=T)
         self.a_frac = A("Fraction of Total…", "chart.pie", lambda: self._quick("fraction"), kinds=T)
@@ -170,7 +176,7 @@ class MainWindow(QMainWindow):
         analyze_later = [self.a_cont, self.a_surv, self.a_frac, self.a_nonlin, self.a_linreg, self.a_corr, self.a_auc,
                          self.a_anova, self.a_anova2, self.a_multi_t, self.a_nested,
                          self.a_normality, self.a_freq, self.a_outliers,
-                         L("Transform…", "x.squareroot", "M7"), L("Normalize…", "percent", "M7")]
+                         self.a_transform, self.a_normalize]
         # Graph
         self.a_fmt_graph = A("Format Graph…", "paintbrush", lambda: self.format_graph(), "Ctrl+Shift+F", "accent", kinds=G)
         self.a_axes = A("Axes…", "ruler", lambda: self.format_graph("y"), kinds=G)
@@ -204,7 +210,7 @@ class MainWindow(QMainWindow):
 
         self.top_groups = [
             [self.a_new, self.a_open, self.a_save, self.a_undo, self.a_redo, self.a_print],
-            [self.a_new_table, self.a_new_graph, self.a_new_layout, self.a_new_info,
+            [self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info,
              self.a_duplicate, self.a_delete],
             [self.a_cut, self.a_copy, self.a_paste, self.a_insert_row, self.a_delete_row,
              self.a_insert_set, self.a_delete_set, self.a_exclude, self.a_sort],
@@ -243,13 +249,14 @@ class MainWindow(QMainWindow):
         menu("Edit", [self.a_undo, self.a_redo, None, self.a_cut, self.a_copy, self.a_paste, None,
                       self.a_insert_row, self.a_delete_row, self.a_insert_set, self.a_delete_set,
                       None, self.a_exclude, self.a_sort, self.a_transpose])
-        menu("Sheet", [self.a_new_table, self.a_new_graph, self.a_new_layout, self.a_new_info,
+        menu("Sheet", [self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info,
                        None, self.a_table_format, None, self.a_duplicate, self.a_delete, None,
                        self.a_prev, self.a_next])
         menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_anova,
                          self.a_normality, self.a_freq, self.a_outliers, None, self.a_anova2,
                          self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
-                         self.a_corr, self.a_auc, None, self.a_cont, self.a_surv, self.a_frac])
+                         self.a_corr, self.a_auc, None, self.a_cont, self.a_surv, self.a_frac, None,
+                         self.a_transform, self.a_normalize])
         menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket])
         menu("View", [self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
@@ -522,7 +529,7 @@ class MainWindow(QMainWindow):
             elif isinstance(s, InfoSheet):
                 w = InfoSheetView(s)
             else:
-                w = PlaceholderSheet("Page layouts (several graphs on one page) arrive in a later milestone.")
+                w = PlaceholderSheet("Figures (graphs and tables arranged as panels on a page) arrive in M8.")
             self.widgets[id(s)] = w
             self.stack.addWidget(w)
         return w
@@ -569,7 +576,7 @@ class MainWindow(QMainWindow):
             return f"Results · from “{s.table.name}”"
         if isinstance(s, InfoSheet):
             return "Notes"
-        return "Layout"
+        return "Figure"
 
     def show_sheet(self, s: Sheet) -> None:
         w = self._widget_for(s)
@@ -654,6 +661,10 @@ class MainWindow(QMainWindow):
         s = self.current
         if isinstance(s, Table):
             return s
+        if isinstance(s, Analysis) and s.has_output():      # analyse a transform's result table
+            return s.output_table()
+        if isinstance(s, Graph) and s.source is not None and s.source.has_output():
+            return s.source.output_table()
         return getattr(s, "table", None) or (self.project.tables[0] if self.project.tables else None)
 
     def _family_graph(self) -> tuple[Graph | None, GraphSheet | None]:
@@ -679,8 +690,8 @@ class MainWindow(QMainWindow):
             self.show_sheet(p.add_info())
         elif cmd == "new_analysis":
             self.analyze()
-        elif cmd == "new_layout":
-            self.show_sheet(p.add_layout())
+        elif cmd == "new_figure":
+            self.show_sheet(p.add_figure())
 
     def analyze(self) -> None:
         t = self._family_table()
@@ -733,7 +744,8 @@ class MainWindow(QMainWindow):
 
     def _result_graph(self, a: Analysis) -> None:
         """Analyses whose output is itself graphed (frequency distributions) get a graph."""
-        if a.analysis_type == "frequency" and a.result is not None and not a.result.error:
+        if a.has_output() and not a.result.error and (a.analysis_type in OUTPUT_GRAPHED or
+                                                      a.params.get("residual_plot")):
             self.project.add_sheets([self.project.new_result_graph(a)], "New Graph")
 
     def change_params(self) -> None:

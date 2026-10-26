@@ -1,4 +1,4 @@
-"""Project model: data tables, info sheets, analyses, graphs, layouts (no Qt).
+"""Project model: data tables, info sheets, analyses, graphs, figures (no Qt).
 
 Live linking is Prism's core promise: edit a table and its analyses recompute and
 its graphs rebuild. Sheets wire themselves to their table when they are attached
@@ -87,8 +87,9 @@ class InfoSheet(Sheet):
         self.notes = ""
 
 
-class LayoutSheet(Sheet):
-    kind = "layout"
+class FigureSheet(Sheet):
+    """A figure: graphs and tables arranged as panels on a page (M8)."""
+    kind = "figure"
 
 
 class Graph(Sheet):
@@ -128,7 +129,8 @@ class Graph(Sheet):
             self.name = self.source.name if self.source is not None else self.home.name
 
     def _analysis_changed(self, a: "Analysis") -> None:
-        if a is self.source or (self.source is None and a.table is self.home):
+        target = getattr(self.source, "_output", None) if self.source is not None else self.home
+        if a is self.source or a.table is target:
             self.changed.emit()
 
     def set_spec(self, spec: GraphSpec) -> None:
@@ -136,9 +138,12 @@ class Graph(Sheet):
         self.changed.emit()
 
     def analyses(self) -> list["Analysis"]:
-        if self.project is None or self.source is not None:
+        """Analyses of what the graph plots (its data table, or its analysis's result table),
+        for curves and significance brackets."""
+        if self.project is None:
             return []
-        return [a for a in self.project.analyses if a.table is self.home]
+        target = self.source.output_table() if self.source is not None else self.home
+        return [a for a in self.project.analyses if a.table is target]
 
 
 class Analysis(Sheet):
@@ -173,27 +178,38 @@ class Analysis(Sheet):
         self.params = dict(params)
         self.recompute()
 
-    def result_table(self) -> "Table":
-        """The analysis's tabular output as an XY table (frequency distributions), rebuilt
-        when the result changes. Graphs of an analysis plot this."""
-        cached = getattr(self, "_rt", None)
-        if cached is not None and cached[0] is self.result:
-            return cached[1]
-        t = Table(self.name, "xy", "single", ncols=max(1, len(self.columns)))
-        tab = getattr(self.result, "table", None) if self.result is not None else None
-        if tab:
-            for r, cx in enumerate(tab.get("centers", [])):
-                t.set(r, "x", float(cx), emit=False)
-            for j, vals in enumerate(tab.get("values", [])):
-                for r, v in enumerate(vals):
-                    if v is not None:
-                        t.set(r, t.flat(j), float(v), emit=False)
-            for j, c in enumerate(self.columns[:t.ncols]):
-                t.titles[j] = self.table.label(c)
-            t.bin_width = tab.get("width")
-            t.cumulative = bool(self.params.get("cumulative"))
-        self._rt = (self.result, t)
-        return t
+    # --- output table (transforms, frequency distributions …) ----------------------------
+    # An analysis whose result includes a table (result.out_table) owns one persistent
+    # output Table, refreshed in place on every recompute, so graphs and further analyses
+    # that use it stay live. Its id is "<analysis id>.out" (how files refer to it).
+
+    def has_output(self) -> bool:
+        return self.result is not None and getattr(self.result, "out_table", None) is not None
+
+    def output_table(self) -> "Table":
+        if getattr(self, "_output", None) is None:
+            t = Table(self.name, "column", id=f"{self.id}.out")
+            t.source_analysis = self
+            self._output = t
+            self._refresh_output(emit=False)
+        return self._output
+
+    def result_table(self) -> "Table":          # older name
+        return self.output_table()
+
+    def _refresh_output(self, emit: bool = True) -> None:
+        out = getattr(self, "_output", None)
+        if out is None:
+            return
+        src = getattr(self.result, "out_table", None) if self.result is not None else None
+        if src is None:
+            src = Table("", "column")
+        out.set_state(src.state(), emit=False)
+        for attr in ("bin_width", "cumulative"):
+            setattr(out, attr, getattr(src, attr, None))
+        out.name = self.name
+        if emit:
+            out.changed.emit()
 
     def _auto_rename(self) -> None:
         engine = self.project.engine if self.project else None
@@ -204,6 +220,7 @@ class Analysis(Sheet):
         engine = self.project.engine if self.project else None
         self._auto_rename()
         self.result = engine.run(self) if engine is not None else None
+        self._refresh_output()
         self.changed.emit()
         if self.project is not None:
             self.project.analysis_changed.emit(self)
@@ -214,7 +231,7 @@ class Analysis(Sheet):
 # ---------------------------------------------------------------------------
 
 SECTION_OF = {"table": "tables", "info": "infos", "analysis": "analyses", "graph": "graphs",
-              "layout": "layouts"}
+              "figure": "figures"}
 
 
 class Project:
@@ -223,7 +240,7 @@ class Project:
         self.infos: list[InfoSheet] = []
         self.analyses: list[Analysis] = []
         self.graphs: list[Graph] = []
-        self.layouts: list[LayoutSheet] = []
+        self.figures: list[FigureSheet] = []
         self.engine = engine
         self.undo = UndoStack()
         self._touched = False
@@ -254,7 +271,7 @@ class Project:
     # --- lookup ------------------------------------------------------------------
 
     def sheets(self) -> list[Sheet]:
-        return [*self.tables, *self.infos, *self.analyses, *self.graphs, *self.layouts]
+        return [*self.tables, *self.infos, *self.analyses, *self.graphs, *self.figures]
 
     def list_for(self, sheet: Sheet) -> list:
         return getattr(self, SECTION_OF[sheet.kind])
@@ -262,13 +279,47 @@ class Project:
     def find(self, sheet_id: str) -> Sheet | None:
         return next((s for s in self.sheets() if s.id == sheet_id), None)
 
+    def root_table(self, sheet: Sheet) -> "Table | None":
+        """The data table at the top of a sheet's chain (through analysis output tables)."""
+        t = sheet if isinstance(sheet, Table) else (sheet.home if isinstance(sheet, Graph)
+                                                     else getattr(sheet, "table", None))
+        seen = 0
+        while t is not None and getattr(t, "source_analysis", None) is not None and seen < 100:
+            t = t.source_analysis.table
+            seen += 1
+        return t
+
+    def children(self, sheet: Sheet) -> list[Sheet]:
+        """Sheets nested directly under a sheet: a table's analyses and graphs; an analysis's
+        graphs of its results and the analyses of its output table."""
+        if isinstance(sheet, Table):
+            return ([a for a in self.analyses if a.table is sheet]
+                    + [g for g in self.graphs if g.home is sheet and g.source is None])
+        if isinstance(sheet, Analysis):
+            out = getattr(sheet, "_output", None)
+            return ([g for g in self.graphs if g.source is sheet]
+                    + ([a for a in self.analyses if a.table is out] if out is not None else [])
+                    + ([g for g in self.graphs if g.home is out and g.source is None] if out is not None else []))
+        return []
+
+    def descendants(self, sheet: Sheet) -> list[Sheet]:
+        out = []
+        for c in self.children(sheet):
+            out.append(c)
+            out += self.descendants(c)
+        return out
+
     def family(self, sheet: Sheet) -> list[Sheet]:
-        """Prism 'family': a data table plus the analyses and graphs fed by it."""
-        table = getattr(sheet, "table", sheet if isinstance(sheet, Table) else None)
-        if table is None:
+        """Prism 'family': a data table plus every analysis and graph fed by it, directly or
+        through analysis results."""
+        table = self.root_table(sheet)
+        if table is None or table not in self.tables:
             return [sheet]
-        return ([table] + [a for a in self.analyses if a.table is table]
-                + [g for g in self.graphs if g.home is table])
+        return [table] + self.descendants(table)
+
+    def analysis_outputs(self) -> list["Table"]:
+        """Output tables of analyses that produce one (can be analysed and graphed)."""
+        return [a.output_table() for a in self.analyses if a.has_output()]
 
     def set_engine(self, engine: AnalysisEngine | None) -> None:
         self.engine = engine
@@ -339,7 +390,23 @@ class Project:
         return g
 
     def new_result_graph(self, a: "Analysis") -> Graph:
-        """A graph of an analysis's results table (frequency distributions)."""
+        """A graph of an analysis's results table (frequency distributions, transforms)."""
+        if a.analysis_type != "frequency":
+            out = a.output_table()
+            g = self.new_graph(out)
+            # Start from the format of the data's own graph when it plots the same kind of table.
+            base = next((x for x in self.graphs if x.home is a.table and x.source is None
+                         and x.table.table_type == out.table_type), None)
+            if base is not None:
+                import copy as _copy
+                g.spec = _copy.deepcopy(base.spec)
+                g.spec.title = ""
+                g.spec.offsets = {}
+            if a.analysis_type == "normalize" and g.spec.y.title in ("Title", ""):
+                g.spec.y.title = "Percent" if a.params.get("percent", True) else "Fraction"
+            g.home, g.source = a.table, a
+            g.name = a.name
+            return g
         g = Graph(a.name, a.table, source=a)
         g.auto_name = True
         g.spec.palette = True
@@ -383,19 +450,18 @@ class Project:
         self.add_sheets([info], "New Info")
         return info
 
-    def add_layout(self) -> LayoutSheet:
-        lay = LayoutSheet(self.unique_name("Layout", "layout"))
-        self.add_sheets([lay], "New Layout")
+    def add_figure(self) -> FigureSheet:
+        lay = FigureSheet(self.unique_name("Figure", "figure"))
+        self.add_sheets([lay], "New Figure")
         return lay
 
     def delete(self, sheet: Sheet) -> None:
         """Delete a sheet; deleting a data table deletes its whole family."""
         from .commands import RemoveSheets
-        doomed = self.family(sheet) if isinstance(sheet, Table) else [sheet]
-        if isinstance(sheet, Analysis):            # graphs of its results go with it
-            doomed += [g for g in self.graphs if g.source is sheet]
-        # Dependents first, so nothing points at a missing table while removing.
-        doomed = doomed[1:] + doomed[:1] if len(doomed) > 1 else doomed
+        # A sheet goes with everything that depends on it (its family, for a data table;
+        # graphs and analyses of its results, for an analysis); dependents first.
+        doomed = [sheet] + self.descendants(sheet)
+        doomed = list(reversed(doomed))
         self.undo.push(RemoveSheets(self, doomed, f"Delete {sheet.name}"))
 
     def rename(self, sheet: Sheet, name: str) -> None:

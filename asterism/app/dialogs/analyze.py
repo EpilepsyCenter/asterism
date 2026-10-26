@@ -37,6 +37,8 @@ CATALOGUE = [
         ("Bland-Altman agreement", None, "Agreement between two methods of measurement."),
         ("Outlier detection", "outliers", "Find outliers with ROUT or Grubbs' test."),
         ("Correlation", "correlation", "Pearson or Spearman correlation between every pair of data sets."),
+        ("Compare observed and expected counts", "observed_expected",
+         "Chi-square (or exact binomial) test of observed counts against equal or entered expected counts."),
         ("Combine P values", None, "Analyze a set of P values (false discovery rate, combined P)."),
     ]),
     ("grouped", "Grouped data", "square.grid.3x2", [
@@ -76,11 +78,17 @@ CATALOGUE = [
         ("Fraction of total", "fraction", "Each value as a fraction or percentage of its column, row or grand total."),
     ]),
     ("transform", "Transform and normalize", "function", [
-        ("Transform values", None, "Logarithms, reciprocals, powers and other transforms."),
-        ("Normalize", None, "Express values as a percentage of a reference."),
-        ("Subtract baseline and column arithmetic", None, "Remove a baseline; add, subtract or divide columns."),
-        ("Remove rows", None, "Keep only some rows."),
-        ("Fraction of total", None, "Each value as a fraction of its column or row total."),
+        ("Transform", "transform", "Logarithms, reciprocals, powers, Z scores or your own equation, for Y and X. "
+                                   "Makes a result table you can graph and analyse."),
+        ("Normalize", "normalize", "Each data set from 0% to 100% (smallest or first value to largest, last, "
+                                   "sum, mean or a value)."),
+        ("Remove baseline and column maths", "baseline",
+         "Subtract or divide by a baseline data set, or by the first rows of each data set."),
+        ("Prune rows", "prune", "Keep a range of rows, every nth row, or the average of every k rows."),
+        ("Transpose", "transpose", "Rows become data sets and data sets become rows."),
+        ("Smooth, differentiate or integrate a curve", "smooth",
+         "Savitzky-Golay smoothing, first or second derivative, or the cumulative area of an XY curve."),
+        ("Fraction of total", "fraction", "Each value as a fraction of its column, row or grand total."),
     ]),
 ]
 
@@ -128,7 +136,10 @@ class AnalyzeDialog(SectionDialog):
         self.table_combo = QComboBox()
         for t in project.tables:
             self.table_combo.addItem(t.name, t)
-        self.table_combo.setCurrentIndex(project.tables.index(table))
+        for t in project.analysis_outputs():           # result tables of transforms etc.
+            self.table_combo.addItem(f"Results: {t.name}", t)
+        idx = self.table_combo.findData(table)
+        self.table_combo.setCurrentIndex(max(idx, 0))
         self.table_combo.currentIndexChanged.connect(self._fill_sets)
         trow.addWidget(self.table_combo, 1)
         self.btn_all = QPushButton("All")
@@ -200,8 +211,8 @@ class AnalyzeDialog(SectionDialog):
         if key == "ttest" and table.table_type != "column":
             QMessageBox.information(self, "Analyze", "The t test works on a Column table.")
             return
-        if key not in ("ttest", "linreg", "nonlin", "auc", "contingency", "survival", "fraction") \
-                and table.is_summary():
+        if key not in ("ttest", "linreg", "nonlin", "auc", "contingency", "survival", "fraction",
+                       "transpose", "prune", "smooth", "observed_expected") and table.is_summary():
             QMessageBox.information(self, "Analyze", "This analysis needs raw values; this table "
                                     "holds means and errors calculated elsewhere.")
             return
@@ -215,7 +226,8 @@ class AnalyzeDialog(SectionDialog):
         need = {"anova2": ("grouped", "xy"), "multiple_t": ("grouped", "xy"), "nested": ("nested",),
                 "linreg": ("xy",), "nonlin": ("xy",), "auc": ("xy",), "correlation": ("xy", "column"),
                 "contingency": ("contingency", "grouped"), "survival": ("survival",),
-                "fraction": ("parts", "column", "grouped", "contingency")}
+                "fraction": ("parts", "column", "grouped", "contingency"),
+                "smooth": ("xy",), "observed_expected": ("column", "parts", "contingency")}
         if key in need and table.table_type not in need[key]:
             QMessageBox.information(self, "Analyze", {
                 "anova2": "Two-way ANOVA works on a Grouped table.",
@@ -227,7 +239,9 @@ class AnalyzeDialog(SectionDialog):
                 "correlation": "Correlation works on an XY or Column table.",
                 "contingency": "This analysis works on a Contingency table of counts.",
                 "survival": "Survival analysis works on a Survival table.",
-                "fraction": "Fraction of total works on Parts of whole, Column or Grouped tables."}[key])
+                "fraction": "Fraction of total works on Parts of whole, Column or Grouped tables.",
+                "smooth": "Smoothing, derivatives and integrals work on XY tables.",
+                "observed_expected": "Enter the observed counts in a Column table."}[key])
             return
         if key in ("ttest", "anova1", "onesample", "normality", "frequency", "outliers", "descriptive") \
                 and table.table_type == "nested":

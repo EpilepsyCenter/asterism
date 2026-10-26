@@ -359,6 +359,20 @@ def settings_dialog(kind: str, params: dict | None, table, columns: list[int], p
     from .params_grouped import MultipleTParamsDialog, NestedParamsDialog, TwoWayParamsDialog
     if kind == "anova2":
         return TwoWayParamsDialog(params, table, parent)
+    from .params_transforms import (BaselineParamsDialog, NormalizeParamsDialog, ObservedExpectedParamsDialog,
+                                    PruneParamsDialog, SmoothParamsDialog, TransformParamsDialog)
+    if kind == "transform":
+        return TransformParamsDialog(params, table.has_x(), parent)
+    if kind == "normalize":
+        return NormalizeParamsDialog(params, parent)
+    if kind == "baseline":
+        return BaselineParamsDialog(params, table, columns, parent)
+    if kind == "prune":
+        return PruneParamsDialog(params, table.has_x(), parent)
+    if kind == "smooth":
+        return SmoothParamsDialog(params, parent)
+    if kind == "observed_expected":
+        return ObservedExpectedParamsDialog(params, parent)
     from .params_counts import ContingencyParamsDialog, FractionParamsDialog, SurvivalParamsDialog
     if kind == "contingency":
         rows = sum(1 for r in range(table.nrows_used()) if any(table.get(r, table.flat(c)) is not None for c in columns))

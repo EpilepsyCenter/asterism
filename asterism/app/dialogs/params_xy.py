@@ -36,7 +36,7 @@ class LinRegParamsDialog(SectionDialog):
         super().__init__("Linear Regression Settings", "Linear regression", parent)
         p = {"replicates": "individual", "through": False, "x0": 0.0, "y0": 0.0, "compare": False,
              "interpolate": False, "runs_test": False, "linearity_test": False, "conf": 0.95,
-             "bands": "none", "graph": True, **(params or {})}
+             "bands": "none", "graph": True, "residual_plot": False, **(params or {})}
         self.add_group("Settings")
         page, pl = tab_page()
         pl.addWidget(Section("Replicates"))
@@ -64,7 +64,8 @@ class LinRegParamsDialog(SectionDialog):
         page, pl = tab_page()
         for attr, text in (("interpolate", "Interpolate unknowns (rows with Y but no X, or X but no Y)"),
                            ("runs_test", "Runs test: do the points systematically deviate from the line?"),
-                           ("linearity_test", "Replicates test: does the line fit worse than replicates scatter?")):
+                           ("linearity_test", "Replicates test: does the line fit worse than replicates scatter?"),
+                           ("residual_plot", "Residual plot (a result table of residuals, graphed)")):
             c = QCheckBox(text)
             c.setChecked(p[attr])
             setattr(self, "c_" + attr, c)
@@ -94,7 +95,8 @@ class LinRegParamsDialog(SectionDialog):
                 "x0": _val(self.x0) or 0.0, "y0": _val(self.y0) or 0.0, "compare": self.c_compare.isChecked(),
                 "interpolate": self.c_interpolate.isChecked(), "runs_test": self.c_runs_test.isChecked(),
                 "linearity_test": self.c_linearity_test.isChecked(), "conf": self.conf.currentData(),
-                "bands": self.bands.currentData(), "graph": self.c_graph.isChecked()}
+                "bands": self.bands.currentData(), "graph": self.c_graph.isChecked(),
+                "residual_plot": self.c_residual_plot.isChecked()}
 
 
 class CorrelationParamsDialog(SectionDialog):
@@ -177,7 +179,7 @@ class NonlinParamsDialog(SectionDialog):
              "x_min": None, "x_max": None, "curve_from": None, "curve_to": None, "interpolate": False,
              "residuals": False, "runs_test": False, "outliers": "none", "rout_q": 0.01,
              "ci_method": "profile", "report_se": False, "conf": 0.95, "bands": "none", "graph": True,
-             **(params or {})}
+             "residual_plot": False, **(params or {})}
         self.p = p
         self.ncols = ncols
         self.add_group("Settings")
@@ -292,6 +294,7 @@ class NonlinParamsDialog(SectionDialog):
         page, pl = tab_page()
         for attr, text in (("interpolate", "Interpolate unknowns"),
                            ("residuals", "Table of residuals"),
+                           ("residual_plot", "Residual plot (a result table of residuals, graphed)"),
                            ("runs_test", "Runs test")):
             c = QCheckBox(text)
             c.setChecked(p[attr])
@@ -423,6 +426,7 @@ class NonlinParamsDialog(SectionDialog):
                 "x_min": _val(self.x_min), "x_max": _val(self.x_max), "curve_from": _val(self.c_from),
                 "curve_to": _val(self.c_to), "interpolate": self.c_interpolate.isChecked(),
                 "residuals": self.c_residuals.isChecked(), "runs_test": self.c_runs_test.isChecked(),
+                "residual_plot": self.c_residual_plot.isChecked(),
                 "ci_method": _key(self.g_ci), "report_se": self.c_se.isChecked(),
                 "conf": self.conf.currentData(), "bands": self.bands.currentData(),
                 "graph": self.c_graph.isChecked()}

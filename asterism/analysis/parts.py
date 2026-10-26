@@ -60,4 +60,16 @@ def fraction_of_total(an) -> AnalysisResult:
         info.append(("Confidence intervals", ["Not computed: the values are not counts"], "row"))
     res = AnalysisResult(pages=[page, ResultPage("Settings", ["Fraction of total"], info)])
     res.table = {"fractions": frac.tolist(), "rows": [t.row_label(r) for r in rows]}
+    from asterism.doc.model import Table
+    out_type = t.table_type if t.table_type in ("parts", "grouped", "column", "contingency") else "grouped"
+    out = Table(an.name, out_type, "single", row_titles=True, ncols=max(1, len(cols)))
+    for j, c in enumerate(cols):
+        out.titles[j] = t.label(c)
+    for i, r in enumerate(rows):
+        if out.has_row_titles:
+            out.set(i, "row", t.row_label(r), emit=False)
+        for j in range(len(cols)):
+            if np.isfinite(frac[i, j]):
+                out.set(i, out.flat(j), float(frac[i, j] * scale), emit=False)
+    res.out_table = out
     return res

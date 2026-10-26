@@ -259,6 +259,23 @@ def take_shots(app, out: str) -> int:
     w.show_sheet(g10)
     shot(w, "60_donut")
 
+    # Transforms and result tables (M7).
+    from .dialogs.params_transforms import SmoothParamsDialog
+    a14 = p.add_analysis(_A("normalize", t6, [0, 1], {}))
+    w._result_graph(a14)
+    w.show_sheet(a14)
+    shot(w, "61_normalize_results")
+    w.show_sheet(next(g for g in p.graphs if g.source is a14))
+    shot(w, "62_normalize_graph")
+    out14 = a14.output_table()
+    a15 = p.add_analysis(_A("nonlin", out14, out14.used_columns(), {"model": "agonist_norm_var"}))
+    w.show_sheet(a15)
+    shot(w, "63_chain_fit_of_normalized")
+    dlg = SmoothParamsDialog(None, w)
+    dlg.show()
+    shot(dlg, "64_smooth_settings")
+    dlg.close()
+
     # Dark mode: a fresh window after switching the app's colour scheme.
     try:
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)

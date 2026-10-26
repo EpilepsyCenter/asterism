@@ -1,11 +1,11 @@
 # ASTERISM — design spec
 
 A desktop app for scientific graphing and statistics that does what **GraphPad Prism 11**
-does (projects of live-linked data tables, analyses, graphs and layouts, with Prism's
+does (projects of live-linked data tables, analyses, graphs and figures, with Prism's
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M6 done; M7 (transforms and result tables) next.** The Qt spike (M0) passed on
+Status: **M1–M7 done; M8 (figures) next.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -51,7 +51,7 @@ multiple-variable methods) arrives after the core is solid, in the order users a
    - never reproduce Prism's window arrangement (ribbon with Prism's groups, Navigator
      sections and Family panel), its dialog layouts or tab sets, its icons or artwork;
    - never use Prism's coined terms ("Family", "Magic", "Welcome dialog", "Project
-     Companion", …) or copy its text (help, dialog wording, result layouts beyond
+     Companion", "Layouts" for pages of panels — ours are **Figures**, …) or copy its text (help, dialog wording, result layouts beyond
      standard statistical terms such as "P value" or "t, df");
    - screenshots of Prism are used to learn *which options exist*, never as layouts to
      reproduce.
@@ -122,7 +122,7 @@ Dependency rule: `app → analysis → doc → core`. Lower layers never import 
   arrives (e.g. nonlinear fits on large data), it gets a worker thread; the result object
   is immutable so it can be handed across.
 - **Identity.** Every sheet has a stable UUID; links between sheets (analysis → table,
-  graph → table/analysis, layout → graphs) are stored as ids in the file and resolved to
+  graph → table/analysis, figure → graphs) are stored as ids in the file and resolved to
   objects on load.
 
 ---
@@ -136,7 +136,7 @@ sections, with each table's analyses and graphs nested under it:
 |---|---|---|
 | Data | data table, and under it its analyses and graphs | tables are typed (§6); results are recomputed, never stored; a graph is a spec (§8) over one table |
 | Notes | info sheet | constants (experiment date, ID, notebook ref, …) + free notes |
-| Layouts | layout | a page arranging graphs, tables and text (§9) |
+| Figures | figure | a page arranging graphs, tables and text as panels (§9) |
 
 **Linked sheets:** a data table plus every analysis and graph fed by it. Deleting a table
 deletes its linked sheets too (undoable). Renaming a table renames graphs that still carry
@@ -232,7 +232,7 @@ Results can feed graphs: multiple comparison results draw significance brackets
   100% is what exports.
 - A graph sheet shows the graph alone on a white area that fills the window, always
   centred (also when zooming, resizing or dragging a title). There is no page on a graph
-  sheet; pages belong to layouts (§9).
+  sheet; pages belong to figures (§9).
 - Scatter plots spread tied values side by side within the column; only points that do
   not fit overlap, and the rest of the cloud keeps its true spacing.
 - Box and whiskers follow Prism: box = 25th–75th percentile with the median line; seven
@@ -304,7 +304,7 @@ Status: ✅ done · ◐ partly done · blank = to do.
 
 **Graphs created by analyses (with each analysis, M3–M7)**
 30. Estimation plots (t test: Gardner-Altman; one-way ANOVA: Cumming)
-31. Normality QQ plot; residual plots for regression
+31. ◐ Residual plots for linear and nonlinear regression ✅ (result tables, graphed); normality QQ plot (M9)
 32. Bland-Altman plot
 33. ROC curve
 34. Volcano plot (multiple t tests)
@@ -320,21 +320,22 @@ Error bar direction (above/below/both); left and right Y axes; log axes; axis ga
 time-scale axes; grid lines and shaded bands (QC graphs); nudging data sets
 (waterfall); labelling points with row titles; colour by row ("rainbow"); colour
 schemes; legends; text, lines, arrows and pictures on graphs; overlaying graphs in a
-layout (M8).
+figure (M8).
 
-## 9. Layouts
+## 9. Figures
 
-A layout sheet is a page (letter/A4, portrait/landscape, or custom size) holding graphs,
-data/result tables and text. Graphs are placed live (they update with their data),
-snap to a grid and to each other, and can carry automatic panel letters (A, B, C…).
-A layout exports as one PDF/SVG in which each graph is its own named group at its own
-exact size. This replaces the old "figure set" export.
+(Prism calls these "layouts"; ASTERISM's name, chosen 2026-10-26, is **figures**: what labs
+call a multi-panel page.) A figure is a page (letter/A4, portrait/landscape, or custom size)
+holding panels: graphs, data/result tables and text. Graphs are placed live (they update
+with their data), snap to a grid and to each other, and can carry automatic panel letters
+(A, B, C…). A figure exports as one PDF/SVG in which each graph is its own named group at
+its own exact size. This replaces the old "figure set" export.
 
 ---
 
 ## 10. Export and clipboard
 
-**Formats:** PDF, SVG, PNG and TIFF (chosen DPI), for a single graph, a layout, or a batch
+**Formats:** PDF, SVG, PNG and TIFF (chosen DPI), for a single graph, a figure, or a batch
 of selected sheets. Results and data tables export as CSV/Excel.
 
 **Fidelity is a hard requirement:** an exported graph must open in Affinity/Illustrator
@@ -400,13 +401,13 @@ bitmap flavour a receiving app might silently prefer). On Windows, users export 
   and on close); a new window opens offset from the frontmost one, and always on screen.
 - **Window structure (NED-Net's):**
   - *Project sidebar*, full window height: the asterism wordmark at the top (where NED-Net
-    shows its name; the logo's small form, the star dotting the i, without the Dipper), a search field, then the Data / Notes / Layouts sections (§5) as
+    shows its name; the logo's small form, the star dotting the i, without the Dipper), a search field, then the Data / Notes / Figures sections (§5) as
     rounded rows; each section header has a "+" button to add a sheet. Analyses and
     graphs sit indented under their table.
   - *Top bar* above the sheet only (not across the sidebar): the sheet's name (click to
     rename) and a one-line description (e.g. "Column table · 2 data sets") on the left;
     then caption-less icon groups for project-wide actions: **Project** (new, open, save,
-    undo, redo, print), **Sheet** (new table / graph / layout / notes, duplicate, delete),
+    undo, redo, print), **Sheet** (new table / graph / figure / notes, duplicate, delete),
     **Edit** (cut, copy, paste, insert/delete rows, exclude, sort, transpose); an
     **Export** button with a menu at the right end, and a button to show/hide the tool panel.
     Icons that don't fit go into a "»" overflow menu: the top bar never sets a minimum
@@ -428,7 +429,7 @@ bitmap flavour a receiving app might silently prefer). On Windows, users export 
   top of dialogs. Long dialogs scroll within the section, never the whole dialog.
 - **Icons:** SF Symbols via the theme-icon engine on macOS, tinted with theme colours.
   Windows needs a bundled fallback icon set (M11).
-- **Graphs and layouts stay print colours** (white page) in both light and dark mode.
+- **Graphs and figures stay print colours** (white page) in both light and dark mode.
 - **One window per project**, like Prism. Opening a file reuses an untouched empty window.
 
 ---
@@ -636,9 +637,27 @@ Graph Type dialog.
   (`tests/golden/REQUESTS.md`). Deferred: McNemar's test, comparing observed and expected
   counts (with M7's column tools), survival tables entered as percentages.
 
-**M7 — Transforms** producing result tables.
+**M7 — Transforms and result tables. Done (2026-10-26).**
+- Result tables: an analysis with tabular output owns one persistent output table
+  (`<analysis id>.out` in files), refreshed in place on every recompute; it can be graphed
+  (`Graph.source`) and analysed further, to any depth, and everything stays live. The sidebar
+  nests graphs and analyses of results under their analysis; deleting an analysis removes its
+  chain (undoable); files save and reload chains in dependency order. A new graph of results
+  copies the format of the data's own graph and shows fits made on the result table.
+- Transforms: Y and X functions (log, powers, reciprocals, logit, arcsine, Z score, your own
+  equation in X, Y, K via the safe expression compiler); normalize (0% = smallest / first /
+  value; 100% = largest / first / last / sum / mean / value); remove baseline and column maths
+  (a baseline data set, matched replicates or means, or the first rows; subtract, divide,
+  percent, percent change); prune rows (range, every nth, average every k); transpose;
+  smooth (Savitzky-Golay over 2k + 1 points, ends dropped, as Prism documents), first and
+  second derivatives (midpoint finite differences) and integrals (cumulative trapezoids from a
+  starting value); fraction of total now makes a result table too.
+- Also: compare observed and expected counts (chi-square, exact binomial for two
+  categories; = SciPy), McNemar's test for matched pairs (continuity-corrected chi-square and
+  exact binomial; = statsmodels), residual plots for linear and nonlinear regression.
+- Frequency distributions use the same result-table machinery.
 
-**M8 — Layouts** and layout export.
+**M8 — Figures** (Prism's layouts) and figure export.
 
 **M9 — Graph polish:** colour schemes, Copy formatting, drawing tools, right Y axis, axis breaks,
 significance bracket formatting (§8a item 9).

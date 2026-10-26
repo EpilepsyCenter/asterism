@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Callable
 
 from . import (anova, anova2, column, contingency, frequency, multiple_t, nested, nonlin, normality,
-               onesample, parts, survival, xy)
+               onesample, parts, survival, transforms, xy)
 from .results import AnalysisResult, ResultPage
 
 _RUNNERS: dict[str, tuple[Callable, Callable[[dict], str]]] = {
@@ -30,10 +30,19 @@ _RUNNERS: dict[str, tuple[Callable, Callable[[dict], str]]] = {
                     else "Pearson correlation"),
     "auc": (xy.area_under_curve, lambda p: "Area under the curve"),
     "nonlin": (nonlin.nonlinear, nonlin.title),
-    "contingency": (contingency.contingency, lambda p: "Fisher's exact test" if p.get("test") == "fisher"
-                    else "Chi-square test" if p.get("test") == "chi2" else "Contingency analysis"),
+    "contingency": (contingency.contingency, lambda p: {"fisher": "Fisher's exact test", "chi2": "Chi-square test",
+                                                        "mcnemar": "McNemar's test"}.get(p.get("test"),
+                                                                                         "Contingency analysis")),
     "fraction": (parts.fraction_of_total, lambda p: "Fraction of total"),
     "survival": (survival.survival, lambda p: "Survival analysis"),
+    "transform": (transforms.transform, lambda p: "Transform"),
+    "normalize": (transforms.normalize, lambda p: "Normalize"),
+    "baseline": (transforms.baseline, lambda p: "Remove baseline"),
+    "prune": (transforms.prune, lambda p: "Prune rows"),
+    "transpose": (transforms.transpose, lambda p: "Transpose"),
+    "smooth": (transforms.smooth, lambda p: {"derivative": "Derivative", "derivative2": "Second derivative",
+                                             "integral": "Integral"}.get(p.get("op"), "Smooth")),
+    "observed_expected": (transforms.observed_expected, lambda p: "Observed vs. expected"),
     "frequency": (frequency.frequency, lambda p: "Cumulative frequency distribution"
                   if p.get("cumulative") else "Frequency distribution"),
 }

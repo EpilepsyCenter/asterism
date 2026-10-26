@@ -1,6 +1,6 @@
 """Project sidebar (NED-Net's sidebar structure): wordmark, search, and the project's
 sheets in three sections — Data (each table with its analyses and graphs nested under
-it), Notes and Layouts — each with a "+" button. SPEC §5, §12."""
+it), Notes and Figures — each with a "+" button. SPEC §5, §12."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from .widgets import NavDelegate
 from ..doc.model import Table, Project, Sheet
 
 KIND_ICON = {"table": "tablecells", "analysis": "list.bullet.rectangle",
-             "graph": "chart.xyaxis.line", "info": "note.text", "layout": "rectangle.split.2x2"}
+             "graph": "chart.xyaxis.line", "info": "note.text", "figure": "rectangle.split.2x2"}
 SECTIONS = [("Data", "new_table", "New data table"), ("Notes", "new_info", "New notes"),
-            ("Layouts", "new_layout", "New layout")]
+            ("Figures", "new_figure", "New figure")]
 
 
 class _SectionHeader(QWidget):
@@ -136,10 +136,15 @@ class ProjectSidebar(QWidget):
         self.tree.clear()
         p = self.project
         self._header(*SECTIONS[0])
+        def add_children(parent_item, sheet, depth=0):
+            for child in p.children(sheet):
+                ci = self._item(parent_item, child)
+                if depth < 20:
+                    add_children(ci, child, depth + 1)
+                    ci.setExpanded(True)
         for t in p.tables:
             ti = self._item(self.tree, t)
-            for s in p.family(t)[1:]:
-                self._item(ti, s)
+            add_children(ti, t)
             ti.setExpanded(True)
         if not p.tables:
             self._placeholder("No data tables")
@@ -149,10 +154,10 @@ class ProjectSidebar(QWidget):
         if not p.infos:
             self._placeholder("No notes")
         self._header(*SECTIONS[2])
-        for lay in p.layouts:
+        for lay in p.figures:
             self._item(self.tree, lay)
-        if not p.layouts:
-            self._placeholder("No layouts")
+        if not p.figures:
+            self._placeholder("No figures")
         self.tree.blockSignals(False)
         self._select_current()
         if self.search.text():

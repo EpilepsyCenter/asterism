@@ -178,7 +178,7 @@ def test_project_file_round_trip(tmp_path):
     p.undo.push(SpecCommand(g, spec))
     p.infos[0].fields["Experimenter"] = "M.L."
     p.infos[0].notes = "pilot cohort"
-    p.add_layout()
+    p.add_figure()
     p.rename(g, "Figure 1")
 
     path = tmp_path / "proj.asterism"

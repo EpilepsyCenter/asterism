@@ -67,3 +67,4 @@ class AnalysisResult:
     fit: dict | None = None                  # model details (two-way ANOVA)
     families: list | None = None
     rows: list = field(default_factory=list)  # per-row tests: (row, P, adjusted P or q)
+    out_table: object = None                 # an output data table (transforms, frequency …)

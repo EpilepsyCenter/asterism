@@ -374,8 +374,9 @@ def test_frequency_distribution_gets_a_graph_of_its_results():
     rt = g.table
     assert rt.table_type == "xy" and rt.bin_width == pytest.approx(a.result.table["width"])
     assert g.home is t and g in p.family(t)
-    t.set(0, 0, 500.0)                                 # live: the graph's table follows the analysis
-    assert g.table is not rt
+    before = rt.state()
+    t.set(0, 0, 500.0)                                 # live: the same table, refreshed in place
+    assert g.table is rt and rt.state() != before
     from asterism.doc.fileformat import project_from_dict, project_to_dict
     q = project_from_dict(project_to_dict(p), engine)
     assert q.graphs[-1].source is q.analyses[-1]

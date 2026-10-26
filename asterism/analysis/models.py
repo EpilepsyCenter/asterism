@@ -272,6 +272,20 @@ _ALLOWED = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, 
             ast.USub, ast.UAdd, ast.Constant, ast.Name, ast.Load, ast.Call, ast.Mod)
 
 
+def compile_expression(body: str, names: set[str]):
+    """Compile a formula that may use only `names`, numbers, + − × ÷ ^ and the functions
+    above; anything else (attributes, imports, unknown names) is refused."""
+    tree = ast.parse(body.replace("^", "**").strip(), mode="eval")
+    for node in ast.walk(tree):
+        if not isinstance(node, _ALLOWED):
+            raise ValueError(f"Not allowed in an equation: {type(node).__name__}")
+        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name) and node.func.id in _FUNCS):
+            raise ValueError("Unknown function in the equation.")
+        if isinstance(node, ast.Name) and node.id not in _FUNCS and node.id not in names:
+            raise ValueError(f"Unknown name in the equation: {node.id}")
+    return compile(tree, "<equation>", "eval")
+
+
 def user_model(text: str, initial: dict[str, float] | None = None) -> Model:
     """Parse 'Y = Bottom + (Top-Bottom)/(1+exp(-K*X))'. ^ means power, log is log10, ln is
     natural log. Every name other than X and the functions is a parameter."""

@@ -39,7 +39,10 @@ The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
   with Prism's recommended intervals (checked against R); Kaplan-Meier, log-rank,
   Gehan-Breslow-Wilcoxon and hazard ratios (checked against R and SAS); fraction of total;
   contingency bars, survival curves, pie and donut charts.
-- **Next — M7:** transforms and result tables (normalise, baseline, smoothing, residual plots).
+- **M7 — Transforms and result tables:** done. Transform, normalize, remove baseline, prune,
+  transpose, smooth/differentiate/integrate, residual plots; result tables are live and can be
+  graphed and analysed further in chains. Also observed vs. expected and McNemar's test.
+- **Next — M8:** figures (graphs and tables arranged as panels on a page) and their export.
 
 ## Run
 

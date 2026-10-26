@@ -349,6 +349,24 @@ def contingency(an) -> AnalysisResult:
         ("Table", [f"{m.shape[0]} rows × {m.shape[1]} columns, {int(m.sum())} subjects"], "row"), ("", [], "blank")]
     res = AnalysisResult()
     chi = chi_square(m, yates=p.get("yates", False))
+    if test == "mcnemar":
+        if not is22:
+            raise ValueError("McNemar's test needs a 2 × 2 table of matched pairs.")
+        b_, c_ = int(m[0, 1]), int(m[1, 0])
+        if b_ + c_ == 0:
+            raise ValueError("McNemar's test needs at least one discordant pair.")
+        mc = (abs(b_ - c_) - 1) ** 2 / (b_ + c_)
+        pm = float(sps.chi2.sf(mc, 1))
+        pe = float(sps.binomtest(b_, b_ + c_, 0.5).pvalue)
+        rows += [("McNemar's test (matched pairs)", [], "section"),
+                 ("Discordant pairs", [f"{b_} and {c_}"], "row"),
+                 ("Chi-square (continuity-corrected), df", [f"{mc:.4g}, 1"], "row"),
+                 ("P value", [fmt_p(pm)], "row"), ("P value summary", [p_summary(pm)], "row"),
+                 ("Exact binomial P value", [fmt_p(pe)], "row"),
+                 ("Note", ["Rows are the first measurement, columns the second, of the same subjects"], "row")]
+        res = AnalysisResult(pages=[ResultPage("Results", ["Contingency"], rows)])
+        res.p = pm
+        return res
     if test == "fisher":
         if is22:
             pv = fisher_2x2(m, "two-sided" if tails == 2 else ("greater" if (m[0, 0] * m[1, 1] >= m[0, 1] * m[1, 0]) else "less"))
