@@ -34,7 +34,7 @@ TYPE_HELP = {
     "parts": "Values that add up to a whole, one per row. For fractions of the total and pie "
              "or donut charts.",
     "multivar": "One row per observation, one column per variable (numbers or text). For "
-                "multiple regression, correlation matrices and principal components.",
+                "bubble and scatter graphs that map variables to position, size and colour.",
     "nested": "Groups, each split into subjects (for example animals) with several "
               "measurements per subject. For nested t tests and nested ANOVA.",
 }

@@ -131,7 +131,7 @@ Notes on choosing:
 - The **normalized response** models assume the response runs from 0 to 100 (see [Normalize](transforms.md#normalize)).
 - For the concentration models, Km, Kd, Khalf, EC50 and IC50 are kept positive automatically.
 
-**Your own equation.** Choose **User-defined › User-defined equation** and type it in the box, for example `Y = Bottom + (Top-Bottom)/(1+exp(-K*(X-X50)))`. Use `X` for the X value; every other name becomes a parameter to fit. You can use + − × ÷ written as `+ - * /`, `^` for powers, brackets, and the functions `exp`, `ln` (natural log), `log` and `log10` (base 10), `sqrt`, `abs`, `sin`, `cos` and `tan`, plus the constants `pi` and `e`. If the equation can't be read, the dialog says why. Parameters start at 1 unless you give **Initial values**.
+**Your own equation.** Choose **User-defined › User-defined equation** and type it in the box, for example `Y = Bottom + (Top-Bottom)/(1+exp(-K*(X-X50)))`. Use `X` (or `x`) for the X value; every other name becomes a parameter to fit. You can use + − × ÷ written as `+ - * /`, `^` for powers, brackets, and the functions `exp`, `ln` (natural log), `log` and `log10` (base 10), `sqrt`, `abs`, `sin`, `cos` and `tan`, plus the constants `pi` and `e`. If the equation can't be read, the dialog says why. Parameters start at 1 unless you give **Initial values**.
 
 ### Method
 
@@ -142,7 +142,7 @@ Notes on choosing:
 ### Compare
 
 - **No comparison**.
-- **Compare this model with another model**: choose the **Other model:**. Both are fitted to each data set, and the result says which fits better given its number of parameters.
+- **Compare this model with another model**: choose the **Other model:**. Both are fitted to each data set, and the result says which fits better given its number of parameters. With the F test, the more complex model is preferred when P is below the analysis's α (0.05 unless you changed it in Settings).
 - **Is one curve adequate for all data sets?** (two or more data sets): compares separate curves with one shared curve.
 - **Does one parameter differ between data sets?** (two or more data sets): choose the **Parameter:**, for example LogEC50 to ask whether a drug shifted the dose-response curve.
 - **Test:** **Extra sum-of-squares F test** (needs nested models, where the simpler one is a special case of the other, such as three- vs four-parameter dose-response) or **AICc (information criterion)** (works for any pair, and gives the probability that each model is correct).

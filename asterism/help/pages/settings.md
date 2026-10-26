@@ -16,6 +16,7 @@ The window has four sections: **General**, **New graphs**, **New analyses** and 
 |---|---|---|
 | Show the Start window when ASTERISM opens | On | Off opens an empty project instead. The same choice is on the Start window itself. |
 | Save a recovery copy of unsaved changes every … min | On, 2 min | Autosave (see [Autosave and recovery](#autosave)). Any interval from 1 to 60 minutes. |
+| PNG and TIFF resolution | 300 dpi | 150, 300, 600 or 1200 dpi, for graphs and figures exported as PNG or TIFF. PDF and SVG are vector files and print sharp at any size. |
 
 ### New graphs
 
@@ -45,7 +46,7 @@ Where a new analysis's settings start. You can still change each analysis in its
 | Unpaired t test | Student's t test | Or Welch's t test, which does not assume the two groups have the same SD. Student's is Prism's default too. |
 | One-way ANOVA comparisons | Automatic | Automatic uses Tukey when comparing all pairs and Dunnett when comparing each group with a control. You can instead start every new one-way ANOVA with **Tukey**, **Šídák**, **Bonferroni** or **Holm-Šídák**. |
 | Confidence intervals | 95% | 90%, 95% or 99%. Used by new t tests, one-sample tests, one-way and two-way ANOVA, nested analyses, linear regression, correlation and contingency tables. |
-| Significance level (α) | 0.05 | 0.05, 0.01 or 0.10. Used by new normality tests and multiple t tests to decide what counts as significant. |
+| Significance level (α) | 0.05 | 0.05, 0.01 or 0.10. Every new analysis uses it to decide what counts as significant: the **Significant at α = …** rows, the **Significant?** column of multiple comparisons and similar answers. Normality tests and multiple t tests also let you change it in their own settings. Analyses you made earlier keep 0.05. |
 
 ### Import
 
@@ -56,7 +57,7 @@ Your lab's defaults for importing instrument files (see [Importing data](importi
 | ΔΔCt relative to | The mean of a control group | Or **One reference sample (as QuantStudio)**. Applies to qPCR (QuantStudio) imports. |
 | Dilution factor | 1 | Filled in for every standard-curve import; you can change it there. |
 | Template volume | (empty) | µL of template per reaction. |
-| Report | Per reaction | Or **Per µL of sample** or **Per mL of sample**. |
+| Report | Per reaction (× dilution factor) | Or **Per µL of sample** or **Per mL of sample**. |
 | × 2 for single-stranded genomes on a double-stranded standard | Off | Doubles the titre. |
 
 The titre is calculated as quantity per reaction × dilution [× 2] ÷ template µL [× 1000 per mL].

@@ -112,25 +112,35 @@ class FormatGraphDialog(SectionDialog):
         self.add_section("significance", "Significance", self._significance_page(), "asterisk")
         tt = graph.table.table_type
         if tt in ("grouped", "nested", "contingency", "parts", "survival"):
-            self.add_section("arrangement", "Arrangement", self._arrangement_page(tt),
+            self.add_section("arrangement", "Slices" if tt == "parts" else "Arrangement", self._arrangement_page(tt),
                              {"nested": "square.stack.3d.down.right", "parts": "chart.pie",
                               "survival": "waveform.path.ecg"}.get(tt, "square.grid.3x2"))
         if tt == "multivar":
             self.add_section("arrangement", "Variables", self._variables_page(), "circle.hexagongrid")
+        parts = tt == "parts"                    # slices have their own page; no data-set style or X axis
+        style_page, ds_page = self._style_page(), self._datasets_page()
+        x_page, y_page, right_page = self._x_page(), self._y_page(), self._right_page()
+        self._kept_pages = [style_page, ds_page, x_page, y_page, right_page]     # also the hidden ones
         self.add_group("Data sets")
-        self.add_section("style", "Style", self._style_page(), "circle.grid.2x2")
-        self.add_section("datasets", "Show and order", self._datasets_page(), "eye")
+        if not parts:
+            self.add_section("style", "Style", style_page, "circle.grid.2x2")
+        self.add_section("datasets", "Show and order", ds_page, "eye")
         self.add_group("Axes")
-        self.add_section("x", "X axis", self._x_page(), "arrow.left.and.right")
-        self.add_section("y", "Y axis", self._y_page(), "arrow.up.and.down")
-        self.add_section("right", "Right Y axis", self._right_page(), "arrow.up.and.down.square")
+        if not parts:
+            self.add_section("x", "X axis", x_page, "arrow.left.and.right")
+        self.add_section("y", "Y axis" if not parts else "Y axis (stacked bars)", y_page, "arrow.up.and.down")
+        if not parts:
+            self.add_section("right", "Right Y axis", right_page, "arrow.up.and.down.square")
 
         self.apply_button.clicked.connect(self.apply)
         self.sectionChanged.connect(self._section_changed)
         if column is not None and column in self.cols:
             self.ds_combo.setCurrentIndex(self.cols.index(column) + 1)
         self._load()
-        self.show_section(ALIASES.get(section, section))
+        section = ALIASES.get(section, section)
+        if section == "arrangement" and "arrangement" not in self._keys:     # legend on column/XY graphs
+            section = "style"
+        self.show_section(section)
         self.resize(900, 640)
 
     def _graph_type(self) -> None:
@@ -312,25 +322,7 @@ class FormatGraphDialog(SectionDialog):
         s = self.spec
         g = FormGrid()
         if tt == "parts":
-            self.arrangement = combo([("Pie chart", "pie"), ("Donut chart", "donut"),
-                                      ("Bar stacked to 100%", "stacked100"),
-                                      ("Percentage dot plot (100 squares)", "waffle")], s.parts_layout)
-            self.parts_labels = combo([("Percentages", "percent"), ("Values", "value"), ("No labels", "none")],
-                                      s.parts_labels)
-            self.hole = QDoubleSpinBox()
-            self.hole.setRange(10, 90)
-            self.hole.setDecimals(0)
-            self.hole.setSuffix(" % of the radius")
-            self.hole.setValue(s.donut_hole * 100)
-            g.add(("Draw as:", self.arrangement))
-            g.add(("Label the slices with:", self.parts_labels))
-            g.add(("Donut hole:", self.hole))
-            pl.addLayout(g)
-            self.legend = QCheckBox("Show a legend for the slices")
-            self.legend.setChecked(s.show_legend)
-            pl.addWidget(self.legend)
-            pl.addStretch(1)
-            return page
+            return self._parts_page(page, pl)
         if tt == "survival":
             self.surv_y = combo([("Percent surviving", "pct"), ("Fraction surviving", "frac"),
                                  ("Percent with the event (deaths)", "pct_death"),
@@ -381,12 +373,326 @@ class FormatGraphDialog(SectionDialog):
             g.add(("Arrange as:", self.arrangement))
             pl.addLayout(g)
             note = QLabel("Each sub-column of a nested table is one subject; its values are "
-                          "replicate measurements. Subjects take colours in table order.")
+                          "replicate measurements.")
             note.setWordWrap(True)
             note.setEnabled(False)
+            note.setContentsMargins(18, 0, 0, 0)
             pl.addWidget(note)
+            self._nested_colours(pl)
         pl.addStretch(1)
         return page
+
+    # --- nested: subject colours ------------------------------------------------------
+
+    def _nested_colours(self, pl) -> None:
+        from ...doc.spec import SUBJECT_PALETTES
+        N = self.spec.nested
+        pl.addWidget(Section("Colours"))
+        g = FormGrid()
+        self.n_color_by = combo([("Subject (a colour for each subject)", "subject"),
+                                 ("Data set (its symbol colour on the Style page)", "dataset")],
+                                N.get("color_by", "subject"))
+        self.n_restart = combo([("Continue across groups", False),
+                                ("Start again in each group (subject 1 matches subject 1)", True)],
+                               bool(N.get("restart")))
+        self.n_palette = QComboBox()
+        self.n_palette.addItem("Choose a colour set…", None)
+        for key, (name, _cols) in SUBJECT_PALETTES.items():
+            self.n_palette.addItem(name, key)
+        g.add(("Colour points by:", self.n_color_by))
+        g.add(("Subject colours:", self.n_restart))
+        g.add(("Colour set:", self.n_palette))
+        pl.addLayout(g)
+        self.n_grid_box = QWidget()
+        self.n_grid = QGridLayout(self.n_grid_box)
+        self.n_grid.setContentsMargins(18, 2, 0, 4)
+        self.n_grid.setHorizontalSpacing(10)
+        self.n_grid.setVerticalSpacing(4)
+        pl.addWidget(self.n_grid_box)
+        self.n_custom = bool(N.get("colors"))
+        self.n_colors: list[str] = list(N.get("colors") or [])
+        self.n_buttons: list = []
+        self._nested_grid()
+        pl.addWidget(Section("Subject means (SuperPlot)"))
+        g = FormGrid()
+        self.n_mean = QDoubleSpinBox()
+        self.n_mean.setRange(1.0, 5.0)
+        self.n_mean.setSingleStep(0.1)
+        self.n_mean.setDecimals(1)
+        self.n_mean.setSuffix(" × the points")
+        self.n_mean.setValue(float(N.get("mean_size", 2.2)))
+        self.n_outline = ColorButton(N.get("mean_outline", "#000000"))
+        g.add(("Size:", self.n_mean), ("Outline:", self.n_outline))
+        pl.addLayout(g)
+        self.n_restart.currentIndexChanged.connect(lambda *_: self._nested_grid())
+        self.n_color_by.currentIndexChanged.connect(lambda *_: self._nested_sync())
+        self.n_palette.activated.connect(self._nested_palette)
+        self._nested_sync()
+
+    def _subject_rows(self) -> list[tuple[int, str]]:
+        """(colour index, who has it) for the colour list."""
+        from ..graph.layout import subject_color_keys
+        t = self.graph.table
+        restart = bool(self.n_restart.currentData())
+        keys = subject_color_keys(t, self.cols, restart)
+        names: dict[int, list[str]] = {}
+        for c, sub, k in keys:
+            title = (t.sub_titles[c][sub] if c < len(t.sub_titles) and sub < len(t.sub_titles[c]) else "") \
+                or f"subject {sub + 1}"
+            names.setdefault(k, []).append(title if restart else f"{t.short_label(c)} · {title}")
+        out = []
+        for k in sorted(names):
+            who = names[k]
+            if restart:
+                uniq = list(dict.fromkeys(who))
+                label = uniq[0] if len(uniq) == 1 else f"Subject {k + 1}"
+            else:
+                label = who[0]
+            out.append((k, label))
+        return out
+
+    def _nested_grid(self) -> None:
+        from ..graph.layout import subject_palette
+        while self.n_grid.count():
+            w = self.n_grid.takeAt(0).widget()
+            if w is not None:
+                w.hide()
+                w.deleteLater()
+        pal = self.n_colors or subject_palette(self.spec)
+        self.n_buttons = []
+        rows = self._subject_rows()
+        per_col = max(1, (len(rows) + 2) // 3)          # up to three columns of colours
+        for i, (k, label) in enumerate(rows):
+            r, cblock = i % per_col, i // per_col
+            btn = ColorButton(pal[k % len(pal)])
+            btn.colorChanged.connect(lambda _c, k=k: self._nested_edit(k))
+            lab = QLabel(label)
+            self.n_grid.addWidget(btn, r, cblock * 2)
+            self.n_grid.addWidget(lab, r, cblock * 2 + 1)
+            self.n_buttons.append((k, btn))
+        self.n_grid.setColumnStretch(6, 1)
+        self._nested_sync()
+
+    def _nested_edit(self, k: int) -> None:
+        self._nested_capture()
+        self.n_custom = True
+
+    def _nested_capture(self) -> None:
+        from ..graph.layout import subject_palette
+        pal = list(self.n_colors or subject_palette(self.spec))
+        need = max([k for k, _ in self.n_buttons] + [len(pal) - 1]) + 1
+        while len(pal) < need:
+            pal.append(pal[len(pal) % max(1, len(pal))])
+        for k, btn in self.n_buttons:
+            pal[k] = btn.color()
+        self.n_colors = pal
+
+    def _nested_palette(self, *_) -> None:
+        from ...doc.spec import SUBJECT_PALETTES
+        key = self.n_palette.currentData()
+        if key is None:
+            return
+        base = SUBJECT_PALETTES[key][1]
+        n = max([k for k, _ in self.n_buttons] + [0]) + 1
+        self.n_colors = [base[i % len(base)] for i in range(max(n, len(base)))]
+        self.n_custom = key != "distinct"
+        if key == "distinct":
+            self.n_colors = []
+        self._nested_grid()
+        self.n_palette.setCurrentIndex(0)
+
+    def _nested_sync(self) -> None:
+        by_subject = self.n_color_by.currentData() == "subject"
+        for w in (self.n_restart, self.n_palette, self.n_grid_box):
+            w.setEnabled(by_subject)
+
+    def _store_nested(self) -> None:
+        s = self.spec
+        if self.n_custom:
+            self._nested_capture()
+        s.nested = {**s.nested, "color_by": self.n_color_by.currentData(),
+                    "restart": bool(self.n_restart.currentData()),
+                    "colors": list(self.n_colors) if self.n_custom else [],
+                    "mean_size": self.n_mean.value(), "mean_outline": self.n_outline.color()}
+
+    def _parts_page(self, page, pl) -> QWidget:
+        """Parts of whole: chart type and size, each slice's colour and pull-out, borders,
+        what the legend shows, the total."""
+        from ..graph.parts_survival_layout import parts_colors, parts_rows
+        s, P = self.spec, self.spec.parts
+        t = self.graph.table
+        pl.addWidget(Section("Chart"))
+        g = FormGrid()
+        self.arrangement = combo([("Pie chart", "pie"), ("Donut chart", "donut"),
+                                  ("Bar stacked to 100%", "stacked100"),
+                                  ("Percentage dot plot (100 squares)", "waffle")], s.parts_layout)
+        self.parts_labels = combo([("Percentages", "percent"), ("Values", "value"), ("No labels", "none")],
+                                  s.parts_labels)
+        self.hole = QDoubleSpinBox()
+        self.hole.setRange(10, 90)
+        self.hole.setDecimals(0)
+        self.hole.setSuffix(" % of the radius")
+        self.hole.setValue(s.donut_hole * 100)
+        self.diameter = QDoubleSpinBox()
+        self.diameter.setRange(10, 300)
+        self.diameter.setDecimals(1)
+        self.diameter.setSuffix(" mm")
+        self.diameter.setValue(s.y_len_mm)
+        self.parts_order = combo([("Standard (row order)", False), ("Reverse", True)], bool(P.get("reverse")))
+        if hasattr(self, "height_mm"):           # the same length as Size and frame › height
+            self.diameter.valueChanged.connect(self.height_mm.setValue)
+            self.height_mm.valueChanged.connect(self.diameter.setValue)
+        g.add(("Draw as:", self.arrangement), ("Label the slices with:", self.parts_labels))
+        g.add(("Diameter / height:", self.diameter), ("Donut hole:", self.hole))
+        g.add(("Order:", self.parts_order))
+        for w in (self.arrangement, self.parts_labels, self.parts_order, self.diameter, self.hole):
+            w.setMinimumWidth(0)
+            w.setMaximumWidth(210)
+        g.setColumnStretch(4, 1)
+        pl.addLayout(g)
+        self.arrangement.currentIndexChanged.connect(
+            lambda *_: self.hole.setEnabled(self.arrangement.currentData() == "donut"))
+        self.hole.setEnabled(s.parts_layout == "donut")
+
+        pl.addWidget(Section("Slices"))
+        rows = sorted(parts_rows(self.graph))
+        auto = parts_colors(self.graph)
+        chosen = dict(P.get("colors") or {})
+        self.slice_ctl: dict[int, tuple] = {}
+        grid = QGridLayout()
+        grid.setContentsMargins(18, 2, 0, 4)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(4)
+        for j, head in enumerate(("Row", "Colour", "Pull out")):
+            h = QLabel(head)
+            h.setEnabled(False)
+            grid.addWidget(h, 0, j)
+        from ..graph.parts_survival_layout import slice_color
+        for i, r in enumerate(rows, start=1):
+            name = QLabel(t.row_label(r) or f"Row {r + 1}")
+            btn = ColorButton(chosen.get(str(r)) or auto.get(r, slice_color(i - 1)))
+            pull = QDoubleSpinBox()
+            pull.setRange(0, 50)
+            pull.setDecimals(0)
+            pull.setSuffix(" %")
+            pull.setSpecialValueText("None")
+            pull.setValue(float((P.get("explode") or {}).get(str(r), 0) or 0))
+            grid.addWidget(name, i, 0)
+            grid.addWidget(btn, i, 1)
+            grid.addWidget(pull, i, 2)
+            self.slice_ctl[r] = (btn, pull, str(r) in chosen)
+            btn.colorChanged.connect(lambda _c, r=r: self._slice_custom(r))
+        grid.setColumnStretch(3, 1)
+        pl.addLayout(grid)
+        if not rows:
+            note = QLabel("Enter values in the table to set each slice's colour.")
+            note.setEnabled(False)
+            pl.addWidget(note)
+        reset = QPushButton("Automatic Colours")
+        reset.setToolTip("Give every slice its automatic colour again")
+        reset.clicked.connect(self._slice_auto)
+        rl = QHBoxLayout()
+        rl.setContentsMargins(18, 2, 0, 4)
+        rl.addWidget(reset)
+        rl.addStretch(1)
+        pl.addLayout(rl)
+        hint = QLabel("Pull out moves a slice away from the centre (pie and donut charts).")
+        hint.setEnabled(False)
+        hint.setContentsMargins(18, 0, 0, 0)
+        pl.addWidget(hint)
+
+        pl.addWidget(Section("Borders"))
+        g = FormGrid()
+        self.outer_on = QCheckBox("Outer")
+        self.outer_on.setChecked(bool(P.get("outer")))
+        self.outer_w = combo(THICK[1:], float(P.get("outer_width", 1.0)))
+        self.outer_c = ColorButton(P.get("outer_color", "#000000"))
+        self.inner_on = QCheckBox("Between slices")
+        self.inner_on.setChecked(bool(P.get("inner", True)))
+        self.inner_w = combo(THICK[1:], float(P.get("inner_width", 1.0)))
+        self.inner_c = ColorButton(P.get("inner_color", "#ffffff"))
+        for on, w, c in ((self.outer_on, self.outer_w, self.outer_c), (self.inner_on, self.inner_w, self.inner_c)):
+            row = QHBoxLayout()
+            row.addWidget(w)
+            row.addWidget(c)
+            row.addStretch(1)
+            g.add((None, on), ("Thickness and colour:", row))
+        pl.addLayout(g)
+
+        pl.addWidget(Section("Legend"))
+        self.legend = QCheckBox("Show a legend for the slices")
+        self.legend.setChecked(s.show_legend)
+        lg = QHBoxLayout()
+        lg.setContentsMargins(18, 0, 0, 0)
+        lg.addWidget(self.legend)
+        lg.addStretch(1)
+        pl.addLayout(lg)
+        row = QHBoxLayout()
+        row.setContentsMargins(36, 0, 0, 4)
+        self.leg_bits = {}
+        for key, label in (("legend_color", "Colour"), ("legend_label", "Row title"),
+                           ("legend_percent", "Percentage"), ("legend_value", "Value")):
+            cb = QCheckBox(label)
+            cb.setChecked(bool(P.get(key, key in ("legend_color", "legend_label"))))
+            self.leg_bits[key] = cb
+            row.addWidget(cb)
+        row.addStretch(1)
+        pl.addLayout(row)
+        note = QLabel("Percentages and values appear in the legend when the graph shows one data set.")
+        note.setEnabled(False)
+        note.setContentsMargins(36, 0, 0, 0)
+        pl.addWidget(note)
+        self.legend.toggled.connect(lambda on: [cb.setEnabled(on) for cb in self.leg_bits.values()])
+        for cb in self.leg_bits.values():
+            cb.setEnabled(s.show_legend)
+
+        pl.addWidget(Section("Total"))
+        g = FormGrid()
+        self.total_on = QCheckBox("Show the total under each chart")
+        self.total_on.setChecked(bool(P.get("total")))
+        self.total_pre = QLineEdit(P.get("total_prefix", "Total = "))
+        self.total_suf = QLineEdit(P.get("total_suffix", ""))
+        for w in (self.total_pre, self.total_suf):
+            w.setFixedWidth(150)
+        g.add((None, self.total_on))
+        g.add(("Before:", self.total_pre), ("After:", self.total_suf))
+        g.setColumnStretch(4, 1)
+        pl.addLayout(g)
+        pl.addStretch(1)
+        return page
+
+    def _slice_custom(self, r: int) -> None:
+        btn, pull, _ = self.slice_ctl[r]
+        self.slice_ctl[r] = (btn, pull, True)
+
+    def _slice_auto(self) -> None:
+        from ..graph.parts_survival_layout import slice_color
+        for i, r in enumerate(sorted(self.slice_ctl)):
+            btn, pull, _ = self.slice_ctl[r]
+            btn.blockSignals(True)
+            btn.set_color(slice_color(i))
+            btn.blockSignals(False)
+            self.slice_ctl[r] = (btn, pull, False)
+
+    def _store_parts(self) -> None:
+        s = self.spec
+        s.parts_layout = self.arrangement.currentData()
+        s.parts_labels = self.parts_labels.currentData()
+        s.donut_hole = self.hole.value() / 100
+        s.show_legend = self.legend.isChecked()
+        s.y_len_mm = self.diameter.value()
+        P = dict(s.parts)
+        P["reverse"] = bool(self.parts_order.currentData())
+        P["colors"] = {str(r): btn.color() for r, (btn, _p, custom) in self.slice_ctl.items() if custom}
+        P["explode"] = {str(r): pull.value() for r, (_b, pull, _c) in self.slice_ctl.items() if pull.value() > 0}
+        P.update(outer=self.outer_on.isChecked(), outer_width=self.outer_w.currentData(),
+                 outer_color=self.outer_c.color(), inner=self.inner_on.isChecked(),
+                 inner_width=self.inner_w.currentData(), inner_color=self.inner_c.color(),
+                 total=self.total_on.isChecked(), total_prefix=self.total_pre.text(),
+                 total_suffix=self.total_suf.text())
+        for k, cb in self.leg_bits.items():
+            P[k] = cb.isChecked()
+        s.parts = P
 
     # --- Graph: significance --------------------------------------------------------
 
@@ -663,6 +969,11 @@ class FormatGraphDialog(SectionDialog):
         self.plot_axis = combo([("Left Y axis", "left"), ("Right Y axis", "right")])
         self.in_legend = QCheckBox("Show in legend")
         g.add(("Plot against:", self.plot_axis), (None, self.in_legend))
+        self.legend_global = None
+        if self.graph.table.table_type in ("column", "xy"):         # others set it on Arrangement
+            self.legend_global = QCheckBox("Show the legend (all data sets)")
+            self.legend_global.setChecked(self.spec.show_legend)
+            g.add((None, self.legend_global))
         self.nudge, self.nudge_y = QDoubleSpinBox(), QDoubleSpinBox()
         for w in (self.nudge, self.nudge_y):
             w.setRange(-500, 500)
@@ -1156,11 +1467,10 @@ class FormatGraphDialog(SectionDialog):
         s.axis_color = self.axis_c.color()
         s.show_title = self.show_title.isChecked()
         tt = self.graph.table.table_type
+        if getattr(self, "legend_global", None) is not None:
+            s.show_legend = self.legend_global.isChecked()
         if tt == "parts":
-            s.parts_layout = self.arrangement.currentData()
-            s.parts_labels = self.parts_labels.currentData()
-            s.donut_hole = self.hole.value() / 100
-            s.show_legend = self.legend.isChecked()
+            self._store_parts()
         elif tt == "survival":
             k = self.surv_y.currentData()
             s.surv_percent, s.surv_death = k.startswith("pct"), k.endswith("death")
@@ -1177,6 +1487,7 @@ class FormatGraphDialog(SectionDialog):
             s.heat_low, s.heat_high = self.heat_low.color(), self.heat_high.color()
         elif tt == "nested":
             s.nested_layout = self.arrangement.currentData()
+            self._store_nested()
         elif tt == "multivar":
             ys = [self.mv_y.item(i).data(Qt.UserRole) for i in range(self.mv_y.count())
                   if self.mv_y.item(i).checkState() == Qt.Checked]

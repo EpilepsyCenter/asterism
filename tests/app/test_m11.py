@@ -123,7 +123,7 @@ def test_settings_apply_to_new_graphs_and_analyses_only(app, clean_prefs, monkey
     assert old_graph.spec.frame == "plain"                         # existing graphs keep theirs
     prefs.set("analysis.ttest", "welch")
     prefs.set("analysis.conf", 0.99)
-    assert prefs.analysis_defaults("ttest") == {"test": "welch", "conf": 0.99}
+    assert prefs.analysis_defaults("ttest") == {"test": "welch", "conf": 0.99, "alpha": 0.05}
     w = MainWindow(p)
     w.show_sheet(old)
     monkeypatch.setattr(type(settings_dialog("ttest", None, old, [0, 1])), "exec", lambda self: True)

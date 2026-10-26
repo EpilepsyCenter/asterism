@@ -5,7 +5,7 @@ This page covers the analyses that compare groups of values, plus the checks you
 A few things are the same on every results sheet:
 
 - **Significance** uses stars: ns (not significant, P ≥ 0.05), one star (P < 0.05), two (P < 0.01), three (P < 0.001) or four (P < 0.0001).
-- **Significant at α = 0.05** is a plain Yes or No at the usual 0.05 cut-off.
+- **Significant at α = 0.05** is a plain Yes or No: is P below the analysis's significance level (α)? New analyses take α from **Settings… › New analyses** (0.05 unless you change it), and the row shows the value used, for example **Significant at α = 0.01**. The same α decides the other Yes/No answers, such as **Significant?** for multiple comparisons. Analyses made before α became a setting keep 0.05.
 - P values below 0.0001 are shown as <0.0001.
 - Data sets are named by their column letter and title, for example "A: Control".
 
@@ -56,7 +56,7 @@ The **Residuals** page lists residual plots and checks that aren't available yet
 
 The **Results** tab names the table and the two data sets, then gives:
 
-- **P value**, **Significance**, **Significant at α = 0.05** and **Tails**. Mann-Whitney and Wilcoxon also show **P value method**: **Exact** or **Normal approximation**. Mann-Whitney uses the exact P when the two groups together have up to 100 values, also when values are tied, as Prism does. Wilcoxon uses the exact P for up to 50 pairs with no tied or zero differences. The Kolmogorov-Smirnov P is exact and always two-sided (the **One-sided** choice doesn't apply to it).
+- **P value**, **Significance**, **Significant at α = …** and **Tails**. Mann-Whitney and Wilcoxon also show **P value method**: **Exact** or **Normal approximation**. Mann-Whitney uses the exact P when the two groups together have up to 100 values, also when values are tied, as Prism does. Wilcoxon uses the exact P for up to 50 pairs with no tied or zero differences. The Kolmogorov-Smirnov P is exact and always two-sided (the **One-sided** choice doesn't apply to it).
 - The test statistic: **t** with its **Degrees of freedom** (fractional for Welch), **U** for Mann-Whitney (the smaller of the two U values, as Prism reports it), **D** for Kolmogorov-Smirnov, or **W (sum of signed ranks)** for Wilcoxon.
 - **Size of the difference**, the part to report alongside P:
   - Unpaired t tests: each mean, the **Difference of means (B − A)**, its standard error and confidence interval, and **η² (R²)**, the share of the total variation explained by the group.
@@ -155,7 +155,7 @@ The **Comparisons** tab has one row per comparison:
 
 - **Mean difference**: the first data set minus the second. Against a control, it is the control minus the other data set. Rank tests show the **Mean rank difference** (Kruskal-Wallis) or **Rank sum difference** (Friedman) instead.
 - The confidence interval of the difference (not given for rank tests or Holm-Šídák).
-- **Significant?**, **Significance** and **Adjusted P**. The P value is already adjusted for the number of comparisons, as in Prism, so you compare it directly with 0.05. Fisher's LSD and uncorrected Dunn's are the exceptions: their P values are not adjusted.
+- **Significant?**, **Significance** and **Adjusted P**. The P value is already adjusted for the number of comparisons, as in Prism, so you compare it directly with α (**Significant?** does this for you). Fisher's LSD and uncorrected Dunn's are the exceptions: their P values are not adjusted.
 
 When the mixed-effects model was used, the results show the method and why (**Values are missing** or **Chosen in the settings**). They also show the F test of the fixed effect, the random-effect SDs and variances, a likelihood-ratio test of whether the matching was effective, and how many values were missing. A **Fixed effects** tab replaces the ANOVA table.
 
@@ -276,7 +276,7 @@ The **Results** tab gives the number of groups, subjects and values, then:
 
 - Nested t test: **t**, **Degrees of freedom** (number of subjects minus number of groups), the P value, each group's mean, the **Difference (B − A)**, its standard error and confidence interval (at the level set under **Comparisons**).
 - Nested one-way ANOVA: **F** with its degrees of freedom and the P value. The **Comparisons** tab lists each pair of groups with the mean difference, confidence interval and **Adjusted P**.
-- **Variation between subjects**: the **Variance between subjects**, the **Residual variance** (within subjects) and the **% of variance between subjects**. A likelihood-ratio test asks whether subjects differ more than chance would explain (**Subjects differ at α = 0.05**).
+- **Variation between subjects**: the **Variance between subjects**, the **Residual variance** (within subjects) and the **% of variance between subjects**. A likelihood-ratio test asks whether subjects differ more than chance would explain (**Subjects differ at α = …**).
 
 When every subject has the same number of replicates, the group test gives the same result as an ordinary t test or ANOVA on the subject means. ASTERISM's tests check this. With unequal numbers of replicates, the two can differ: the nested model uses every value and accounts for the variation both between and within subjects.
 

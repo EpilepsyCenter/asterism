@@ -431,6 +431,8 @@ class Slot:
     force_bar: bool = False        # stacked bars
     error_dir: str | None = None   # override (stacked: above only)
     no_line: bool = False          # suppress the centre line (connected means draw a symbol)
+    mark_scale: float = 2.2        # size of the big symbols (subject means) relative to the points
+    mark_outline: str = "#000000"  # their outline colour
 
 
 @dataclass
@@ -570,13 +572,34 @@ def _negate(s: dict) -> dict:
     return out
 
 
-def plan_nested(graph, cols: list[int], colw: float) -> Plan:
+def subject_color_keys(t, cols: list[int], restart: bool) -> list[tuple[int, int, int]]:
+    """(data set, sub-column, colour index) for each subject with values. Colours run on
+    across groups, or start again in each group (subject n has colour n in every group)."""
+    out, k = [], 0
+    for c in cols:
+        for sub in range(t.width()):
+            f = t.flat(c, sub)
+            if any(t._ok(r, f) is not None for r in range(len(t.y[f]))):
+                out.append((c, sub, sub if restart else k))
+                k += 1
+    return out
+
+
+def subject_palette(spec) -> list[str]:
     from ...doc.spec import SUBJECT_COLORS
+    return list(spec.nested.get("colors") or []) or list(SUBJECT_COLORS)
+
+
+def plan_nested(graph, cols: list[int], colw: float) -> Plan:
     spec, t = graph.spec, graph.table
     lay = spec.nested_layout
+    N = spec.nested
+    pal = subject_palette(spec)
+    by_dataset = N.get("color_by") == "dataset"
+    keys = {(c, sub): k for c, sub, k in subject_color_keys(t, cols, bool(N.get("restart")))}
+    mark_scale = float(N.get("mean_size", 2.2))
     slots, labels = [], []
     x0 = 0.0
-    k = 0                                  # subject counter → colour, continuing across groups
     for c in cols:
         st = spec.style(c)
         subjects = []
@@ -585,8 +608,8 @@ def plan_nested(graph, cols: list[int], colw: float) -> Plan:
             vals = [t._ok(r, f) for r in range(len(t.y[f]))]
             vals = np.array([v for v in vals if v is not None], float)
             if len(vals):
-                subjects.append((sub, vals, SUBJECT_COLORS[k % len(SUBJECT_COLORS)]))
-                k += 1
+                col = st.symbol_color if by_dataset else pal[keys[(c, sub)] % len(pal)]
+                subjects.append((sub, vals, col))
         if lay == "subjects":
             sw = max(colw / max(len(subjects), 1), 5.0 * MM)
             gw = sw * max(len(subjects), 1)
@@ -609,7 +632,8 @@ def plan_nested(graph, cols: list[int], colw: float) -> Plan:
             s = summarize(allv, st)
             marks = []
         order = colors if len(s["points"]) == len(colors) else None
-        slots.append(Slot((c,), c, x0 + colw / 2, colw, s, allv, point_colors=order, marks=marks))
+        slots.append(Slot((c,), c, x0 + colw / 2, colw, s, allv, point_colors=order, marks=marks,
+                          mark_scale=mark_scale, mark_outline=N.get("mean_outline", "#000000")))
         labels.append((x0 + colw / 2, t.label(c)))
         x0 += colw
     if lay == "subjects" and slots:
@@ -651,7 +675,7 @@ class _SlotGeom:
         else:
             ref = s["center"] if s["center"] is not None else s["max"]
             top = ym(ref) if ref is not None else ym(rng.vmin)
-        md = d * 2.2
+        md = d * sl.mark_scale
         self.mark_xs = swarm([ym(v) for v, _ in sl.marks], md * 1.05, colw * 0.3) if sl.marks else []
         for (v, _), mx in zip(sl.marks, self.mark_xs):
             hit.append(QRectF(xc + mx - md / 2, ym(v) - md / 2, md, md))
@@ -754,8 +778,9 @@ class _SlotGeom:
             draw_symbol(cv, st.symbol_shape, xc + dx, y, d, colors[j] if colors else st.symbol_color)
         for (v, col), mx in zip(sl.marks, self.mark_xs):     # subject means (SuperPlot)
             y = ym(v)
-            draw_symbol(cv, st.symbol_shape, xc + mx, y, d * 2.2, "#000000")
-            draw_symbol(cv, st.symbol_shape, xc + mx, y, d * 1.7, col)
+            ms = sl.mark_scale
+            draw_symbol(cv, st.symbol_shape, xc + mx, y, d * ms, sl.mark_outline)
+            draw_symbol(cv, st.symbol_shape, xc + mx, y, d * max(ms - 0.5, ms * 0.7), col)
         if (st.appearance not in ("box", "violin", "floating") or sl.force_bar or sl.no_line) \
                 and s["center"] is not None:
             yc = ym(s["center"])

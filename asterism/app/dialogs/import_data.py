@@ -114,7 +114,7 @@ class ImportDialog(SectionDialog):
             self.volume = QLineEdit("")
             self.volume.setPlaceholderText("µL per reaction")
             self.volume.setFixedWidth(130)
-            self.per = combo([("Per reaction (as measured)", "reaction"), ("Per µL of sample", "ul"),
+            self.per = combo([("Per reaction (× dilution factor)", "reaction"), ("Per µL of sample", "ul"),
                               ("Per mL of sample", "ml")])
             self.ss = QCheckBox("Single-stranded genomes against a double-stranded (plasmid) standard: × 2")
             from .. import prefs                      # the lab's titration settings (Settings › Import)
@@ -286,8 +286,17 @@ class ImportDialog(SectionDialog):
         self.layout_combo.currentIndexChanged.connect(lambda *_: self._fill_roles(keep=False))
         self.merge.toggled.connect(lambda *_: self._later())
         self.avg.toggled.connect(lambda *_: self._later())
+        self.type_combo.currentIndexChanged.connect(lambda *_: self._sync_options())
+        self.layout_combo.currentIndexChanged.connect(lambda *_: self._sync_options())
         self._sheet_changed()
+        self._sync_options()
         return page
+
+    def _sync_options(self) -> None:
+        """Show only the options that do something for this table type and layout."""
+        tt, lay = self.type_combo.currentData(), self.layout_combo.currentData()
+        self.merge.setVisible(lay == "wide" and tt in ("xy", "grouped"))
+        self.avg.setVisible(lay == "long")
 
     def rows(self) -> list[list]:
         return self.sheets[self.sheet_combo.currentText()]
@@ -369,8 +378,7 @@ class ImportDialog(SectionDialog):
             c.currentIndexChanged.connect(lambda *_: self._later())
             self.role_table.setCellWidget(j, 2, c)
         self.role_table.blockSignals(False)
-        self.merge.setVisible(layout == "wide")
-        self.avg.setVisible(layout == "long")
+        self._sync_options()
         self._later()
 
     def roles(self) -> dict[int, str]:

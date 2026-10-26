@@ -162,6 +162,6 @@ Choose **Sheet › Table Format…**, or right-click in the table, to change an 
 
 A Notes sheet records the details of an experiment next to its data. Add one with **Sheet › New Notes**, or the **+** next to **Notes** in the project sidebar.
 
-It has a **Constants** section with fields for **Experiment Date**, **Experiment ID**, **Notebook Reference**, **Project**, **Experimenter** and **Protocol**, and a **Notes** box for free text. Notes sheets are saved with the project. Their text isn't part of the project's undo history.
+It has a **Constants** section with fields for **Experiment Date**, **Experiment ID**, **Notebook Reference**, **Project**, **Experimenter** and **Protocol**, and a **Notes** box for free text. Notes sheets are saved with the project. You can undo typing with **Edit › Undo** (⌘Z); continued typing in one field is a single step.
 
 Prism users: these are Prism's info sheets, and info sheets in Prism files come across as Notes sheets (see [Prism files](prism.md)).

@@ -14,6 +14,7 @@ from .results import AnalysisResult, ResultPage, fmt, fmt_p, p_summary
 
 
 def one_sample(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, an.columns, an.params
     mu = float(p.get("mu", 0.0))
     test = p.get("test", "t")                       # t | wilcoxon
@@ -44,7 +45,7 @@ def one_sample(an) -> AnalysisResult:
                  ("Degrees of freedom", [str(r["df"]) if r else "" for r in res_rows], "row"),
                  ("P value", [fmt_p(r["p"]) if r else "" for r in res_rows], "row"),
                  ("Significance", [p_summary(r["p"]) if r else "" for r in res_rows], "row"),
-                 ("Significant at α = 0.05", [("Yes" if r["p"] < 0.05 else "No") if r else "" for r in res_rows], "row"),
+                 (f"Significant at α = {ALPHA:g}", [("Yes" if r["p"] < ALPHA else "No") if r else "" for r in res_rows], "row"),
                  ("Tails", ["Two-sided" if tails == 2 else "One-sided"] * len(cols), "row"),
                  ("", [], "blank"), ("Size of the discrepancy", [], "section"),
                  ("Discrepancy (actual − hypothetical)", [fmt(r["d"]) if r else "" for r in res_rows], "row"),
@@ -76,7 +77,7 @@ def one_sample(an) -> AnalysisResult:
                  ("P value", [fmt_p(r["p"]) if r else "" for r in res_rows], "row"),
                  ("P value method", [r["method"] if r else "" for r in res_rows], "row"),
                  ("Significance", [p_summary(r["p"]) if r else "" for r in res_rows], "row"),
-                 ("Significant at α = 0.05", [("Yes" if r["p"] < 0.05 else "No") if r else "" for r in res_rows], "row"),
+                 (f"Significant at α = {ALPHA:g}", [("Yes" if r["p"] < ALPHA else "No") if r else "" for r in res_rows], "row"),
                  ("Tails", ["Two-sided" if tails == 2 else "One-sided"] * len(cols), "row")]
     return AnalysisResult(pages=[ResultPage("Results", [t.label(c) for c in cols], rows)])
 

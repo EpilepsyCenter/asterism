@@ -428,3 +428,56 @@ def test_real_prism_dashed_line():
     g = p.graphs[0]
     assert [g.spec.style(c).line_dash for c in (0, 1)] == ["solid", "dash"]
     assert row_x(g.table) == [1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def test_prism_one_way_anovas_match_prism():
+    """One-way ANOVAs read from a .prism file (ordinary with Tukey or Dunnett, repeated
+    measures with Geisser-Greenhouse and Šídák, Kruskal-Wallis with Dunn, Brown-Forsythe and
+    Welch with Dunnett's T3) and recomputed: the same numbers as Prism's own results."""
+    import json
+    import zipfile
+    from asterism.analysis import engine
+    from asterism.doc.model import Project
+    from asterism.io.prism import into_project, read
+    path = _need("Anovas et al.prism")
+    imp = read(str(path))
+    assert not any("one way" in n.lower() for n in imp.notes)
+    p = Project(engine)
+    into_project(imp, p)
+    # Prism's adjusted P values, per analysis title + family
+    z = zipfile.ZipFile(path)
+    want = {}
+    for n in z.namelist():
+        if n.endswith("/results.json"):
+            base = n.rsplit("/", 1)[0]
+            sh = json.loads(z.read(base + "/sheet.json"))
+            par = json.loads(z.read(base + "/parameters.json"))["content"]
+            fam = par["postTests"]["pairwiseTests"]["pairwiseDesign"]["type"]
+            ps = []
+
+            def walk(o):
+                if isinstance(o, dict):
+                    if "pValueAdjusted" in o:
+                        ps.append(o["pValueAdjusted"]["value"])
+                    for v in o.values():
+                        walk(v)
+            walk(json.loads(z.read(n))["content"])
+            want[(sh["title"].split(" of ")[0], fam)] = sorted(ps)
+    got = {}
+    for a in p.analyses:
+        fam = "CONTROL_VS_ALL" if a.params.get("compare") == "control" else "ALL_VS_ALL"
+        comps = [float(vals[-1]) for pg in a.result.pages for lab, vals, _ in pg.rows if " vs. " in lab]
+        got[(a.name.split(" of ")[0], fam)] = sorted(comps)
+    pairs = {("One-way ANOVA", "ALL_VS_ALL"): ("Ordinary one-way ANOVA", "ALL_VS_ALL"),
+             ("One-way ANOVA", "CONTROL_VS_ALL"): ("Ordinary one-way ANOVA", "CONTROL_VS_ALL"),
+             ("Repeated-measures one-way ANOVA", "ALL_VS_ALL"): ("RM one-way ANOVA", "ALL_VS_ALL"),
+             ("Welch and Brown-Forsythe ANOVA", "ALL_VS_ALL"): ("Brown-Forsythe and Welch ANOVA tests",
+                                                               "ALL_VS_ALL"),
+             ("Kruskal-Wallis test", "ALL_VS_ALL"): ("Kruskal-Wallis test", "ALL_VS_ALL")}
+    for ours, theirs in pairs.items():
+        assert got[ours] == pytest.approx(want[theirs], abs=6e-5), ours     # results show 4 decimals
+    # tables: sub-column titles and date X
+    nested = next(t for t in p.tables if t.table_type == "nested")
+    assert nested.sub_titles[0] == ["Mouse 1", "Mouse 2", "Mouse 3"]
+    xy = next(t for t in p.tables if t.table_type == "xy")
+    assert xy.x_format == "date" and xy.x_value(0) == 45658.0          # 2025-01-01 as a day number

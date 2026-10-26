@@ -9,6 +9,7 @@ DEFAULTS: dict[str, object] = {
     # general
     "autosave.enabled": True,
     "autosave.minutes": 2,
+    "export.dpi": 300,                 # PNG and TIFF export
     # new graphs
     "graph.font": "Arial",
     "graph.font_size": 12.0,
@@ -77,8 +78,7 @@ def analysis_defaults(kind: str) -> dict:
         out["method"] = get("analysis.posthoc")
     if kind in CONF_KINDS:
         out["conf"] = get("analysis.conf")
-    if kind in ALPHA_KINDS:
-        out["alpha"] = get("analysis.alpha")
+    out["alpha"] = get("analysis.alpha")          # every analysis that reports significance
     return out
 
 

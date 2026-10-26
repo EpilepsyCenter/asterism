@@ -61,6 +61,13 @@ class SettingsDialog(SectionDialog):
         pl.addLayout(g)
         pl.addWidget(_note("Recovery copies are kept in ASTERISM's own folder, never over your files, and removed "
                            "when you save or close. If ASTERISM quits unexpectedly, it offers them the next time."))
+        pl.addWidget(Section("Exporting"))
+        g = FormGrid()
+        self.w["export.dpi"] = combo([("150 dpi", 150), ("300 dpi", 300), ("600 dpi", 600), ("1200 dpi", 1200)],
+                                     prefs.get("export.dpi"))
+        g.add(("PNG and TIFF resolution:", self.w["export.dpi"]))
+        pl.addLayout(g)
+        pl.addWidget(_note("PDF and SVG are vector files and print sharp at any size."))
         pl.addStretch(1)
         return page
 
@@ -142,7 +149,7 @@ class SettingsDialog(SectionDialog):
                                                      if prefs.get("import.titre_volume_ul") else "")
         self.w["import.titre_volume_ul"].setPlaceholderText("µL per reaction")
         self.w["import.titre_volume_ul"].setFixedWidth(130)
-        self.w["import.titre_per"] = combo([("Per reaction", "reaction"), ("Per µL of sample", "ul"),
+        self.w["import.titre_per"] = combo([("Per reaction (× dilution factor)", "reaction"), ("Per µL of sample", "ul"),
                                             ("Per mL of sample", "ml")], prefs.get("import.titre_per"))
         self.w["import.titre_ss"] = QCheckBox("× 2 for single-stranded genomes on a double-stranded standard")
         self.w["import.titre_ss"].setChecked(prefs.get("import.titre_ss"))

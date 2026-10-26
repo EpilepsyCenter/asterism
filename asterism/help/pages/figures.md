@@ -100,8 +100,8 @@ Export the graph or figure that is open with **File › Export PDF…** (⌘E), 
 |---|---|---|
 | PDF | Vector, live text | Journals, and editing in Illustrator or Affinity |
 | SVG | Vector, live text | Editing in Illustrator, Affinity or Inkscape; every element is a named group |
-| PNG | Image, 300 dpi | Slides, documents, the web |
-| TIFF | Image, 300 dpi | Journals that ask for TIFF |
+| PNG | Image, 300 dpi unless you change it | Slides, documents, the web |
+| TIFF | Image, 300 dpi unless you change it | Journals that ask for TIFF |
 
 Vector files (PDF, SVG) stay sharp at any size and keep the text as text, so you can still correct a label in a drawing program. In an SVG, each part of the graph (each data set, each axis, the brackets, the title) is its own named group; in a figure, each panel is a group named after its letter, holding that graph's own groups. Use PDF or SVG whenever the receiver accepts them, and PNG or TIFF only when an image is required.
 
@@ -109,7 +109,7 @@ Vector files (PDF, SVG) stay sharp at any size and keep the text as text, so you
 
 - **A graph** exports at the size it is drawn, the size you set in [Size and frame](formatting.md#size-and-frame), plus a narrow margin around everything on it. What you see at 100% zoom is what you get.
 - **A figure** exports at exactly its page size, with a white background.
-- PNG and TIFF are drawn at 300 dpi, on white.
+- PNG and TIFF are drawn on white at 300 dpi. To change this, choose 150, 600 or 1200 dpi under **Settings… › General › PNG and TIFF resolution** (see [Settings, autosave and files](settings.md#settings)). Journals often ask for 300 dpi for photos and 600 to 1200 dpi for line art.
 
 To get a graph at a particular size, set its plot height and column width (or X-axis length) in millimetres in Format Graph, rather than scaling the exported file.
 

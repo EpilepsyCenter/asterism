@@ -42,6 +42,7 @@ def ttest_title(params: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def _ttest(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     if an.table.is_summary():
         return _ttest_summary(an)
     t, (ca, cb) = an.table, an.columns[:2]
@@ -79,7 +80,7 @@ def _ttest(an) -> AnalysisResult:
         if exact:
             rows.append(("P value method", [exact], "row"))
         rows.append(("Significance", [p_summary(pv)], "row"))
-        rows.append(("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row"))
+        rows.append((f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row"))
         rows.append(("Tails", ["Two-sided" if tails == 2 else "One-sided"], "row"))
 
     if dist in ("normal", "lognormal") and design == "unpaired":
@@ -133,7 +134,7 @@ def _ttest(an) -> AnalysisResult:
             ("Degrees of freedom (numerator, denominator)", [f"{dfn}, {dfd}"], "row"),
             ("P value", [fmt_p(pf)], "row"),
             ("Significance", [p_summary(pf)], "row"),
-            ("Variances differ at α = 0.05", ["Yes" if pf < 0.05 else "No"], "row"),
+            (f"Variances differ at α = {ALPHA:g}", ["Yes" if pf < ALPHA else "No"], "row"),
         ]
         rows += _data_analyzed(A, B, n1, n2)
 
@@ -170,7 +171,7 @@ def _ttest(an) -> AnalysisResult:
             ("Correlation between pairs (r)", [fmt(r)], "row"),
             ("P value (one-sided, r > 0)", [fmt_p(pr / 2 if r > 0 else 1 - pr / 2)], "row"),
             ("Significance", [p_summary(pr / 2 if r > 0 else 1)], "row"),
-            ("Pairing effective at α = 0.05", ["Yes" if r > 0 and pr / 2 < 0.05 else "No"], "row"),
+            (f"Pairing effective at α = {ALPHA:g}", ["Yes" if r > 0 and pr / 2 < ALPHA else "No"], "row"),
         ]
 
     elif test == "mw":
@@ -225,6 +226,7 @@ def _ttest(an) -> AnalysisResult:
 
 def _ttest_summary(an) -> AnalysisResult:
     """Unpaired t test from entered mean, SD (or SEM, %CV) and N."""
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, (ca, cb) = an.table, an.columns[:2]
     p = an.params
     design, dist, test = _test_key(p)
@@ -253,7 +255,7 @@ def _ttest_summary(an) -> AnalysisResult:
     rows = [("Data table", [t.name], "row"), (f"Data set {A}", [t.label(ca)], "row"),
             (f"Data set {B}", [t.label(cb)], "row"), ("", [], "blank"), (name, [], "section"),
             ("P value", [fmt_p(pv)], "row"), ("Significance", [p_summary(pv)], "row"),
-            ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row"),
+            (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row"),
             ("Tails", ["Two-sided" if tails == 2 else "One-sided"], "row"),
             ("t", [f"{abs(tv):.3f}"], "row"),
             ("Degrees of freedom" + (" (Welch)" if test == "welch" else ""),

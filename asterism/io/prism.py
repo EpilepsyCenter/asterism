@@ -21,6 +21,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .build import date_number
 from .sheets import number
 
 TYPES = {"column": "column", "grouped": "grouped", "xy": "xy", "contingency": "contingency",
@@ -212,13 +213,17 @@ def _prism_table(z, names, load, sh):
     has_rt = bool(td.get("rowTitlesDataSet"))
     has_x = bool(td.get("xDataSet"))
     xerr = str(td.get("xDataSetFormat", "")).endswith("err")
+    xdate = str(td.get("xDataSetFormat", "")) == "date"          # stored as "2025-01-01 00:00:00"
     text = z.read(f"data/tables/{td['uid']}/data.csv").decode("utf-8", "replace")
     cols_raw = list(csv.reader(io.StringIO(text)))
     nrows = len(cols_raw)
     ncols = max((len(r) for r in cols_raw), default=0)
     col = lambda j: [r[j].strip() if j < len(r) else "" for r in cols_raw]
     t = Table(_plain(sh.get("title"), "Data"), tt, y_format=yf, replicates=reps, ncols=max(len(set_uids), 1),
-              row_titles=has_rt, x_format=("numbers_err" if xerr else "numbers") if has_x else None)
+              row_titles=has_rt,
+              x_format=("date" if xdate else "numbers_err" if xerr else "numbers") if has_x else None)
+    if xdate:
+        t.x_format = "date"
     j = 0
     if has_rt:
         for i, v in enumerate(col(j)):
@@ -229,7 +234,7 @@ def _prism_table(z, names, load, sh):
         xd = load(f"data/sets/{td['xDataSet']}.json") if f"data/sets/{td['xDataSet']}.json" in names else {}
         _w, xex = _set_layout(xd, 1)
         for i, v in enumerate(col(j)):
-            n = number(v)
+            n = (date_number(v) if v else None) if xdate else number(v)
             if n is not None:
                 t.set(i, "x", n, emit=False)
         if xex[0]:
@@ -264,6 +269,14 @@ def _prism_table(z, names, load, sh):
             j += 1
     if excluded:
         t.set_excluded(excluded, True, emit=False)
+    st = td.get("subcolumnTitlesDataSet")            # sub-column titles (e.g. subject names)
+    if st and f"data/sets/{st}.json" in names:
+        for entry in load(f"data/sets/{st}.json").get("titles", []):
+            ds = int(entry.get("column", -1))
+            for rp in entry.get("replicates", []):
+                k, name = int(rp.get("replicate", -1)), _plain(rp.get("name"))
+                if 0 <= ds < t.ncols and 0 <= k < width and name:
+                    t.sub_titles[ds][k] = name
     return t
 
 
@@ -277,6 +290,68 @@ def _letters(idx: str) -> int:
         if ch.isalpha():
             n = n * 26 + (ord(ch.upper()) - 64)
     return n - 1
+
+
+ONE_WAY_DESIGNS = {                               # Prism's experimental design → ASTERISM's settings
+    "ORDINARY_ANOVA": {"design": "ordinary", "distribution": "normal"},
+    "REPEATED_MEASURES_ANOVA": {"design": "rm", "distribution": "normal"},
+    "KRUSKAL_WALLIS_TEST": {"design": "ordinary", "distribution": "nonparametric"},
+    "FRIEDMAN_TEST": {"design": "rm", "distribution": "nonparametric"},
+    "BROWN_FORSYTHE_ANOVA": {"design": "ordinary", "distribution": "normal", "welch": True},
+    "WELCH_ANOVA": {"design": "ordinary", "distribution": "normal", "welch": True},
+}
+ONE_WAY_TESTS = {"TUKEY": "tukey", "DUNNET": "dunnett", "DUNNETT": "dunnett", "BONFERRONI_SIDAK": "sidak",
+                 "SIDAK": "sidak", "BONFERRONI": "bonferroni", "HOLM_SIDAK": "holm_sidak", "DUNN": "dunn",
+                 "DUNNET_T3": "t3", "DUNNETT_T3": "t3", "GAMES_HOWELL": "games_howell", "TAMHANE_T2": "t2"}
+
+
+def _map_one_way(p: dict, cols: list[int], alpha: float):
+    """Prism's one-way ANOVA family (ordinary, repeated measures, Kruskal-Wallis, Friedman,
+    Brown-Forsythe/Welch) and its multiple comparisons."""
+    from ..analysis.anova import METHODS_FOR, model_of
+    design = ONE_WAY_DESIGNS.get(p.get("experimentalDesign"))
+    if design is None or len(cols) < 3:
+        return None
+    params = dict(design)
+    lost = []
+    rm = p.get("repeatedMeasures", {})
+    params["gg"] = not rm.get("assumeSphericity", False)
+    post = p.get("postTests", {})
+    pw = post.get("pairwiseTests", {})
+    pdesign = pw.get("pairwiseDesign", {})
+    if post.get("type") not in (None, "PAIRWISE_TESTS"):
+        params["compare"] = "none"
+        if post.get("type") not in ("NONE", "NO_POST_TESTS"):
+            lost.append("its post test (only comparisons between pairs of groups come across)")
+    elif pdesign.get("type") == "CONTROL_VS_ALL":
+        params["compare"] = "control"
+        k = pdesign.get("controlID", {}).get("col", {}).get("idx", 0)
+        params["control"] = cols[k] if 0 <= k < len(cols) else cols[0]
+    elif pdesign.get("type") in (None, "ALL_VS_ALL"):
+        params["compare"] = "all"
+    else:
+        params["compare"] = "all"
+        lost.append("the chosen pairs of groups (every pair is compared)")
+    mc = pw.get("multipleComparisons", {})
+    kind = mc.get("type", "STATISTICAL")
+    model = model_of(params)
+    if kind == "STATISTICAL":
+        method = ONE_WAY_TESTS.get(mc.get("statistical", {}).get("test"))
+        a_ = mc.get("statistical", {}).get("options", {}).get("significanceLevel")
+    elif kind == "NO_CORRECTION":
+        method = "dunn_none" if model in ("kw", "friedman") else "fisher"
+        a_ = mc.get("noCorrection", {}).get("options", {}).get("significanceLevel")
+    else:                                         # FDR: not offered for one-way ANOVA here
+        method, a_ = None, None
+        lost.append("false discovery rate comparisons (the default test is used)")
+    if method is not None and method in METHODS_FOR[model]:
+        params["method"] = method
+    elif method is not None:
+        lost.append(f"the {method} comparisons (the default test is used)")
+    params["alpha"] = float(a_ if a_ is not None else alpha)
+    if p.get("report", {}).get("descriptiveStatistics"):
+        params["descriptive"] = True
+    return "anova1", cols, params, "; ".join(lost)
 
 
 def map_analysis(cls: str, p: dict, t, idx: list[str]):
@@ -316,6 +391,8 @@ def map_analysis(cls: str, p: dict, t, idx: list[str]):
             q = float(mc.get("fdr", {}).get("options", {}).get("discoveryLevel", 1.0)) / 100.0
             return "multiple_t", cols[:2], {"test": test, "correction": corr, "q": q}, ""
         return "multiple_t", cols[:2], {"test": test, "correction": "none"}, ""
+    if cls == "ONE_WAY_ANOVA":
+        return _map_one_way(p, cols, alpha)
     if cls == "TWO_WAY_ANOVA":
         design = {"REPEATED_MEASURES_BY_ROWS": "rm_rows", "REPEATED_MEASURES_BY_COLUMNS": "rm_cols",
                   "REPEATED_MEASURES_BY_BOTH": "rm_both"}.get(p.get("experimentalDesign"), "ordinary")

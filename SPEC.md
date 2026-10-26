@@ -827,5 +827,16 @@ menus; How Results Are Calculated documents the methods. Pages are written from 
 behaviour changes, update the page (the help tests catch broken anchors, not stale text).
 Packaging must include `asterism/help/pages/*.md`.
 
+**After M11b (2026-10-26):** parts-of-whole graphs get Format Graph › Slices (per-row colour and
+pull-out, outer/internal borders, legend contents, total with prefix/suffix, order, diameter;
+`GraphSpec.parts`); nested graphs get subject colours (by subject or data set, colour sets,
+per-subject colours, restart per group, subject-mean size/outline; `GraphSpec.nested`). The α
+set for new analyses reaches every analysis's "significant at α" answers; PNG/TIFF resolution
+setting; Notes sheets undoable. Prism import now maps one-way ANOVAs (all designs and
+comparison methods), sub-column titles and date X; checked against Prism's stored results in the
+lab's "Anovas et al.prism" (Dunnett's T3 now uses the studentized maximum modulus with df rounded
+down; repeated measures without sphericity compares each pair on its own differences; exact
+Kruskal-Wallis P for small and moderate samples).
+
 **M11 — Product:** autosave and recovery, preferences, help, Windows icon set, packaging,
 signing, file associations, sample projects.

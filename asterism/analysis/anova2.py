@@ -485,6 +485,7 @@ def comparisons(design: str, fit: dict, compare: str, method: str, conf: float,
 # ---------------------------------------------------------------------------
 
 def two_way(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     if t.table_type not in ("grouped", "xy"):
         raise ValueError("Two-way ANOVA works on a Grouped table (or an XY table with replicates).")
@@ -549,7 +550,7 @@ def two_way(an) -> AnalysisResult:
                      ("% of total variation", [f"{100 * s['ss'] / total:.2f}" if total else ""], "row"),
                      ("F", [f"{s['F']:.4g} ({fmt_df(s.get('dfn', s['df']))}, {fmt_df(s.get('dfd', 0))})"], "row"),
                      ("P value", [fmt_p(s["p"])], "row"), ("Significance", [p_summary(s["p"])], "row"),
-                     ("Significant at α = 0.05", ["Yes" if s["p"] < 0.05 else "No"], "row"),
+                     (f"Significant at α = {ALPHA:g}", ["Yes" if s["p"] < ALPHA else "No"], "row"),
                      ("", [], "blank")]
     if design in ("rm_rows", "rm_cols"):
         rows_out.append(("Geisser-Greenhouse ε", [f"{fit['eps']:.4f}"], "row"))
@@ -572,7 +573,7 @@ def two_way(an) -> AnalysisResult:
             crow.append((fam, [], "section"))
             for r_, (a, b) in zip(results, pairs):
                 ci = f"{fmt(r_['ci'][0])} to {fmt(r_['ci'][1])}" if r_["ci"] else ""
-                crow.append((r_["label"], [fmt(r_["diff"]), ci, "Yes" if r_["p"] < 0.05 else "No",
+                crow.append((r_["label"], [fmt(r_["diff"]), ci, "Yes" if r_["p"] < ALPHA else "No",
                                            p_summary(r_["p"]), fmt_p(r_["p"])], "row"))
                 if a[0] >= 0 and a[1] >= 0:      # in table coordinates (row, data set)
                     res.cell_comparisons.append(((rows[a[0]], cols[a[1]]), (rows[b[0]], cols[b[1]]),
@@ -591,6 +592,7 @@ def two_way(an) -> AnalysisResult:
 def _mixed_result(t, rows, cols, p, design, fit, compare, method, conf, row_f, col_f,
                   row_names, col_names) -> AnalysisResult:
     """Result pages for the mixed-effects model (Prism's layout of information, our wording)."""
+    ALPHA = float(p.get("alpha", 0.05))      # significance level (Settings)
     f, tb, data = fit["mm"], fit["table"], fit["data"]
     src = [(row_f, tb["rows"]), (col_f, tb["cols"]), (f"{row_f} × {col_f}", tb["inter"])]
     rows_out: list[tuple[str, list[str], str]] = [
@@ -602,7 +604,7 @@ def _mixed_result(t, rows, cols, p, design, fit, compare, method, conf, row_f, c
         rows_out += [(name, [], "section"),
                      ("F", [f"{s['F']:.4g} ({fmt_df(s['dfn'])}, {fmt_df(s['dfd'])})"], "row"),
                      ("P value", [fmt_p(s["p"])], "row"), ("Significance", [p_summary(s["p"])], "row"),
-                     ("Significant at α = 0.05", ["Yes" if s["p"] < 0.05 else "No"], "row"),
+                     (f"Significant at α = {ALPHA:g}", ["Yes" if s["p"] < ALPHA else "No"], "row"),
                      ("", [], "blank")]
     if design in ("rm_rows", "rm_cols"):
         rows_out.append(("Geisser-Greenhouse ε", [f"{fit['eps']:.4f}"], "row"))
@@ -619,7 +621,7 @@ def _mixed_result(t, rows, cols, p, design, fit, compare, method, conf, row_f, c
     rows_out += [("", [], "blank"), ("Was the matching effective?", [], "section"),
                  ("χ² (likelihood ratio)", [f"{chi:.4g}"], "row"), ("Degrees of freedom", [str(dfc)], "row"),
                  ("P value", [fmt_p(pc)], "row"),
-                 ("Matching effective at α = 0.05", ["Yes" if pc < 0.05 else "No"], "row"),
+                 (f"Matching effective at α = {ALPHA:g}", ["Yes" if pc < ALPHA else "No"], "row"),
                  ("", [], "blank"), ("Data summary", [], "section"),
                  ("Subjects", [str(data["subjects"])], "row"),
                  ("Values analysed", [str(len(data["y"]))], "row"),
@@ -638,7 +640,7 @@ def _mixed_result(t, rows, cols, p, design, fit, compare, method, conf, row_f, c
             crow.append((fam, [], "section"))
             for r_, (a, b) in zip(results, pairs):
                 ci = f"{fmt(r_['ci'][0])} to {fmt(r_['ci'][1])}" if r_["ci"] else ""
-                crow.append((r_["label"], [fmt(r_["diff"]), ci, "Yes" if r_["p"] < 0.05 else "No",
+                crow.append((r_["label"], [fmt(r_["diff"]), ci, "Yes" if r_["p"] < ALPHA else "No",
                                            p_summary(r_["p"]), fmt_p(r_["p"])], "row"))
                 if a[0] >= 0 and a[1] >= 0:
                     res.cell_comparisons.append(((rows[a[0]], cols[a[1]]), (rows[b[0]], cols[b[1]]),

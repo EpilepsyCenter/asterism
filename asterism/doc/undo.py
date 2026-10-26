@@ -13,6 +13,10 @@ from .events import Signal
 class Command:
     text = "Edit"
 
+    def merge(self, other: "Command") -> bool:
+        """Absorb the next command into this one (e.g. continued typing); True if merged."""
+        return False
+
     def redo(self) -> None:  # pragma: no cover - interface
         raise NotImplementedError
 
@@ -75,6 +79,10 @@ class UndoStack:
 
     def push(self, cmd: Command) -> None:
         cmd.redo()
+        top = self._cmds[self._index - 1] if self._index > 0 and self._index == len(self._cmds) else None
+        if top is not None and self._clean != self._index and top.merge(cmd):
+            self.changed.emit()
+            return
         del self._cmds[self._index:]
         if self._clean > self._index:
             self._clean = -1

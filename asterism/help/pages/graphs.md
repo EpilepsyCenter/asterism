@@ -76,7 +76,7 @@ For nested tables, where each sub-column is one subject (an animal, a culture) h
 | SuperPlot on bars | The SuperPlot on top of bars |
 | Box and whiskers with points | A box per group with every value as a dot |
 
-A SuperPlot shows both levels at once: the spread of the replicates and the subject means that the nested test compares.
+A SuperPlot shows both levels at once: the spread of the replicates and the subject means that the nested test compares. The subject colours, and the size and outline of the subject means, are set under **Format Graph › Arrangement** (see [Formatting graphs](formatting.md#arrangement)).
 
 ### XY graphs
 
@@ -108,7 +108,7 @@ For contingency tables (counts).
 
 ### Parts of whole
 
-For parts-of-whole tables: **Pie chart**, **Donut chart**, **Bar stacked to 100%** and **Percentage dot plot** (100 squares, coloured in proportion).
+For parts-of-whole tables: **Pie chart**, **Donut chart**, **Bar stacked to 100%** and **Percentage dot plot** (100 squares, coloured in proportion). Slice colours, pulled-out slices, borders, the legend and a total are set under **Format Graph › Slices** (see [Formatting graphs](formatting.md#slices)).
 
 ### Survival graphs
 
@@ -156,7 +156,8 @@ You can change most things by working on the graph itself.
 - **Click** an element to select it: a data set, an axis, a title, a bracket, the legend or a drawing. Selection handles appear around it. Drag across empty space to select several elements.
 - **Drag** titles, significance brackets, the legend and drawings to move them. The graph itself stays centred.
 - **Arrow keys** nudge a selected data set sideways by 1 pt (5 pt with Shift). On XY graphs you can also nudge it up and down, for example to make a waterfall plot. Selected drawings move with the arrow keys too.
-- **Double-click** a data set, an axis, a bracket or the legend to open Format Graph at the matching section. Double-clicking a data set picks that data set in the dialog.
+- **Double-click** a data set, an axis, a bracket or the legend to open Format Graph at the matching section. Double-clicking a data set picks that data set in the dialog. The legend opens **Style** on column and XY graphs, where **Show the legend (all data sets)** is.
+- **Graph › Show or Hide Legend** turns the legend on or off. **Graph › Nudge Data Set…** opens the nudge settings for the selected data set.
 - **Right-click** for a menu: **Format Graph…**, **Axes…**, and for brackets **Hide this comparison** and **Format significance…**.
 
 Every change is one step you can undo with **Edit › Undo** (⌘Z).

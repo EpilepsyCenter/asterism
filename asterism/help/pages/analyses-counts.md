@@ -53,7 +53,7 @@ The method for each confidence interval. The recommended methods are selected al
 
 ### Reading the results
 
-- **Results**: the table size and number of subjects, the test with its P value and whether it is significant at α = 0.05, the test for trend, and the strength of association with its interval.
+- **Results**: the table size and number of subjects, the test with its P value and whether it is significant at the analysis's α (0.05 unless you changed it in Settings), the test for trend, and the strength of association with its interval.
 - **Effect size** (2 × 2 tables): each measure with its confidence interval. A relative risk or odds ratio whose interval includes 1, or a difference whose interval includes 0, is not statistically significant. When the difference isn't significant, the interval of the number needed to treat includes infinity, and the results say so.
 - **Expected counts**: the counts you would expect if group and outcome were unrelated.
 

@@ -272,6 +272,19 @@ _ALLOWED = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, 
             ast.USub, ast.UAdd, ast.Constant, ast.Name, ast.Load, ast.Call, ast.Mod)
 
 
+class _LowerX(ast.NodeTransformer):
+    """Lowercase x means X (a constant called x would only ever be a mistake)."""
+
+    def visit_Name(self, node):
+        if node.id == "x":
+            node.id = "X"
+        return node
+
+
+def x_tree(expr: str):
+    return ast.fix_missing_locations(_LowerX().visit(ast.parse(expr, mode="eval")))
+
+
 def compile_expression(body: str, names: set[str]):
     """Compile a formula that may use only `names`, numbers, + − × ÷ ^ and the functions
     above; anything else (attributes, imports, unknown names) is refused."""
@@ -291,7 +304,7 @@ def user_model(text: str, initial: dict[str, float] | None = None) -> Model:
     natural log. Every name other than X and the functions is a parameter."""
     expr = text.split("=", 1)[1] if "=" in text else text
     expr = expr.replace("^", "**").strip()
-    tree = ast.parse(expr, mode="eval")
+    tree = x_tree(expr)
     names = []
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED):

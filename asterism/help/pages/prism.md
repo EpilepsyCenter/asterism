@@ -24,7 +24,7 @@ If you choose a Prism file with **File › Import Data…** instead, its sheets 
 Data tables come across completely:
 
 - all eight table types, with their entry formats (replicates, or mean with SD, SEM, %CV, N, or plus/minus errors or limits);
-- column titles, row titles, X values and X error values;
+- column titles, sub-column titles (for example subject names in a Nested table), row titles, X values (also dates) and X error values;
 - excluded values, still excluded;
 - text in Multiple variables tables.
 
@@ -41,6 +41,7 @@ Analyses whose options have a clean ASTERISM equivalent are re-created with the 
 | Prism analysis | In ASTERISM |
 |---|---|
 | t tests and nonparametric tests | unpaired (Student's or Welch's), t test on logs, Mann-Whitney, Kolmogorov-Smirnov, paired, ratio paired, Wilcoxon; one- or two-tailed |
+| One-way ANOVA | ordinary, repeated measures (with or without assuming sphericity), Kruskal-Wallis, Friedman, Brown-Forsythe and Welch; every pair or each group against a control; Tukey, Dunnett, Šídák, Bonferroni, Holm-Šídák, Dunn, Dunnett's T3, Games-Howell, Tamhane's T2 or no correction; the significance level |
 | Multiple t tests | the test, and the correction for multiple comparisons (Holm-Šídák, Šídák, Bonferroni) or the false discovery rate method and Q |
 | Two-way ANOVA | ordinary or repeated measures (by rows, columns or both), the multiple comparisons method, the Geisser-Greenhouse correction, factor names |
 | Normality tests | which tests, lognormality, the QQ plot |

@@ -53,25 +53,59 @@ def waffle_counts(vals) -> list[int]:
     return [int(b) for b in base]
 
 
+def parts_rows(graph) -> list[int]:
+    """Rows drawn as slices, in drawing order (reversed when asked)."""
+    spec, t = graph.spec, graph.table
+    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    rows = sorted({r for c in cols for r in _parts_values(t, c)[0]})
+    return rows[::-1] if spec.parts.get("reverse") else rows
+
+
+def parts_colors(graph) -> dict[int, str]:
+    """Each slice row's fill: the colour set for it, else the automatic one (by row order)."""
+    spec, t = graph.spec, graph.table
+    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    rows = sorted({r for c in cols for r in _parts_values(t, c)[0]})
+    chosen = spec.parts.get("colors") or {}
+    return {r: (chosen.get(str(r)) or slice_color(i)) for i, r in enumerate(rows)}
+
+
+def _total_text(P: dict, vals) -> str:
+    tot = float(np.sum(vals))
+    return f"{P.get('total_prefix', '')}{tot:g}{P.get('total_suffix', '')}"
+
+
 def build_parts(graph) -> tuple[list[Element], AxisRange]:
     spec, t = graph.spec, graph.table
+    P = spec.parts
     cols = [c for c in t.used_columns() if c not in spec.hidden]
     elements: list[Element] = []
     lay = spec.parts_layout
     fs = spec.fonts["x_labels"]
     fs_l = spec.fonts["legend"]
-    all_rows = sorted({r for c in cols for r in _parts_values(t, c)[0]})
-    color_of = {r: slice_color(i) for i, r in enumerate(all_rows)}
+    all_rows = parts_rows(graph)
+    color_of = parts_colors(graph)
+    rev = bool(P.get("reverse"))
+    inner = (P.get("inner_color", "#ffffff"), float(P.get("inner_width", 1.0))) if P.get("inner", True) else None
+    outer = (P.get("outer_color", "#000000"), float(P.get("outer_width", 1.0))) if P.get("outer") else None
+    explode = {int(k): float(v) for k, v in (P.get("explode") or {}).items() if float(v or 0) > 0}
+    show_total = bool(P.get("total"))
+    line_h = TM.ascent(fs) + TM.descent(fs)
+
+    def ordered(c):
+        rows, vals = _parts_values(t, c)
+        if rev:
+            rows, vals = rows[::-1], vals[::-1]
+        return rows, vals
+
     d = spec.y_len_mm * MM
     if lay == "stacked100":
         bw, gap = spec.col_width_mm * MM * 1.6, spec.col_width_mm * MM
         ph = d
         rng = AxisRange(0.0, 100.0, 20.0)
-        from ...doc.spec import AxisSpec
         ym = YMap(spec.y, rng, ph)
-        tops = []
         for i, c in enumerate(cols):
-            rows, vals = _parts_values(t, c)
+            rows, vals = ordered(c)
             if not len(vals):
                 continue
             x0 = gap / 2 + i * (bw + gap)
@@ -84,13 +118,22 @@ def build_parts(graph) -> tuple[list[Element], AxisRange]:
 
             def draw(cv, x0=x0, segs=segs, rows=rows, vals=vals, pct=pct):
                 for r, a, b in segs:
-                    cv.rect(x0, ym(b), bw, ym(a) - ym(b), fill=color_of[r], stroke="#ffffff", width=0.75)
+                    cv.rect(x0, ym(b), bw, ym(a) - ym(b), fill=color_of[r], stroke=None)
+                if inner:
+                    for r, a, b in segs[:-1]:
+                        cv.line(x0, ym(b), x0 + bw, ym(b), inner[0], inner[1], "butt")
+                if outer:
+                    cv.rect(x0, ym(100.0), bw, ym(0.0) - ym(100.0), fill=None, stroke=outer[0], width=outer[1])
+                for r, a, b in segs:
                     if spec.parts_labels != "none" and ym(a) - ym(b) > TM.ascent(fs_l) + 2:
                         k = rows.index(r)
                         lab = f"{pct[k]:.0f}%" if spec.parts_labels == "percent" else f"{vals[k]:g}"
                         cv.text(x0 + bw / 2, (ym(a) + ym(b)) / 2 + TM.cap_height(fs_l) / 2, lab, fs_l,
                                 color=ink_on(color_of[r]), anchor="middle")
-            box = QRectF(x0, 0, bw, ph)
+                if show_total:
+                    cv.text(x0 + bw / 2, ym(100.0) - 4, _total_text(P, vals), fs_l, anchor="middle")
+            top = -(line_h + 4) if show_total else 0.0
+            box = QRectF(x0, top, bw, ph - top)
             elements.append(Element(f"data-{column_letter(c)}", "dataset", box, draw, _rect_path(box),
                                     {"column": c, "label": t.label(c)}))
         pw = max(len(cols), 1) * (bw + gap)
@@ -105,76 +148,113 @@ def build_parts(graph) -> tuple[list[Element], AxisRange]:
         gap = d * 0.25
         cell = d / 10
         for i, c in enumerate(cols):
-            rows, vals = _parts_values(t, c)
+            rows, vals = ordered(c)
             if not len(vals):
                 continue
             counts = waffle_counts(vals)
             x0 = i * (d + gap)
             owner = [r for r, k in zip(rows, counts) for _ in range(k)]
 
-            def draw(cv, x0=x0, owner=owner, c=c):
+            def draw(cv, x0=x0, owner=owner, c=c, vals=vals):
                 for k, r in enumerate(owner):           # row by row from the top left
                     row, col = divmod(k, 10)
                     cv.rect(x0 + col * cell + cell * 0.08, row * cell + cell * 0.08, cell * 0.84, cell * 0.84,
                             fill=color_of[r])
+                if outer:
+                    cv.rect(x0, 0, d, d, fill=None, stroke=outer[0], width=outer[1])
                 cv.text(x0 + d / 2, d + 6 + TM.ascent(fs), t.label(c), fs, anchor="middle")
-            box = QRectF(x0, 0, d, d + 8 + TM.ascent(fs) + TM.descent(fs))
+                if show_total:
+                    cv.text(x0 + d / 2, d + 6 + line_h + TM.ascent(fs_l), _total_text(P, vals), fs_l, anchor="middle")
+            box = QRectF(x0, 0, d, d + 8 + line_h * (2 if show_total else 1))
             elements.append(Element(f"data-{column_letter(c)}", "dataset", box, draw, _rect_path(box),
                                     {"column": c, "label": t.label(c)}))
         pw = max(len(cols), 1) * (d + gap) - gap
     else:
         rng = AxisRange(0.0, 1.0, 1.0)
-        gap = d * 0.35
+        pull = max(explode.values(), default=0.0) / 100.0         # room for pulled-out slices
+        gap = d * 0.35 + 2 * pull * d / 2
         for i, c in enumerate(cols):
-            rows, vals = _parts_values(t, c)
+            rows, vals = ordered(c)
             if not len(vals):
                 continue
-            cx, cy, R = i * (d + gap) + d / 2, d / 2, d / 2
+            R = d / 2
+            cx, cy = i * (d + gap) + d / 2 + pull * R, d / 2 + pull * R
             hole = spec.donut_hole if lay == "donut" else 0.0
             fracs = vals / vals.sum()
+
+            def arc(cx_, cy_, rad, a0, a1, n):
+                return [(cx_ + rad * math.cos(math.radians(a)), cy_ + rad * math.sin(math.radians(a)))
+                        for a in np.linspace(a0, a1, n)]
 
             def draw(cv, cx=cx, cy=cy, R=R, hole=hole, rows=rows, fracs=fracs, vals=vals):
                 a0 = -90.0                               # start at 12 o'clock, clockwise
                 for r, f, v in zip(rows, fracs, vals):
                     a1 = a0 + f * 360.0
                     n = max(2, int(abs(a1 - a0) / 3) + 2)
-                    outer = [(cx + R * math.cos(math.radians(a)), cy + R * math.sin(math.radians(a)))
-                             for a in np.linspace(a0, a1, n)]
+                    mid = math.radians((a0 + a1) / 2)
+                    off = explode.get(r, 0.0) / 100.0 * R
+                    sx, sy = cx + off * math.cos(mid), cy + off * math.sin(mid)
+                    outer_pts = arc(sx, sy, R, a0, a1, n)
                     if hole > 0:
-                        inner = [(cx + R * hole * math.cos(math.radians(a)), cy + R * hole * math.sin(math.radians(a)))
-                                 for a in np.linspace(a1, a0, n)]
-                        pts = outer + inner
+                        inner_pts = arc(sx, sy, R * hole, a1, a0, n)
+                        pts = outer_pts + inner_pts
                     else:
-                        pts = [(cx, cy)] + outer
-                    cv.polygon(pts, fill=color_of[r], stroke="#ffffff", width=1.0)
+                        pts = [(sx, sy)] + outer_pts
+                    full = f >= 0.9999
+                    cv.polygon(pts, fill=color_of[r], stroke=None if full else (inner[0] if inner else None),
+                               width=inner[1] if inner else 0.0)
+                    if outer:
+                        cv.polyline(outer_pts, outer[0], outer[1], "butt")
+                        if hole > 0:
+                            cv.polyline(inner_pts, outer[0], outer[1], "butt")
                     if spec.parts_labels != "none" and f >= 0.04:
-                        mid = math.radians((a0 + a1) / 2)
                         rr = R * (0.62 if hole == 0 else (1 + hole) / 2)
                         lab = f"{f * 100:.0f}%" if spec.parts_labels == "percent" else f"{v:g}"
-                        cv.text(cx + rr * math.cos(mid), cy + rr * math.sin(mid) + TM.cap_height(fs_l) / 2, lab,
+                        cv.text(sx + rr * math.cos(mid), sy + rr * math.sin(mid) + TM.cap_height(fs_l) / 2, lab,
                                 fs_l, color=ink_on(color_of[r]), anchor="middle")
                     a0 = a1
-                cv.text(cx, cy + R + 6 + TM.ascent(fs), t.label(c), fs, anchor="middle")
-            box = QRectF(cx - R, cy - R, 2 * R, 2 * R + 8 + TM.ascent(fs) + TM.descent(fs))
+                below = cy + R * (1 + pull) + 6
+                cv.text(cx, below + TM.ascent(fs), t.label(c), fs, anchor="middle")
+                if show_total:
+                    cv.text(cx, below + line_h + TM.ascent(fs_l), _total_text(P, vals), fs_l, anchor="middle")
+            Rp = R * (1 + pull)
+            box = QRectF(cx - Rp, cy - Rp, 2 * Rp, 2 * Rp + 8 + line_h * (2 if show_total else 1))
             p = QPainterPath()
-            p.addEllipse(QRectF(cx - R, cy - R, 2 * R, 2 * R))
+            p.addEllipse(QRectF(cx - Rp, cy - Rp, 2 * Rp, 2 * Rp))
             elements.append(Element(f"data-{column_letter(c)}", "dataset", box, draw, p,
                                     {"column": c, "label": t.label(c)}))
         pw = max(len(cols), 1) * (d + gap) - gap
-    # legend: one entry per row (slice)
+    # legend: one entry per row (slice) — colour, label, percentage and value as chosen
     if spec.show_legend and all_rows:
-        entries = [(r, t.row_label(r)) for r in all_rows]
+        one = cols[0] if len(cols) == 1 else None
+        share = {}
+        if one is not None:
+            rr, vv = _parts_values(t, one)
+            tot = float(vv.sum()) or 1.0
+            share = {r: (v, v / tot * 100) for r, v in zip(rr, vv)}
+        entries = []
+        for r in (all_rows[::-1] if lay == "stacked100" else all_rows):     # stacked: top segment first
+            bits = [t.row_label(r)] if P.get("legend_label", True) else []
+            if r in share and P.get("legend_percent"):
+                bits.append(f"{share[r][1]:.0f}%")
+            if r in share and P.get("legend_value"):
+                bits.append(f"{share[r][0]:g}")
+            entries.append((r, "  ".join(bits)))
+        swatch = bool(P.get("legend_color", True))
+        sw = 17.0 if swatch else 0.0
         row_h = max(TM.ascent(fs_l) + TM.descent(fs_l), 9.0) + 4.0
         lx = pw + 14.0
         dx, dy = spec.offsets.get("legend", (0.0, 0.0))
         lx, ly = lx + dx, dy
 
         def draw_legend(cv, lx=lx, ly=ly):
-            for k, (r, s) in enumerate(entries):
+            for k, (r, s_) in enumerate(entries):
                 yc = ly + k * row_h + row_h / 2
-                cv.rect(lx, yc - 4.5, 12.0, 9.0, fill=color_of[r], stroke=None)
-                cv.text(lx + 17.0, yc + TM.cap_height(fs_l) / 2, s, fs_l, anchor="start")
-        w = 17.0 + max(TM.width(s, fs_l) for _, s in entries)
+                if swatch:
+                    cv.rect(lx, yc - 4.5, 12.0, 9.0, fill=color_of[r],
+                            stroke=outer[0] if outer else None, width=outer[1] * 0.75 if outer else 0.0)
+                cv.text(lx + sw, yc + TM.cap_height(fs_l) / 2, s_, fs_l, anchor="start")
+        w = sw + max([TM.width(s_, fs_l) for _, s_ in entries] + [0.0])
         box = QRectF(lx - 1, ly, w + 2, row_h * len(entries))
         elements.append(Element("legend", "legend", box, draw_legend, _rect_path(box), {"font_keys": ["legend"]}))
     elements += _title(spec, graph, pw, 0.0 if lay != "stacked100" else min(0.0, -6.0))

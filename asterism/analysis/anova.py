@@ -154,10 +154,29 @@ def _holm_sidak(p: list[float]) -> list[float]:
     return adj.tolist()
 
 
+def smm_cdf(q: float, m: int, df: float) -> float:
+    """Studentized maximum modulus: P(max of m |Z_i| / S ≤ q), the Z_i independent normals
+    sharing one S = √(χ²_df / df). Used by Dunnett's T3."""
+    from scipy import integrate, special
+    if not math.isfinite(df):
+        return float((2 * sps.norm.cdf(q) - 1) ** m)
+    logk = 0.5 * df * math.log(df) - special.gammaln(df / 2) - (df / 2 - 1) * math.log(2)
+
+    def f(s):
+        if s <= 0:
+            return 0.0
+        return math.exp(logk + (df - 1) * math.log(s) - df * s * s / 2) * (2 * sps.norm.cdf(q * s) - 1) ** m
+    val, _ = integrate.quad(f, 0, np.inf, limit=200, epsabs=1e-14, epsrel=1e-11)
+    return min(max(val, 0.0), 1.0)
+
+
 def compare(groups: list[np.ndarray], model: str, method: str, family: str, control: int,
-            conf: float, omnibus: dict, Y: np.ndarray | None = None) -> list[dict]:
+            conf: float, omnibus: dict, Y: np.ndarray | None = None,
+            individual: bool = False) -> list[dict]:
     """One dict per comparison: i, j, diff (j − i for control family; i − j otherwise),
-    ci (lo, hi) or None, p (adjusted)."""
+    ci (lo, hi) or None, p (adjusted). `individual` (repeated measures without assuming
+    sphericity, as Prism): each comparison uses only its two columns' differences, with
+    n − 1 degrees of freedom."""
     k = len(groups)
     pairs = _pairs(k, family, control)
     m = len(pairs)
@@ -174,12 +193,16 @@ def compare(groups: list[np.ndarray], model: str, method: str, family: str, cont
         ns = np.array([len(g) for g in groups], float)
         mse = omnibus.get("msw")
         df = omnibus.get("dfw")
-    if method == "dunnett" and model in ("ordinary", "rm"):
+    if method == "dunnett" and model in ("ordinary", "rm") and not (individual and model == "rm"):
         return _dunnett(groups, means, ns, mse, df, control, conf)
     raw = []
     for i, j in pairs:
         diff = means[i] - means[j]
-        if model == "welch":
+        if model == "rm" and individual:
+            d = Y[:, i] - Y[:, j]
+            se = float(d.std(ddof=1) / math.sqrt(len(d)))
+            dfp = len(d) - 1
+        elif model == "welch":
             vi, vj = groups[i].var(ddof=1) / ns[i], groups[j].var(ddof=1) / ns[j]
             se = math.sqrt(vi + vj)
             dfp = (vi + vj) ** 2 / (vi ** 2 / (ns[i] - 1) + vj ** 2 / (ns[j] - 1))
@@ -199,7 +222,19 @@ def compare(groups: list[np.ndarray], model: str, method: str, family: str, cont
             qc = float(sps.studentized_range.ppf(conf, k, dfp))
             half = qc * se / math.sqrt(2)
             ci = (diff - half, diff + half)
-        elif method in ("sidak", "t3"):
+        elif method == "t3":                    # studentized maximum modulus, each pair's own df
+            from scipy.optimize import brentq      # (Welch df rounded down, as Prism and the tables)
+            dft = max(1.0, math.floor(dfp)) if math.isfinite(dfp) else dfp
+            p = 1.0 - smm_cdf(abs(t), m, dft)
+            tc = brentq(lambda c: smm_cdf(c, m, dft) - conf, 1e-6, 100.0, xtol=1e-10)
+            ci = (diff - tc * se, diff + tc * se)
+        elif method == "dunnett":               # individual variances: Dunnett on each pair's t
+            lam = np.full(m, math.sqrt(0.5))
+            p = 1.0 - dunnett_cdf(abs(t), lam, dfp)
+            from scipy.optimize import brentq
+            tc = brentq(lambda c: dunnett_cdf(c, lam, dfp) - conf, 0.5, 50.0, xtol=1e-10)
+            ci = (diff - tc * se, diff + tc * se)
+        elif method == "sidak":
             p = 1 - (1 - p_raw) ** m
             tc = float(sps.t.ppf(1 - (1 - (1 - alpha) ** (1 / m)) / 2, dfp))
             ci = (diff - tc * se, diff + tc * se)
@@ -299,6 +334,7 @@ def _dunn(groups, model, method, pairs, Y) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def one_way(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     if len(cols) < 3:
         raise ValueError("One-way ANOVA compares three or more data sets. Choose at least three.")
@@ -353,7 +389,7 @@ def one_way(an) -> AnalysisResult:
 
     def p_rows(pv, label="P value"):
         rows.extend([(label, [fmt_p(pv)], "row"), ("Significance", [p_summary(pv)], "row"),
-                     ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row")])
+                     (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row")])
 
     table_page = None
     if model == "ordinary":
@@ -370,7 +406,7 @@ def one_way(an) -> AnalysisResult:
                  ("Brown-Forsythe test P", [fmt_p(bf.pvalue)], "row"),
                  ("Bartlett's test χ²", [f"{bt.statistic:.4g}"], "row"),
                  ("Bartlett's test P", [fmt_p(bt.pvalue)], "row"),
-                 ("SDs differ at α = 0.05", ["Yes" if min(bf.pvalue, bt.pvalue) < 0.05 else "No"], "row")]
+                 (f"SDs differ at α = {ALPHA:g}", ["Yes" if min(bf.pvalue, bt.pvalue) < ALPHA else "No"], "row")]
         table_page = ResultPage("ANOVA table", ["Sum of squares", "DF", "Mean square", "F", "P"], [
             ("Between data sets", [fmt(o["ssb"]), str(o["dfb"]), fmt(o["msb"]), f"{o['F']:.4g}", fmt_p(o["p"])], "row"),
             ("Within data sets (residual)", [fmt(o["ssw"]), str(o["dfw"]), fmt(o["msw"]), "", ""], "row"),
@@ -400,7 +436,7 @@ def one_way(an) -> AnalysisResult:
         rows += [("", [], "blank"), ("Matching", [], "section"),
                  ("F (subjects)", [f"{r['F_subj']:.4g}"], "row"),
                  ("P value", [fmt_p(r["p_subj"])], "row"),
-                 ("Matching effective at α = 0.05", ["Yes" if r["p_subj"] < 0.05 else "No"], "row"),
+                 (f"Matching effective at α = {ALPHA:g}", ["Yes" if r["p_subj"] < ALPHA else "No"], "row"),
                  ("Subjects (complete rows)", [str(Y.shape[0])], "row")]
         table_page = ResultPage("ANOVA table", ["Sum of squares", "DF", "Mean square", "F", "P"], [
             ("Treatment (between columns)", [fmt(r["ss_treat"]), str(r["df_t"]), fmt(r["ms_t"]), f"{r['F']:.4g}", fmt_p(r["p"])], "row"),
@@ -410,13 +446,15 @@ def one_way(an) -> AnalysisResult:
         omni = r
     elif model == "kw":
         h = sps.kruskal(*groups)
-        res.p = float(h.pvalue)
+        exact = kw_exact_p(groups)                 # small and moderate samples, as Prism
+        pv = exact if exact is not None else float(h.pvalue)
+        res.p = pv
         allv = np.concatenate(groups)
         ranks = sps.rankdata(allv)
         bounds = np.cumsum([0] + [len(g) for g in groups])
         rows.append(("Kruskal-Wallis statistic (H)", [f"{h.statistic:.4g}"], "row"))
-        p_rows(float(h.pvalue))
-        rows.append(("P value method", ["Approximate (χ²)"], "row"))
+        p_rows(pv)
+        rows.append(("P value method", ["Exact" if exact is not None else "Approximate (χ²)"], "row"))
         rows += [("", [], "blank"), ("Mean ranks", [], "section")]
         rows += [(f"{a}: {lab}", [fmt(ranks[bounds[i]:bounds[i + 1]].mean())], "row")
                  for i, (a, lab) in enumerate(zip(letters, labels))]
@@ -435,14 +473,15 @@ def one_way(an) -> AnalysisResult:
         pages.append(table_page)
 
     if family != "none":
-        comps = compare(groups, model, method, family, control, conf, omni, Y)
+        comps = compare(groups, model, method, family, control, conf, omni, Y,
+                        individual=model == "rm" and bool(p.get("gg", True)))
         crow = []
         nonpar = model in ("kw", "friedman")
         for c in comps:
             i, j = c["i"], c["j"]
             ci = f"{fmt(c['ci'][0])} to {fmt(c['ci'][1])}" if c["ci"] else ""
             crow.append((f"{letters[i]}: {labels[i]}  vs.  {letters[j]}: {labels[j]}",
-                         [fmt(c["diff"]), ci, "Yes" if c["p"] < 0.05 else "No", p_summary(c["p"]),
+                         [fmt(c["diff"]), ci, "Yes" if c["p"] < ALPHA else "No", p_summary(c["p"]),
                           fmt_p(c["p"])], "row"))
             res.comparisons.append((cols[i], cols[j], c["p"]))
         heads = ["Mean rank difference" if model == "kw" else
@@ -462,6 +501,7 @@ def one_way(an) -> AnalysisResult:
 def _one_way_mixed(t, cols, p, method, family, control, conf, letters, labels) -> AnalysisResult:
     """Repeated-measures one-way ANOVA with missing values: mixed-effects model (REML,
     compound symmetry; mixed.py). Rows are subjects."""
+    ALPHA = float(p.get("alpha", 0.05))      # significance level (Settings)
     from . import mixed as mm
     from .anova2 import _adjust, fmt_df
     k = len(cols)
@@ -497,7 +537,7 @@ def _one_way_mixed(t, cols, p, method, family, control, conf, letters, labels) -
             ("", [], "blank"), ("Fixed effect (type III)", [], "section"),
             ("F", [f"{F:.4g} ({fmt_df(q * e)}, {fmt_df(df_r * e)})"], "row"),
             ("P value", [fmt_p(pv)], "row"), ("Significance", [p_summary(pv)], "row"),
-            ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row"),
+            (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row"),
             ("Geisser-Greenhouse ε", [f"{eps:.4f}"], "row"),
             ("Correction applied", ["Geisser-Greenhouse" if gg else "None (sphericity assumed)"], "row"),
             ("", [], "blank"), ("Random effects", [], "section"),
@@ -508,7 +548,7 @@ def _one_way_mixed(t, cols, p, method, family, control, conf, letters, labels) -
             ("", [], "blank"), ("Was the matching effective?", [], "section"),
             ("χ² (likelihood ratio)", [f"{chi:.4g}"], "row"), ("Degrees of freedom", [str(dfc)], "row"),
             ("P value", [fmt_p(pc)], "row"),
-            ("Matching effective at α = 0.05", ["Yes" if pc < 0.05 else "No"], "row"),
+            (f"Matching effective at α = {ALPHA:g}", ["Yes" if pc < ALPHA else "No"], "row"),
             ("", [], "blank"), ("Data summary", [], "section"),
             ("Subjects (rows)", [str(subjects)], "row"), ("Values analysed", [str(len(y))], "row"),
             ("Missing values", [str(missing)], "row")]
@@ -551,7 +591,7 @@ def _one_way_mixed(t, cols, p, method, family, control, conf, letters, labels) -
             i, j = c["i"], c["j"]
             ci = f"{fmt(c['ci'][0])} to {fmt(c['ci'][1])}" if c["ci"] else ""
             crow.append((f"{letters[i]}: {labels[i]}  vs.  {letters[j]}: {labels[j]}",
-                         [fmt(c["diff"]), ci, "Yes" if c["p"] < 0.05 else "No", p_summary(c["p"]),
+                         [fmt(c["diff"]), ci, "Yes" if c["p"] < ALPHA else "No", p_summary(c["p"]),
                           fmt_p(c["p"])], "row"))
             res.comparisons.append((cols[i], cols[j], c["p"]))
         cp = ResultPage("Comparisons", ["Mean difference", "" if method == "holm_sidak" else
@@ -564,3 +604,85 @@ def _one_way_mixed(t, cols, p, method, family, control, conf, letters, labels) -
         pages.append(_descriptive_page(t, cols))
     res.pages = pages
     return res
+
+
+# ---------------------------------------------------------------------------
+# Exact Kruskal-Wallis P (as Prism: small and moderate samples, also with ties)
+# ---------------------------------------------------------------------------
+
+def kw_exact_p(groups: list[np.ndarray], max_cells: float = 1.2e7) -> float | None:
+    """P(H ≥ H observed) over every way of dealing the observed values (ties kept) into
+    groups of the same sizes. Counting by dynamic programming over the distinct values;
+    None when the samples are too large (then the χ² approximation is used)."""
+    from math import comb
+    sizes = [len(g) for g in groups]
+    k, allv = len(groups), np.concatenate(groups)
+    N = len(allv)
+    if k < 2 or N < 2:
+        return None
+    ranks2 = np.rint(sps.rankdata(allv) * 2).astype(int)        # doubled midranks: integers
+    bounds = np.cumsum([0] + sizes)
+    obs = [int(ranks2[bounds[i]:bounds[i + 1]].sum()) for i in range(k)]
+    stat = lambda sums: sum(s * s / n for s, n in zip(sums, sizes))
+    t_obs = stat(obs)
+    vals, counts = np.unique(ranks2, return_counts=True)        # each tie block: (rank, size)
+    total = float(math.factorial(N))
+    for n in sizes:
+        total /= math.factorial(n)
+    if k == 3:
+        n1, n2, _n3 = sizes
+        S = int(ranks2.sum())
+        cells = (n1 + 1) * (n2 + 1) * (S + 1) ** 2
+        if cells > max_cells:
+            return None
+        W = np.zeros((n1 + 1, n2 + 1, S + 1, S + 1))
+        W[0, 0, 0, 0] = 1.0
+        for r, t in zip(vals, counts):
+            r, t = int(r), int(t)
+            new = np.zeros_like(W)
+            for a1 in range(min(t, n1) + 1):
+                for a2 in range(min(t - a1, n2) + 1):
+                    w = comb(t, a1) * comb(t - a1, a2)
+                    d1, d2 = a1 * r, a2 * r
+                    new[a1:, a2:, d1:, d2:] += w * W[:n1 + 1 - a1, :n2 + 1 - a2, :S + 1 - d1, :S + 1 - d2]
+            W = new
+        F = W[n1, n2]
+        s1, s2 = np.nonzero(F)
+        s3 = S - s1 - s2
+        tv = s1 ** 2 / sizes[0] + s2 ** 2 / sizes[1] + s3 ** 2 / sizes[2]
+        hit = tv >= t_obs * (1 - 1e-10) - 1e-9
+        return float(min(1.0, F[s1[hit], s2[hit]].sum() / total))
+    if total > 2e6:                                  # more groups: a dictionary of states
+        return None
+    states = {(tuple([0] * (k - 1)), tuple([0] * (k - 1))): 1.0}
+    done = 0
+    for r, t in zip(vals, counts):
+        r, t = int(r), int(t)
+        nxt: dict = {}
+
+        def splits(left, i):
+            if i == k - 1:
+                yield ()
+                return
+            for a in range(left + 1):
+                for rest in splits(left - a, i + 1):
+                    yield (a,) + rest
+        for (cs, ss), w in states.items():
+            used = sum(cs)
+            for parts in splits(t, 0):
+                last = t - sum(parts)
+                if any(c + a > sizes[i] for i, (c, a) in enumerate(zip(cs, parts))) or \
+                        (done - used) + last > sizes[-1]:
+                    continue
+                mult, left = 1, t
+                for a in parts:
+                    mult *= comb(left, a)
+                    left -= a
+                key = (tuple(c + a for c, a in zip(cs, parts)), tuple(s + a * r for s, a in zip(ss, parts)))
+                nxt[key] = nxt.get(key, 0.0) + w * mult
+        states = nxt
+        done += t
+    S = int(ranks2.sum())
+    hit = sum(w for (cs, ss), w in states.items()
+              if stat(list(ss) + [S - sum(ss)]) >= t_obs * (1 - 1e-10) - 1e-9)
+    return float(min(1.0, hit / total))

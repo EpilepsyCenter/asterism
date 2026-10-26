@@ -259,3 +259,32 @@ class TableEditCommand(Command):
 
     def undo(self) -> None:
         self._restore(self.before)
+
+
+class InfoCommand(Command):
+    """Typing in a Notes sheet: one constant's value, or the notes (key None). Continued
+    typing in the same place merges into one undo step."""
+
+    def __init__(self, info, key: str | None, value: str):
+        self.info, self.key, self.new = info, key, value
+        self.old = info.notes if key is None else info.fields.get(key, "")
+        self.text = "Edit Notes" if key is None else f"Edit {key}"
+
+    def _set(self, v: str) -> None:
+        if self.key is None:
+            self.info.notes = v
+        else:
+            self.info.fields[self.key] = v
+        self.info.changed.emit()
+
+    def redo(self) -> None:
+        self._set(self.new)
+
+    def undo(self) -> None:
+        self._set(self.old)
+
+    def merge(self, other) -> bool:
+        if isinstance(other, InfoCommand) and other.info is self.info and other.key == self.key:
+            self.new = other.new
+            return True
+        return False

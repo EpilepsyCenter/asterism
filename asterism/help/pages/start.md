@@ -34,7 +34,7 @@ Each project opens in its own window. From left to right:
 - **Top bar** and the current sheet in the middle.
 - **Tool panel** on the right: the commands for the sheet in front.
 
-You can drag the edges between them to make the sidebars wider or narrower. Hide or show them with **View › Show Project Sidebar** and **View › Show Tools**. ASTERISM remembers the widths and the window's size and position.
+You can drag the edges between them to make the sidebars wider or narrower. Hide or show them with **View › Show Project Sidebar** (⌃⌘S on a Mac, Ctrl+Alt+S on Windows) and **View › Show Tools**. ASTERISM remembers the widths and the window's size and position.
 
 ### Project sidebar
 
@@ -122,7 +122,7 @@ To label sheets:
 
 - right-click a sheet in the sidebar, or a thumbnail in the graph overview, and click a colour (the crossed circle removes the label);
 - or select sheets and choose **Sheet › Colour Label**;
-- or use the shortcuts. On a Mac, Control-1 to Control-7 set a label and Control-0 removes it; the [Keyboard shortcuts](shortcuts.md) page shows the keys on your computer.
+- or use the shortcuts. On a Mac, Control-1 to Control-7 set a label and Control-0 removes it. On Windows, use Ctrl+Shift+1 to Ctrl+Shift+7, and Ctrl+Shift+0 to remove it. The [Keyboard shortcuts](shortcuts.md) page shows the keys on your computer.
 
 The label applies to all selected sheets. You can undo it.
 
@@ -137,9 +137,7 @@ Choose **Label Names…** (in **Sheet › Colour Label**, or on the right-click 
 
 ## Undo
 
-Every change to a project can be undone: typing and pasting data, excluding values, adding and deleting sheets, formatting graphs, labels, figure layouts. Choose **Edit › Undo** (⌘Z) and **Edit › Redo**. The menu names the step, for example "Undo Paste". Undo works across the whole project, so it also undoes changes on sheets that aren't in front.
-
-Text typed on a Notes sheet isn't part of the project's undo history.
+Every change to a project can be undone: typing and pasting data, excluding values, adding and deleting sheets, formatting graphs, labels, figure layouts, and text typed on Notes sheets. Choose **Edit › Undo** (⌘Z) and **Edit › Redo**. The menu names the step, for example "Undo Paste". Undo works across the whole project, so it also undoes changes on sheets that aren't in front.
 
 ## Opening and saving
 

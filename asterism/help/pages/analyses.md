@@ -92,7 +92,7 @@ See [Formatting graphs](formatting.md) for the full set of significance options.
 - **Unpaired t test:** Student's (the default, as in Prism) or Welch's;
 - **One-way ANOVA comparisons:** Automatic (Tukey for all pairs, Dunnett against a control), or always Tukey, Šídák, Bonferroni or Holm-Šídák;
 - **Confidence intervals:** 90%, 95% or 99%;
-- **Significance level (α):** used by the normality tests and multiple t tests.
+- **Significance level (α):** 0.05, 0.01 or 0.10. Every new analysis uses it for its Yes/No answers, such as **Significant at α = …** and **Significant?** in multiple comparisons. Normality tests and multiple t tests also show it in their own settings.
 
 These apply only to analyses you create from then on. Saved analyses keep their own settings, and you can always change a single analysis in its own settings dialog. See [Settings, autosave and files](settings.md).
 

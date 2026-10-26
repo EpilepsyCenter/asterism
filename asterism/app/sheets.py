@@ -96,32 +96,52 @@ class InfoSheetView(QWidget):
         lay.addWidget(title)
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight)
+        self.edits: dict[str, QLineEdit] = {}
         for k, v in info.fields.items():
             e = QLineEdit(v)
             e.setMaximumWidth(420)
             e.textEdited.connect(lambda s, k=k: self._set_field(k, s))
             form.addRow(k + ":", e)
+            self.edits[k] = e
         lay.addLayout(form)
         lay.addSpacing(14)
         notes = QLabel("Notes")
         notes.setObjectName("SectionTitle")
         lay.addWidget(notes)
         ed = QPlainTextEdit(info.notes)
+        ed.setUndoRedoEnabled(False)            # the project's undo covers it (Edit › Undo)
         ed.textChanged.connect(lambda: self._set_notes(ed.toPlainText()))
+        self.notes_edit = ed
         self.info = info
         lay.addWidget(ed, 1)
+        info.changed.connect(self._refresh)
 
+    def _push(self, key: str | None, value: str) -> None:
+        from ..doc.commands import InfoCommand
+        cmd = InfoCommand(self.info, key, value)
+        if self.info.project is not None:
+            self.info.project.undo.push(cmd)
+        else:
+            cmd.redo()
 
     def _set_field(self, key: str, value: str) -> None:
-        self.info.fields[key] = value
-        if self.info.project is not None:
-            self.info.project.touch()
+        if value != self.info.fields.get(key, ""):
+            self._push(key, value)
 
     def _set_notes(self, text: str) -> None:
         if text != self.info.notes:
-            self.info.notes = text
-            if self.info.project is not None:
-                self.info.project.touch()
+            self._push(None, text)
+
+    def _refresh(self) -> None:
+        """Show undone/redone text (leaving what the user is typing alone)."""
+        for k, e in self.edits.items():
+            v = self.info.fields.get(k, "")
+            if e.text() != v:
+                e.setText(v)
+        if self.notes_edit.toPlainText() != self.info.notes:
+            self.notes_edit.blockSignals(True)
+            self.notes_edit.setPlainText(self.info.notes)
+            self.notes_edit.blockSignals(False)
 
 
 class PlaceholderSheet(QWidget):

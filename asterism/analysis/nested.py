@@ -57,6 +57,7 @@ def fit(y, g, s, k):
 
 
 def nested(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     if t.table_type != "nested":
         raise ValueError("Nested analyses work on a Nested table (groups split into subjects).")
@@ -92,7 +93,7 @@ def nested(an) -> AnalysisResult:
         rows += [("Nested t test", [], "section"),
                  ("t", [f"{abs(tv):.4g}"], "row"), ("Degrees of freedom", [str(df_fixed)], "row"),
                  ("P value", [fmt_p(pv)], "row"), ("Significance", [p_summary(pv)], "row"),
-                 ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row"),
+                 (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row"),
                  ("", [], "blank"), ("Size of the difference", [], "section"),
                  (f"Mean, {letters[0]}", [fmt(means[0])], "row"), (f"Mean, {letters[1]}", [fmt(means[1])], "row"),
                  (f"Difference ({letters[1]} − {letters[0]})", [fmt(diff)], "row"),
@@ -111,7 +112,7 @@ def nested(an) -> AnalysisResult:
         rows += [("Nested one-way ANOVA", [], "section"),
                  ("F", [f"{F:.4g} ({k - 1}, {df_fixed})"], "row"),
                  ("P value", [fmt_p(pv)], "row"), ("Significance", [p_summary(pv)], "row"),
-                 ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row")]
+                 (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row")]
         res.p = pv
         name = "Nested one-way ANOVA"
     total = var_subj + var_res
@@ -120,7 +121,7 @@ def nested(an) -> AnalysisResult:
              ("Residual variance", [fmt(var_res)], "row"),
              ("% of variance between subjects", [f"{100 * var_subj / total:.1f}" if total else ""], "row"),
              ("Likelihood-ratio χ²", [f"{lrt:.4g}"], "row"), ("P value", [fmt_p(p_lrt)], "row"),
-             ("Subjects differ at α = 0.05", ["Yes" if p_lrt < 0.05 else "No"], "row")]
+             (f"Subjects differ at α = {ALPHA:g}", ["Yes" if p_lrt < ALPHA else "No"], "row")]
     pages = [ResultPage("Results", [name], rows)]
     if k > 2 and p.get("compare", "all") != "none":
         method = p.get("method", "tukey")
@@ -136,7 +137,7 @@ def nested(an) -> AnalysisResult:
         crow = []
         for c_, (i, j) in zip(comps, pairs):
             ci = f"{fmt(c_['ci'][0])} to {fmt(c_['ci'][1])}" if c_["ci"] else ""
-            crow.append((c_["label"], [fmt(c_["diff"]), ci, "Yes" if c_["p"] < 0.05 else "No",
+            crow.append((c_["label"], [fmt(c_["diff"]), ci, "Yes" if c_["p"] < ALPHA else "No",
                                        p_summary(c_["p"]), fmt_p(c_["p"])], "row"))
             res.comparisons.append((cols[i], cols[j], c_["p"]))
         cp = ResultPage("Comparisons", ["Mean difference", f"{100 * p.get('conf', 0.95):g}% CI of difference", "Significant?",

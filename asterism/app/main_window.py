@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import os
+import sys
 
 import numpy as np
 from PySide6.QtCore import Qt
@@ -23,7 +24,7 @@ from ..doc.commands import ParamsCommand, SpecCommand
 from ..doc.model import (Analysis, Table, Graph, InfoSheet, FigureSheet, Project, Sheet,
                          column_letter)
 from ..doc.sample import blank_project, sample_project
-from . import documents, theme
+from . import documents, prefs, theme
 from .dialogs.analyze import AnalyzeDialog, TTestParamsDialog
 from .dialogs.format_graph import APPEARANCES, FormatGraphDialog
 from .graph import export as gexport
@@ -266,12 +267,14 @@ class MainWindow(QMainWindow):
         for k in range(0, 8):
             a = QAction("No Label" if k == 0 else LABEL_NAMES[k], self)
             a.triggered.connect(lambda _c=False, k=k: self.tag_selected(k))
-            a.setShortcut(QKeySequence(f"Meta+{k}"))
+            # Mac: Control-digit; elsewhere Ctrl+Shift+digit (Meta is the Windows key there)
+            a.setShortcut(QKeySequence(f"Meta+{k}" if sys.platform == "darwin" else f"Ctrl+Shift+{k}"))
             if k:
                 a.setIcon(tag_icon(k, 14))
             self.a_tags.append(a)
         self.a_label_names = A("Label Names…", "tag", self.edit_label_names)
-        self.a_toggle_sidebar = A("Show Project Sidebar", "sidebar.left", self._toggle_sidebar, "Ctrl+Meta+S", "muted")
+        self.a_toggle_sidebar = A("Show Project Sidebar", "sidebar.left", self._toggle_sidebar,
+                                  "Ctrl+Meta+S" if sys.platform == "darwin" else "Ctrl+Alt+S", "muted")
         self.a_toggle_tools = A("Show Tools", "sidebar.right", self._toggle_tools, "Ctrl+Alt+0", "muted")
         for a in (self.a_toggle_sidebar, self.a_toggle_tools):
             a.setCheckable(True)
@@ -346,7 +349,8 @@ class MainWindow(QMainWindow):
         for a in [*self.draw_tools.values(), None, self.a_picture, None, self.a_draw_front, self.a_draw_back,
                   self.a_draw_align]:
             self.draw_menu.addSeparator() if a is None else self.draw_menu.addAction(a)
-        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket, None, self.scheme_menu,
+        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket, self.a_legend,
+                       self.a_nudge, None, self.scheme_menu,
                        self.a_copy_format, None, self.a_function, self.draw_menu, None, self.a_add_to_figure])
         menu("Figure", [self.a_fig_add, self.a_fig_text, None, self.a_fig_grid, self.a_fig_left, self.a_fig_top,
                         self.a_fig_hc, self.a_fig_width, None, self.a_fig_front, self.a_fig_back, None,
@@ -1139,7 +1143,7 @@ class MainWindow(QMainWindow):
         if sd is not None:
             if not sd.exec():
                 return
-            params = sd.params()
+            params = {**params, **sd.params()}      # keep defaults the dialog doesn't show (α)
         a = Analysis(key, table, cols, params)
         self.project.add_analysis(a)
         self._result_graph(a)
@@ -1169,7 +1173,7 @@ class MainWindow(QMainWindow):
         if sd is not None:
             if not sd.exec():
                 return
-            params = sd.params()
+            params = {**params, **sd.params()}      # keep defaults the dialog doesn't show (α)
         a = Analysis(key, t, cols, params)
         self.project.add_analysis(a)
         self._result_graph(a)
@@ -1188,7 +1192,7 @@ class MainWindow(QMainWindow):
         from .dialogs.params import settings_dialog
         dlg = settings_dialog(a.analysis_type, a.params, a.table, a.columns, self)
         if dlg is not None and dlg.exec():
-            self.project.undo.push(ParamsCommand(a, dlg.params()))
+            self.project.undo.push(ParamsCommand(a, {**a.params, **dlg.params()}))
 
     def format_graph(self, section: str = "style", column=None) -> None:
         g, w = self._family_graph()
@@ -1294,7 +1298,7 @@ class MainWindow(QMainWindow):
             elif fmt == "svg":
                 fexport.export_svg(f, self.project, path)
             else:
-                fexport.export_image(f, self.project, path, int(documents.value("export/dpi", 300)))
+                fexport.export_image(f, self.project, path, int(prefs.get("export.dpi")))
             self.flash(f"Exported {os.path.basename(path)}")
             return
         g, _ = self._family_graph()
@@ -1305,10 +1309,10 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", start, filt)
         if not path:
             return
-        if fmt == "tiff":
-            gexport.export_png(g, path)               # same raster path; the extension picks TIFF
+        if fmt in ("png", "tiff"):                    # same raster path; the extension picks TIFF
+            gexport.export_png(g, path, int(prefs.get("export.dpi")))
         else:
-            {"pdf": gexport.export_pdf, "svg": gexport.export_svg, "png": gexport.export_png}[fmt](g, path)
+            {"pdf": gexport.export_pdf, "svg": gexport.export_svg}[fmt](g, path)
         self.flash(f"Exported {os.path.basename(path)}")
 
     # ------------------------------------------------------------------ figures

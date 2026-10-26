@@ -63,7 +63,7 @@ ASPECTS = {
 }
 _ARRANGEMENT = ("grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "parts_layout",
                 "parts_labels", "donut_hole", "surv_percent", "surv_death", "surv_ci", "surv_ticks",
-                "connect_rows", "connect_width", "connect_color", "palette")
+                "connect_rows", "connect_width", "connect_color", "palette", "parts", "nested")
 
 
 def copy_formatting(source, target, aspects: set[str]):

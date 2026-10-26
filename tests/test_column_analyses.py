@@ -145,9 +145,41 @@ def test_repeated_measures_with_geisser_greenhouse_matches_pingouin():
     assert float(rows["Geisser-Greenhouse ε"][0]) == pytest.approx(float(ref["eps"].iloc[0]), abs=1e-4)
 
 
-def test_kruskal_wallis_and_friedman_match_scipy():
+def _kw_brute(groups):
+    """Exact Kruskal-Wallis P by listing every split of the values into groups of these sizes."""
+    import itertools
+    allv = np.concatenate(groups)
+    sizes = [len(g) for g in groups]
+    h_obs = stats.kruskal(*groups).statistic
+    idx = range(len(allv))
+    hits = total = 0
+    for g1 in itertools.combinations(idx, sizes[0]):
+        rest = [i for i in idx if i not in g1]
+        for g2 in itertools.combinations(rest, sizes[1]):
+            g3 = [i for i in rest if i not in g2]
+            h = stats.kruskal(allv[list(g1)], allv[list(g2)], allv[g3]).statistic
+            hits += h >= h_obs - 1e-9
+            total += 1
+    return hits / total
+
+
+def test_kruskal_wallis_exact_p():
+    """Exact P for small and moderate samples (also with ties), as Prism; matches listing
+    every arrangement. Large samples fall back to the χ² approximation."""
+    from asterism.analysis.anova import kw_exact_p
+    no_ties = [np.array([1.2, 3.4, 2.2, 5.1]), np.array([4.4, 6.0, 7.3]), np.array([8.1, 2.9, 9.5, 6.6])]
+    ties = [np.array([1.0, 2, 2, 5]), np.array([2.0, 3, 5]), np.array([5.0, 6, 6, 1])]
+    for g in (no_ties, ties):
+        assert kw_exact_p(g) == pytest.approx(_kw_brute(g), rel=1e-9)
     res = _run("anova1", [A, B, C], distribution="nonparametric", compare="all")
-    assert res.p == pytest.approx(stats.kruskal(A, B, C).pvalue, rel=1e-9)
+    assert res.p == pytest.approx(kw_exact_p([np.array(A), np.array(B), np.array(C)]), rel=1e-12)
+    big = [np.arange(30.0) + k for k in range(3)]
+    assert kw_exact_p(big) is None
+    res = _run("anova1", [list(g) for g in big], distribution="nonparametric", compare="all")
+    assert res.p == pytest.approx(stats.kruskal(*big).pvalue, rel=1e-9)
+
+
+def test_kruskal_wallis_and_friedman_match_scipy():
     six = [A, C, D]
     res = _run("anova1", six, design="rm", distribution="nonparametric", compare="all")
     assert res.p == pytest.approx(stats.friedmanchisquare(*six).pvalue, rel=1e-9)

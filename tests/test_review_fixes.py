@@ -85,3 +85,37 @@ def test_regression_unknowns_ignore_other_data_sets_rows():
     page = next(pg for pg in an.result.pages if any("→" in str(v) or "unknowns" in lab.lower()
                                                       for lab, v, _ in pg.rows))
     assert not any("X → Y" in vals for _, vals, _ in page.rows)
+
+
+def test_alpha_reaches_every_analysis():
+    """The significance level set for an analysis (Settings › New analyses) is used in its
+    'Significant at α' answers, not a fixed 0.05."""
+    a, b = [1.0, 2, 3, 4, 5, 6], [2.0, 3.5, 4, 5.5, 6, 8]
+    p, t = _column([a, b])
+    an = p.add_analysis(Analysis("ttest", t, [0, 1], {"alpha": 0.5}))
+    rows = _rows(an.result.pages[0])
+    assert "Significant at α = 0.5" in rows and "Significant at α = 0.05" not in rows
+    want = "Yes" if an.result.p < 0.5 else "No"
+    assert rows["Significant at α = 0.5"] == [want]
+    p3, t3 = _column([a, b, [5.0, 6, 7, 8, 9, 10]])
+    an1 = p3.add_analysis(Analysis("anova1", t3, [0, 1, 2], {"alpha": 0.01}))
+    assert an1.result.error is None
+    labels = [lab for pg in an1.result.pages for lab, _, _ in pg.rows]
+    assert any("α = 0.01" in lab for lab in labels)
+
+
+def test_notes_typing_is_undoable_in_one_step():
+    from asterism.doc.commands import InfoCommand
+    p = Project(engine)
+    info = p.add_info()
+    n0 = p.undo.index
+    for text in ("a", "ab", "abc"):                     # typing: merged into one step
+        p.undo.push(InfoCommand(info, None, text))
+    p.undo.push(InfoCommand(info, "Experimenter", "ML"))
+    assert info.notes == "abc" and info.fields["Experimenter"] == "ML"
+    p.undo.undo()
+    assert info.fields["Experimenter"] == ""
+    p.undo.undo()
+    assert info.notes == "" and p.undo.index == n0
+    p.undo.redo()
+    assert info.notes == "abc"

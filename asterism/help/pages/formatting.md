@@ -8,10 +8,10 @@ Shortcuts on this page use ⌘ (the Mac command key); on Windows use Ctrl instea
 
 - **Graph › Format Graph…** (⌘⇧F), or **Format Graph…** in the Tools panel.
 - **Graph › Axes…** opens it at the Y axis.
-- Double-click part of the graph to open it at the matching section: a data set opens **Style** for that data set, an axis opens its axis page, a bracket opens **Significance**.
+- Double-click part of the graph to open it at the matching section: a data set opens **Style** for that data set, an axis opens its axis page, a bracket opens **Significance**. The legend opens **Arrangement** (or **Slices**), or **Style** on column and XY graphs.
 - Right-click the graph and choose **Format Graph…** or **Axes…**.
 
-The sections are listed on the left, in three groups: **Graph** (Size and frame, Titles and fonts, Significance, and Arrangement or Variables for some table types), **Data sets** (Style, Show and order) and **Axes** (X axis, Y axis, Right Y axis).
+The sections are listed on the left, in three groups: **Graph** (Size and frame, Titles and fonts, Significance, and Arrangement, Slices or Variables for some table types), **Data sets** (Style, Show and order) and **Axes** (X axis, Y axis, Right Y axis). Parts-of-whole graphs have no Style, X axis or Right Y axis sections, and their Y axis section is called **Y axis (stacked bars)**, since only the stacked bar has a Y axis.
 
 **Apply** draws your changes and keeps the dialog open; **OK** applies and closes; **Cancel** closes without the changes you have not applied. Each Apply is one step you can undo with ⌘Z. **Graph Type…** applies your pending changes, then opens the graph type gallery.
 
@@ -40,7 +40,8 @@ For box and whiskers, the box spans the 25th to 75th percentile with a line at t
 
 - **Plot against:** **Left Y axis** or **Right Y axis** (column, grouped, contingency and XY graphs). See [Right Y axis](#right-y-axis).
 - **Show in legend** includes this data set in the legend.
-- **Nudge right** and **Nudge up** shift the data set by a number of points. Nudging up is for XY graphs only. You can also select a data set on the graph and use the arrow keys (Shift for 5 pt).
+- **Show the legend (all data sets)** (column and XY graphs) turns the whole legend on or off, the same as **Graph › Show or Hide Legend**. Other graph types set this under Arrangement.
+- **Nudge right** and **Nudge up** shift the data set by a number of points. Nudging up is for XY graphs only. You can also select a data set on the graph and use the arrow keys (Shift for 5 pt). **Graph › Nudge Data Set…** opens this page for the selected data set.
 
 ### Symbols
 
@@ -84,25 +85,32 @@ Error bars do not apply to violins and floating bars.
 
 ## Arrangement
 
-This section appears for grouped, contingency, nested, parts-of-whole and survival graphs.
+This section appears for grouped, contingency, nested and survival graphs. Parts-of-whole graphs have a **Slices** section instead (below).
 
 **Grouped and contingency graphs**
 
 - **Arrange as:** **Side by side**, **Separated**, **Stacked**, **Stacked to 100%**, **Connected means** (one line per data set), **Heat map** or **Back to back** (the first data set to the left or down, the second to the right or up).
 - **Connected means: also show each replicate**.
-- **Show a legend for the data sets**.
+- **Show a legend for the data sets**. On stacked bars the legend lists the top segment first, in the same order as the stack.
 - **Heat map colours:** the colours for the **Lowest value** and **Highest value**. The heat map's colour range follows the Y axis range: automatic, or the minimum and maximum you set on the Y axis page.
 
 **Nested graphs**
 
-- **Arrange as:** **Each subject in its own column**, **All values together, coloured by subject**, or **SuperPlot** (values coloured by subject, with subject means). Subjects take colours in table order.
+- **Arrange as:** **Each subject in its own column**, **All values together, coloured by subject**, or **SuperPlot** (values coloured by subject, with subject means).
 
-**Parts of whole**
+*Colours*
 
-- **Draw as:** **Pie chart**, **Donut chart**, **Bar stacked to 100%** or **Percentage dot plot (100 squares)**.
-- **Label the slices with:** **Percentages**, **Values** or **No labels**.
-- **Donut hole:** its size as a percentage of the radius.
-- **Show a legend for the slices**.
+- **Colour points by:** **Subject** (a colour for each subject) or **Data set** (every point takes its data set's symbol colour from the Style page).
+- **Subject colours:** **Continue across groups** gives every subject in the table its own colour. **Start again in each group** reuses the colours in each group, so subject 1 of one group matches subject 1 of the next. This is the usual choice for a SuperPlot when the same experiment or culture appears in every group.
+- **Colour set:** fills the subject colours from **Distinct (default)**, **Colour-blind safe**, **Viridis**, **Greys**, **Warm** or **Cool**.
+- Below, each subject has its own colour button: click one to change that colour.
+
+The subject colours apply only when you colour points by subject.
+
+*Subject means (SuperPlot)*
+
+- **Size:** the subject-mean symbols, as a multiple of the points (**× the points**).
+- **Outline:** the colour of their outline.
 
 **Survival graphs**
 
@@ -112,6 +120,37 @@ This section appears for grouped, contingency, nested, parts-of-whole and surviv
 - **Show a legend for the groups**.
 
 **Multiple-variable graphs** have a **Variables** section instead: the variable on the **X axis**, the variables on the Y axis (each one ticked is a data set), what **Symbol size shows** and what **Colour shows**, the **Smallest bubble** and **Largest bubble**, the colours for **Low values** and **High values** (for a numeric colour variable; a text variable such as Sex gives one colour per group), **Label each point with its row title** and **Show a legend**.
+
+## Slices
+
+Parts-of-whole graphs set everything about the chart here.
+
+**Chart**
+
+- **Draw as:** **Pie chart**, **Donut chart**, **Bar stacked to 100%** or **Percentage dot plot (100 squares)**.
+- **Label the slices with:** **Percentages**, **Values** or **No labels**.
+- **Diameter / height:** the size of the chart in millimetres (the same as the plot height on Size and frame).
+- **Donut hole:** its size as a percentage of the radius (donut charts only).
+- **Order:** **Standard (row order)** or **Reverse**.
+
+**Slices**
+
+Each row of the table is listed with a **Colour** and a **Pull out** percentage. Pull out moves that slice away from the centre, to draw attention to it (pie and donut charts only). **Automatic Colours** gives every slice its automatic colour again.
+
+**Borders**
+
+- **Outer**: a line around the whole chart.
+- **Between slices**: the lines separating the slices.
+
+Each has its own thickness and colour.
+
+**Legend**
+
+- **Show a legend for the slices**, and what each entry shows: **Colour**, **Row title**, **Percentage** and **Value**. Percentages and values appear in the legend only when the graph shows one data set. On a stacked bar the legend lists the top segment first.
+
+**Total**
+
+- **Show the total under each chart**, with text to put **Before** and **After** the number (for example "Total = " and " cells").
 
 ## Axes
 
@@ -289,12 +328,12 @@ Draw a curve from an equation on an XY graph, for example a theoretical curve to
 
 Type the equation in X, such as `Y = Y0*exp(-K*X)` or `Y = Bottom + (Top-Bottom)/(1+10^((LogEC50-X)*HillSlope))`. You can use:
 
-- `X` (a capital X) and numbers;
+- `X` (or `x`) and numbers;
 - `+`, `-`, `*`, `/` and `^` (power), with brackets for grouping;
 - the functions `exp`, `ln` (natural log), `log` and `log10` (base 10), `sqrt`, `abs`, `sin`, `cos` and `tan`;
 - `pi` and `e`.
 
-Every other name is a constant. Write multiplication out in full (`2*X`, not `2X`). Names are case-sensitive, so a lowercase `x` counts as a constant, not as X. If the equation can't be read, a message in red says why and **OK** stays greyed out.
+Every other name is a constant. Write multiplication out in full (`2*X`, not `2X`). Other names are case-sensitive: `K` and `k` are two different constants. If the equation can't be read, a message in red says why and **OK** stays greyed out.
 
 **Constants**
 

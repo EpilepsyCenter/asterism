@@ -67,7 +67,7 @@ The Preview updates as you change things. Notes below the preview say what was s
 | **X error** | Horizontal error bars of an XY table. |
 | **Ignore** | Left out. |
 
-**Columns with the same name (e.g. Control 1, Control 2) are replicates of one data set** (on by default): in XY and Grouped tables, columns whose names differ only by a trailing number become replicate sub-columns of one data set, each sub-column keeping its column's name.
+**Columns with the same name (e.g. Control 1, Control 2) are replicates of one data set** (on by default; shown only for XY and Grouped tables): columns whose names differ only by a trailing number become replicate sub-columns of one data set, each sub-column keeping its column's name.
 
 What each table type does with a wide sheet:
 
@@ -95,7 +95,7 @@ What each table type does with a wide sheet:
 
 ASTERISM guesses the roles: a single number column becomes **Values**, and a text column whose name contains "animal", "subject", "mouse", "rat" or "id" becomes the subject.
 
-**Average to one value per subject (the unit of independence)**: tick it when you have several values per animal (cells, trials) but want one value per animal in the table, their mean.
+**Average to one value per subject (the unit of independence)** (shown only for the long layout): tick it when you have several values per animal (cells, trials) but want one value per animal in the table, their mean.
 
 What each table type does with a long sheet:
 
@@ -179,7 +179,7 @@ To turn the copies measured in each well into a titre, set:
 |---|---|
 | **Dilution factor:** | How much the sample was diluted before it went into the reaction (digestion, dilution). |
 | **Template volume:** | µL of that diluted sample in each reaction. Used only when reporting per µL or per mL. |
-| **Report quantities:** | **Per reaction (as measured)**, **Per µL of sample** or **Per mL of sample**. |
+| **Report quantities:** | **Per reaction (× dilution factor)**, **Per µL of sample** or **Per mL of sample**. |
 | **Single-stranded genomes against a double-stranded (plasmid) standard: × 2** | For single-stranded vector genomes (for example AAV) measured against a double-stranded plasmid standard. |
 
 ASTERISM multiplies each quantity per reaction by the dilution factor (and by 2 if ticked); for per µL it then divides by the template volume, and for per mL it also multiplies by 1000:

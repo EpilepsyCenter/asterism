@@ -105,6 +105,7 @@ class InfoSheet(Sheet):
         super().__init__(name, id)
         self.fields = {k: "" for k in INFO_FIELDS}
         self.notes = ""
+        self.changed = Signal()      # a field or the notes changed (also by undo)
 
 
 PAGE_SIZES = {"a4": ("A4", 210.0, 297.0), "letter": ("US Letter", 215.9, 279.4),

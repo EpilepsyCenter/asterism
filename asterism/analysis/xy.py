@@ -101,7 +101,7 @@ def linfit(x: np.ndarray, y: np.ndarray, conf: float = 0.95, through: tuple | No
         sxx = float(dx @ dx)
         xm = x0
     else:
-        if n < 3 and n < 2:
+        if n < 2:
             raise ValueError("needs at least two points")
         xm, ym = x.mean(), y.mean()
         sxx = float(((x - xm) ** 2).sum())
@@ -232,6 +232,7 @@ def compare_lines(fits: list[dict], data: list[tuple[np.ndarray, np.ndarray]]) -
 
 
 def linear_regression(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     _need_xy(t)
     conf = p.get("conf", 0.95)
@@ -281,7 +282,7 @@ def linear_regression(an) -> AnalysisResult:
             row("F", lambda f: f"{f['F']:.4g}"),
             row("DFn, DFd", lambda f: f"1, {f['df']}"),
             row("P value", lambda f: fmt_p(f["p"])),
-            row("Deviation from zero?", lambda f: "Significant" if f["p"] < 0.05 else "Not significant"),
+            row("Deviation from zero?", lambda f: "Significant" if f["p"] < ALPHA else "Not significant"),
             ("", [], "blank"), ("Equation", [], "section"),
             row("", lambda f: f"Y = {fmt(f['slope'])}·X {'+' if f['intercept'] >= 0 else '−'} "
                               f"{fmt(abs(f['intercept']))}"),
@@ -316,12 +317,12 @@ def linear_regression(an) -> AnalysisResult:
         F2, e1, e2, p2 = cmp_["intercepts"]
         crow = [("Are the slopes equal?", [], "section"),
                 ("F (DFn, DFd)", [f"{F1:.4g} ({d1}, {d2})"], "row"), ("P value", [fmt_p(p1)], "row"),
-                ("Conclusion", ["The slopes differ" if p1 < 0.05 else "The slopes are not significantly different"], "row")]
-        if p1 >= 0.05:
+                ("Conclusion", ["The slopes differ" if p1 < ALPHA else "The slopes are not significantly different"], "row")]
+        if p1 >= ALPHA:
             crow += [("", [], "blank"), ("Are the intercepts (elevations) equal?", [], "section"),
                      ("Pooled slope", [fmt(cmp_["common_slope"])], "row"),
                      ("F (DFn, DFd)", [f"{F2:.4g} ({e1}, {e2})"], "row"), ("P value", [fmt_p(p2)], "row"),
-                     ("Conclusion", ["The intercepts differ" if p2 < 0.05 else
+                     ("Conclusion", ["The intercepts differ" if p2 < ALPHA else
                                      "The intercepts are not significantly different"], "row")]
         else:
             crow.append(("Intercepts", ["Not compared: with different slopes the lines cross"], "row"))
@@ -459,6 +460,7 @@ def spearman(x, y, conf=0.95) -> dict:
 
 
 def correlation(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     method = p.get("method", "pearson")
     conf = p.get("conf", 0.95)
@@ -499,7 +501,7 @@ def correlation(an) -> AnalysisResult:
     if method == "spearman":
         rows.append(("Exact or approximate?", get(lambda d: "Exact" if d["exact"] else "Approximate"), "row"))
     rows += [("Significance", get(lambda d: p_summary(d["p"])), "row"),
-             ("Significant at α = 0.05", get(lambda d: "Yes" if d["p"] < 0.05 else "No"), "row"),
+             (f"Significant at α = {ALPHA:g}", get(lambda d: "Yes" if d["p"] < ALPHA else "No"), "row"),
              ("", [], "blank"), ("Data", [], "section"),
              ("Number of XY pairs", get(lambda d: str(d["n"])), "row")]
     res = AnalysisResult()

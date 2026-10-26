@@ -364,6 +364,7 @@ def smooth(an) -> AnalysisResult:
 
 
 def observed_expected(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     c = cols[0]
     rows = [r for r in range(t.nrows_used()) if t._ok(r, t.flat(c)) is not None]
@@ -385,7 +386,7 @@ def observed_expected(an) -> AnalysisResult:
     pv = float(sps.chi2.sf(chi, df))
     rows_out = [("Chi-square test", [], "section"), ("Chi-square, df", [f"{chi:.4g}, {df}"], "row"),
                 ("P value", [fmt_p(pv)], "row"), ("P value summary", [p_summary(pv)], "row"),
-                ("Observed differs from expected at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row")]
+                (f"Observed differs from expected at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row")]
     if len(obs) == 2:
         pb = float(sps.binomtest(int(obs[0]), int(n), e[0] / n).pvalue)
         rows_out += [("", [], "blank"), ("Exact binomial test", [], "section"), ("P value", [fmt_p(pb)], "row"),

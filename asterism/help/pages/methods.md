@@ -104,14 +104,14 @@ Every method reports a multiplicity-adjusted P value for each comparison. *m* is
 | Holm-Šídák | Step-down: the smallest P is adjusted with m, the next with m − 1, and so on, never smaller than the one before. No confidence intervals (the method doesn't define them). |
 | Fisher's LSD | No correction. |
 | Games-Howell (Welch ANOVA) | Like Tukey, but each pair uses its own SE and Welch degrees of freedom. |
-| Dunnett's T3 (Welch ANOVA, default) | Šídák correction of Welch t tests. |
+| Dunnett's T3 (Welch ANOVA, default) | Welch t for each pair, with the studentized maximum modulus distribution for the number of comparisons and that pair's Welch degrees of freedom rounded down. Matches Prism. |
 | Tamhane's T2 (Welch ANOVA) | Bonferroni correction of Welch t tests. |
 
-The ordinary methods use the ANOVA's pooled mean square (MS within) and its degrees of freedom; after repeated-measures ANOVA they use the residual mean square. When nothing is chosen, ASTERISM uses Tukey for all pairs and Dunnett against a control (Dunnett's T3 after Welch ANOVA).
+The ordinary methods use the ANOVA's pooled mean square (MS within) and its degrees of freedom. After repeated-measures ANOVA that assumes sphericity they use the residual mean square; when sphericity isn't assumed (Geisser-Greenhouse on, the default), each comparison uses only the differences between its two columns: standard error SD(differences)/√n with n − 1 degrees of freedom, as Prism does. When nothing is chosen, ASTERISM uses Tukey for all pairs and Dunnett against a control (Dunnett's T3 after Welch ANOVA).
 
 ### Kruskal-Wallis and Friedman tests {#kruskal-wallis-and-friedman}
 
-- **Kruskal-Wallis:** H with the correction for ties; P from the χ² approximation (k − 1 df).
+- **Kruskal-Wallis:** H with the correction for ties. For small and moderate samples the P value is exact, also with ties: the share of all ways of dealing the observed values into groups of these sizes that give an H at least as large (shown as "Exact"). For larger samples, the χ² approximation (k − 1 df). With ties, Prism's exact P can differ slightly, as there is no single standard method.
 - **Friedman:** values ranked within each row (complete rows only), with the correction for ties; P from the χ² approximation.
 - **Dunn's test** after either: the difference in mean ranks (Kruskal-Wallis, with the tie correction in the SE) or in rank sums (Friedman, SE = √(n·k·(k + 1)/6)), a z test, and Bonferroni adjustment (P × m). **Uncorrected Dunn's test** skips the adjustment.
 
@@ -268,6 +268,6 @@ On result pages, the **Significance** column always uses these levels:
 | P < 0.05 | * |
 | P ≥ 0.05 | ns |
 
-The "Significant?" columns on result pages use 0.05, except in normality tests and multiple t tests, which use the α (or Q) set in the analysis.
+The Yes/No answers on result pages (**Significant at α = …**, the "Significant?" columns and similar rows) compare P with the analysis's significance level, α. New analyses take it from **Settings… › New analyses** (0.05 unless you change it); analyses made earlier keep 0.05. Multiple t tests with FDR control use Q instead.
 
 On graphs, significance brackets use the same four levels by default. In **Format Graph** (or for new graphs, in [Settings](settings.md#settings)) you can choose three levels (0.05, 0.01, 0.001) or Prism's own cut-offs (0.0332, 0.0021, 0.0002 and 0.0001 for one to four stars). In every case, a P value must be *below* a cut-off to earn its star. Brackets after multiple comparisons show the adjusted P values.

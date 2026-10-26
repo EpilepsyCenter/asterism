@@ -337,6 +337,7 @@ def cramers_v(m: np.ndarray, chi: float, conf=0.95) -> dict:
 # ---------------------------------------------------------------------------
 
 def contingency(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     if t.table_type not in ("contingency", "grouped"):
         raise ValueError("This analysis works on a Contingency table of counts.")
@@ -379,13 +380,13 @@ def contingency(an) -> AnalysisResult:
         rows += [(name, [], "section"), ("P value", [fmt_p(pv)], "row"),
                  ("P value summary", [p_summary(pv)], "row"),
                  ("One- or two-sided", ["Two-sided" if tails == 2 else "One-sided"], "row"),
-                 ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row")]
+                 (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row")]
     else:
         pv = chi["p"]
         rows += [("Chi-square test" + (" with Yates' correction" if p.get("yates") and is22 else ""), [], "section"),
                  ("Chi-square, df", [f"{chi['chi2']:.4g}, {chi['df']}"], "row"),
                  ("P value", [fmt_p(pv)], "row"), ("P value summary", [p_summary(pv)], "row"),
-                 ("Significant at α = 0.05", ["Yes" if pv < 0.05 else "No"], "row")]
+                 (f"Significant at α = {ALPHA:g}", ["Yes" if pv < ALPHA else "No"], "row")]
         if chi["small_expected"]:
             rows.append(("Note", [f"{chi['small_expected']} expected count(s) below 5: "
                                   "Fisher's exact test is more accurate here"], "row"))

@@ -105,3 +105,61 @@ def test_graph_type_gallery_for_new_types(app):
     for tt, first in (("contingency", "c_bars"), ("parts", "p_pie"), ("survival", "s_steps")):
         p, t, g = _project(tt)
         assert GraphTypeDialog(g, p).chosen() == first
+
+
+def test_parts_slices_colours_borders_total_and_order(app):
+    """Format Graph › Slices: each slice's colour and pull-out, borders, legend contents,
+    total, order; saved and reloaded with the project."""
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.app.graph.layout import build
+    from asterism.app.graph.parts_survival_layout import parts_colors, parts_rows
+    from asterism.doc.spec import spec_from_dict, spec_to_dict
+    p, t, g = _project("parts")
+    d = FormatGraphDialog(g, p, "arrangement")
+    r0 = sorted(d.slice_ctl)[0]
+    btn, pull, _ = d.slice_ctl[r0]
+    btn.set_color("#123456")
+    btn.colorChanged.emit("#123456")
+    pull.setValue(15)
+    d.outer_on.setChecked(True)
+    d.total_on.setChecked(True)
+    d.leg_bits["legend_percent"].setChecked(True)
+    d.parts_order.setCurrentIndex(1)
+    d.apply()
+    P = g.spec.parts
+    assert P["colors"] == {str(r0): "#123456"} and P["explode"] == {str(r0): 15.0}
+    assert P["outer"] and P["total"] and P["legend_percent"] and P["reverse"]
+    assert parts_colors(g)[r0] == "#123456" and parts_rows(g)[0] != r0       # reversed
+    assert "Style" not in [d.sections.item(i).text() for i in range(d.sections.count())]
+    build(g)                                               # draws without error
+    back = spec_from_dict(spec_to_dict(g.spec))
+    assert back.parts["colors"] == {str(r0): "#123456"} and back.parts["reverse"]
+
+
+def test_nested_subject_colours(app):
+    """Nested graphs: colour by subject (palette, edited, restart per group) or by data set,
+    subject-mean size; saved with the project."""
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.app.graph.layout import plan_nested, subject_color_keys
+    from asterism.doc.spec import spec_from_dict, spec_to_dict
+    p, t, g = _project("nested")
+    g.spec.nested_layout = "superplot"
+    cols = t.used_columns()
+    keys = subject_color_keys(t, cols, restart=True)
+    assert [k for c, sub, k in keys if c == cols[1]][0] == 0       # starts again in the second group
+    d = FormatGraphDialog(g, p, "arrangement")
+    d.n_restart.setCurrentIndex(1)
+    k0, b0 = d.n_buttons[0]
+    b0.set_color("#ff0000")
+    b0.colorChanged.emit("#ff0000")
+    d.n_mean.setValue(3.0)
+    d.apply()
+    N = g.spec.nested
+    assert N["restart"] and N["colors"][k0] == "#ff0000" and N["mean_size"] == 3.0
+    plan = plan_nested(g, cols, 40.0)
+    assert all(sl.marks[0][1] == "#ff0000" for sl in plan.slots)    # subject 1 red in every group
+    g.spec.nested["color_by"] = "dataset"
+    g.spec.style(cols[0]).symbol_color = "#00aa00"
+    plan = plan_nested(g, cols, 40.0)
+    assert set(plan.slots[0].point_colors) == {"#00aa00"}
+    assert spec_from_dict(spec_to_dict(g.spec)).nested["mean_size"] == 3.0

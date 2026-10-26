@@ -6,7 +6,7 @@ import ast
 
 import numpy as np
 
-from .models import _ALLOWED, _FUNCS
+from .models import _ALLOWED, _FUNCS, x_tree
 
 
 def parse(text: str) -> tuple[object, list[str]]:
@@ -15,7 +15,7 @@ def parse(text: str) -> tuple[object, list[str]]:
     expr = expr.replace("^", "**").strip()
     if not expr:
         raise ValueError("Type an equation, such as Y = A*exp(-K*X).")
-    tree = ast.parse(expr, mode="eval")
+    tree = x_tree(expr)                       # lowercase x is X too
     names: list[str] = []
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
     for node in ast.walk(tree):

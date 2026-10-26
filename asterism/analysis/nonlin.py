@@ -567,6 +567,7 @@ def nonlinear(an) -> AnalysisResult:
 
 
 def _compare_pages(model, datas, cols, p, cons, init, weighting, conf, t) -> list[ResultPage]:
+    ALPHA = float(p.get("alpha", 0.05))      # significance level (Settings)
     cmp_ = p.get("compare", "none")
     if cmp_ == "models":
         alt = BY_KEY.get(p.get("model_b", ""))
@@ -590,7 +591,7 @@ def _compare_pages(model, datas, cols, p, cons, init, weighting, conf, t) -> lis
                                                                    f"{100 * (1 - prob_c):.2f}%", ""], "row"))
             else:
                 F, dfn, dfd, pv = extra_ss(simple, complex_)
-                pref = complex_.model.name if pv < 0.05 else simple.model.name
+                pref = complex_.model.name if pv < ALPHA else simple.model.name
                 rows.append((f"{column_letter(c)}: {t.label(c)}", [pref, f"{F:.4g} ({dfn}, {dfd})", fmt_p(pv), "", ""], "row"))
         heads = (["Preferred model", "Difference in AICc", "Probability the more complex is correct",
                   "Probability the simpler is correct", ""] if p.get("compare_method") == "aicc"
@@ -621,7 +622,7 @@ def _compare_pages(model, datas, cols, p, cons, init, weighting, conf, t) -> lis
         else:
             F, dfn, dfd, pv = extra_ss(one, sep)
             rows += [("F (DFn, DFd)", [f"{F:.4g} ({dfn}, {dfd})"], "row"), ("P value", [fmt_p(pv)], "row"),
-                     ("Conclusion", ["Different for each data set" if pv < 0.05 else
+                     ("Conclusion", ["Different for each data set" if pv < ALPHA else
                                      "No significant difference: one shared value fits"], "row")]
         return [ResultPage("Compare data sets", ["Comparison"], rows)]
     return []

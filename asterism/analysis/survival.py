@@ -164,6 +164,7 @@ def hazard_ratios(lr: dict, conf: float = 0.95) -> dict:
 
 
 def survival(an) -> AnalysisResult:
+    ALPHA = float(an.params.get("alpha", 0.05))      # significance level (Settings)
     t, cols, p = an.table, list(an.columns), an.params
     if t.table_type != "survival":
         raise ValueError("Survival analysis works on a Survival table (X = time, 1 = event, 0 = censored).")
@@ -186,7 +187,7 @@ def survival(an) -> AnalysisResult:
         rows += [("Comparison of survival curves", [], "section"),
                  ("Log-rank (Mantel-Cox): chi-square, df", [f"{lr['chi2']:.4g}, {lr['df']}"], "row"),
                  ("P value", [fmt_p(lr["p"])], "row"), ("P value summary", [p_summary(lr["p"])], "row"),
-                 ("Curves differ at α = 0.05", ["Yes" if lr["p"] < 0.05 else "No"], "row"),
+                 (f"Curves differ at α = {ALPHA:g}", ["Yes" if lr["p"] < ALPHA else "No"], "row"),
                  ("", [], "blank"),
                  ("Gehan-Breslow-Wilcoxon: chi-square, df", [f"{gb['chi2']:.4g}, {gb['df']}"], "row"),
                  ("P value", [fmt_p(gb["p"])], "row"), ("P value summary", [p_summary(gb["p"])], "row")]
