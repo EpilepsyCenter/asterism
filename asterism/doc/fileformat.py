@@ -60,7 +60,7 @@ def project_to_dict(p: Project) -> dict:
             **({"source": g.source.id} if g.source is not None else {}),
             "spec": spec_to_dict(g.spec),
         } for g in p.graphs],
-        "figures": [{"id": f.id, "name": f.name} for f in p.figures],
+        "figures": [{"id": f.id, "name": f.name, **f.state()} for f in p.figures],
     }
 
 
@@ -125,7 +125,11 @@ def project_from_dict(d: dict, engine: AnalysisEngine | None = None) -> Project:
         g.auto_name = bool(gd.get("auto_name", False))
         p.insert(g)
     for ld in d.get("figures", d.get("layouts", [])):     # "layouts": files before the rename
-        p.insert(FigureSheet(ld.get("name", ""), id=ld.get("id")))
+        f = FigureSheet(ld.get("name", ""), id=ld.get("id"))
+        if "page" in ld:
+            f.page.update(ld["page"])
+        f.panels = [dict(pn) for pn in ld.get("panels", [])]
+        p.insert(f)
     p.undo.clear()
     p.mark_saved()
     return p

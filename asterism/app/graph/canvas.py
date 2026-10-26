@@ -129,11 +129,16 @@ class QtCanvas:
         else:
             self.p.drawText(QPointF(x + dx, y), s)
 
-    def begin_group(self, gid: str):
-        pass
+    def begin_group(self, gid: str, dx: float = 0.0, dy: float = 0.0, scale: float = 1.0):
+        """Groups may move and scale what they contain (figure panels)."""
+        self.p.save()
+        if dx or dy:
+            self.p.translate(dx, dy)
+        if scale != 1.0:
+            self.p.scale(scale, scale)
 
     def end_group(self):
-        pass
+        self.p.restore()
 
 
 # ---------------------------------------------------------------------------
@@ -193,8 +198,11 @@ class SvgCanvas:
             attrs += f' transform="rotate({_n(rotate)} {_n(x)} {_n(y)})"'
         self._emit(f"<text {attrs}>{escape(s)}</text>")
 
-    def begin_group(self, gid: str):
-        self._emit(f"<g id={quoteattr(gid)}>")
+    def begin_group(self, gid: str, dx: float = 0.0, dy: float = 0.0, scale: float = 1.0):
+        tf = ""
+        if dx or dy or scale != 1.0:
+            tf = f' transform="translate({_n(dx)} {_n(dy)})' + (f' scale({scale:.6g})' if scale != 1.0 else "") + '"'
+        self._emit(f"<g id={quoteattr(gid)}{tf}>")
         self._indent += 1
 
     def end_group(self):

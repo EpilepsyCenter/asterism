@@ -67,6 +67,22 @@ class SpecCommand(Command):
         self.graph.set_spec(copy.deepcopy(self.old))
 
 
+class FigureCommand(Command):
+    """Snapshot-based undo for any change to a figure (panels moved, added, formatted …)."""
+
+    def __init__(self, figure, new_state: dict, text: str = "Edit Figure"):
+        self.text = text
+        self.figure = figure
+        self.old = copy.deepcopy(figure.state())
+        self.new = copy.deepcopy(new_state)
+
+    def redo(self) -> None:
+        self.figure.set_state(copy.deepcopy(self.new))
+
+    def undo(self) -> None:
+        self.figure.set_state(copy.deepcopy(self.old))
+
+
 class ParamsCommand(Command):
     text = "Change Analysis Parameters"
 

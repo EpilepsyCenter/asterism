@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M7 done; M8 (figures) next.** The Qt spike (M0) passed on
+Status: **M1–M8 done; M9 (graph polish) next.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -320,7 +320,7 @@ Error bar direction (above/below/both); left and right Y axes; log axes; axis ga
 time-scale axes; grid lines and shaded bands (QC graphs); nudging data sets
 (waterfall); labelling points with row titles; colour by row ("rainbow"); colour
 schemes; legends; text, lines, arrows and pictures on graphs; overlaying graphs in a
-figure (M8).
+figure (M9).
 
 ## 9. Figures
 
@@ -657,7 +657,23 @@ Graph Type dialog.
   exact binomial; = statsmodels), residual plots for linear and nonlinear regression.
 - Frequency distributions use the same result-table machinery.
 
-**M8 — Figures** (Prism's layouts) and figure export.
+**M8 — Figures (Prism's layouts). Done (2026-10-26).**
+- A figure is a page (A4, US Letter, A5 or custom, portrait or landscape) of panels: graphs,
+  data or result tables, analysis results and text boxes; positions in millimetres, graphs and
+  tables scaled as a whole. Panels refer to their sheets by id and redraw when they change;
+  a deleted sheet leaves a placeholder (undo brings it back).
+- Panel letters in reading order (A / a / (A) / A. / (a)), font, size, bold, outside or inside
+  the corner; a panel can be left unlettered or given its own label.
+- Editing: select, move (snapping to the grid and to other panels' edges), resize (scale), nudge
+  with the arrow keys, delete, bring to front / send to back, align left / top / centres, same
+  width, arrange in a grid; double-click opens the graph or table, or edits a text box. Every
+  change is one undo step (FigureCommand).
+- Adding: "Add Graphs and Tables…" (placed below what is there, in rows, shrunk to fit) and
+  "Add to Figure…" from a graph (to an existing or a new figure); "Add Text".
+- Export at the exact page size: SVG (each panel a named group "panel-A" holding the graph's
+  own groups "A-data-A" …, live text), PDF, PNG and TIFF; graphs export to TIFF too.
+- Deferred: overlaying graphs, drag and drop from the sidebar, choosing which results page a
+  panel shows (M9).
 
 **M9 — Graph polish:** colour schemes, Copy formatting, drawing tools, right Y axis, axis breaks,
 significance bracket formatting (§8a item 9).

@@ -87,9 +87,48 @@ class InfoSheet(Sheet):
         self.notes = ""
 
 
+PAGE_SIZES = {"a4": ("A4", 210.0, 297.0), "letter": ("US Letter", 215.9, 279.4),
+              "a5": ("A5", 148.0, 210.0), "custom": ("Custom", None, None)}
+LETTER_STYLES = {"A": "A, B, C", "a": "a, b, c", "(A)": "(A), (B), (C)", "A.": "A., B., C.",
+                 "(a)": "(a), (b), (c)"}
+
+
 class FigureSheet(Sheet):
-    """A figure: graphs and tables arranged as panels on a page (M8)."""
+    """A figure (Prism calls these layouts): a page of panels — graphs, data or result
+    tables, and text. Positions in millimetres from the page's top-left corner. Graphs and
+    tables are drawn at their own size times `scale`; text boxes have a width and height.
+    Panels refer to sheets by id, so they stay live."""
+
     kind = "figure"
+
+    def __init__(self, name: str = "", id: str | None = None):
+        super().__init__(name, id)
+        self.page = {"size": "a4", "width": 210.0, "height": 297.0, "landscape": False,
+                     "letters": True, "letter_style": "A", "letter_size": 14.0, "letter_bold": True,
+                     "letter_font": "Arial", "letter_pos": "outside", "grid": 5.0, "snap": True}
+        self.panels: list[dict] = []
+        self.changed = Signal()
+
+    # each panel: {"id", "kind": graph|table|results|text, "ref", "x", "y", "scale", "w", "h",
+    #              "text", "font_size", "label": None (automatic) | "" (none) | custom}
+
+    def page_mm(self) -> tuple[float, float]:
+        w, h = self.page["width"], self.page["height"]
+        return (h, w) if self.page["landscape"] else (w, h)
+
+    def state(self) -> dict:
+        return {"page": dict(self.page), "panels": [dict(p) for p in self.panels]}
+
+    def set_state(self, st: dict) -> None:
+        self.page = dict(st["page"])
+        self.panels = [dict(p) for p in st["panels"]]
+        self.changed.emit()
+
+    def new_panel(self, kind: str, ref: str = "", **kw) -> dict:
+        p = {"id": uuid.uuid4().hex[:8], "kind": kind, "ref": ref, "x": 20.0, "y": 20.0, "scale": 1.0,
+             "w": 60.0, "h": 15.0, "text": "", "font_size": 10.0, "label": None}
+        p.update(kw)
+        return p
 
 
 class Graph(Sheet):

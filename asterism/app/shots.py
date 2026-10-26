@@ -276,6 +276,34 @@ def take_shots(app, out: str) -> int:
     shot(dlg, "64_smooth_settings")
     dlg.close()
 
+    # Figures (M8).
+    from .dialogs.figure import AddPanelsDialog, FormatFigureDialog
+    fig = p.add_figure()
+    w._place_panels(fig, [("graph", g4.id), ("graph", g6.id), ("graph", g9.id), ("graph", g10.id)], 2)
+    import copy as _copy
+    from ..doc.commands import FigureCommand
+    st = _copy.deepcopy(fig.state())
+    pw_, ph_ = fig.page_mm()
+    st["panels"].append(fig.new_panel("text", "", x=15.0, y=ph_ - 45.0, w=pw_ - 30.0, h=20.0, font_size=9.0,
+                                      text="Figure 1. (A) Seizures by week, two-way ANOVA with Šídák comparisons. "
+                                           "(B) Dose-response curves with 95% confidence bands. (C) Seizure-free "
+                                           "survival. (D) Cell types."))
+    p.undo.push(FigureCommand(fig, st, "Add Text"))
+    w.show_sheet(fig)
+    fv = w._figure_view()
+    fv.fit_page()
+    pump(10)
+    shot(w, "65_figure")
+    dlg = FormatFigureDialog(fig, w)
+    dlg.show_section("letters")
+    dlg.show()
+    shot(dlg, "66_format_figure")
+    dlg.close()
+    dlg = AddPanelsDialog(p, preselect={g4.id}, parent=w)
+    dlg.show()
+    shot(dlg, "67_add_to_figure")
+    dlg.close()
+
     # Dark mode: a fresh window after switching the app's colour scheme.
     try:
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)

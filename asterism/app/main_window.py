@@ -132,9 +132,24 @@ class MainWindow(QMainWindow):
         self.a_sort = L("Sort", "arrow.up.arrow.down", "M2")
         self.a_transpose = L("Transpose", "arrow.left.arrow.right.square", "M7")
         # Export
-        self.a_export_pdf = A("Export PDF…", "doc.richtext", lambda: self.export("pdf"), "Ctrl+E", kinds=G)
-        self.a_export_svg = A("Export SVG…", "square.and.arrow.up", lambda: self.export("svg"), kinds=G)
-        self.a_export_png = A("Export PNG…", "photo", lambda: self.export("png"), kinds=G)
+        self.a_export_pdf = A("Export PDF…", "doc.richtext", lambda: self.export("pdf"), "Ctrl+E", kinds=("graph", "figure"))
+        self.a_export_svg = A("Export SVG…", "square.and.arrow.up", lambda: self.export("svg"), kinds=("graph", "figure"))
+        self.a_export_png = A("Export PNG…", "photo", lambda: self.export("png"), kinds=("graph", "figure"))
+        self.a_export_tiff = A("Export TIFF…", "photo.stack", lambda: self.export("tiff"), kinds=("graph", "figure"))
+        # Figures
+        F = ("figure",)
+        self.a_fig_add = A("Add Graphs and Tables…", "plus.rectangle.on.rectangle", self.figure_add, kinds=F,
+                           accent="accent")
+        self.a_fig_text = A("Add Text", "textbox", self.figure_add_text, kinds=F)
+        self.a_fig_grid = A("Arrange in a Grid…", "square.grid.2x2", self.figure_grid, kinds=F)
+        self.a_fig_left = A("Align Left Edges", "align.horizontal.left", lambda: self._figure_op("align", "left"), kinds=F)
+        self.a_fig_top = A("Align Top Edges", "align.vertical.top", lambda: self._figure_op("align", "top"), kinds=F)
+        self.a_fig_hc = A("Align Centres", "align.horizontal.center", lambda: self._figure_op("align", "hcenter"), kinds=F)
+        self.a_fig_width = A("Same Width", "arrow.left.and.right.square", lambda: self._figure_op("same_width"), kinds=F)
+        self.a_fig_front = A("Bring to Front", "square.3.layers.3d.top.filled", lambda: self._figure_op("restack", True), kinds=F)
+        self.a_fig_back = A("Send to Back", "square.3.layers.3d.bottom.filled", lambda: self._figure_op("restack", False), kinds=F)
+        self.a_fig_format = A("Format Figure…", "doc.badge.gearshape", self.figure_format, kinds=F)
+        self.a_add_to_figure = A("Add to Figure…", "rectangle.split.2x2", self.add_graph_to_figure, kinds=G)
         self.a_copy_graph = L("Copy Graph to Clipboard", "doc.on.clipboard.fill", "M8")
         self.a_export_table = L("Export Table (CSV / Excel)…", "tablecells", "M10")
         # Analyze
@@ -215,11 +230,14 @@ class MainWindow(QMainWindow):
             [self.a_cut, self.a_copy, self.a_paste, self.a_insert_row, self.a_delete_row,
              self.a_insert_set, self.a_delete_set, self.a_exclude, self.a_sort],
         ]
-        self.export_actions = [self.a_export_pdf, self.a_export_svg, self.a_export_png,
+        self.export_actions = [self.a_export_pdf, self.a_export_svg, self.a_export_png, self.a_export_tiff,
                                self.a_copy_graph, self.a_export_table]
         self.tool_groups = [
             ("Analyze", self.a_analyze, [self.a_params, self.a_desc, *analyze_later]),
-            ("Graph", self.a_fmt_graph, [self.a_axes, self.a_bracket, *graph_later]),
+            ("Graph", self.a_fmt_graph, [self.a_axes, self.a_bracket, self.a_add_to_figure, *graph_later]),
+            ("Figure", self.a_fig_add, [self.a_fig_text, self.a_fig_grid, self.a_fig_left, self.a_fig_top,
+                                        self.a_fig_hc, self.a_fig_width, self.a_fig_front, self.a_fig_back,
+                                        self.a_fig_format]),
             ("Draw", None, draw),
             ("Text", "text", None),
         ]
@@ -257,7 +275,10 @@ class MainWindow(QMainWindow):
                          self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
                          self.a_corr, self.a_auc, None, self.a_cont, self.a_surv, self.a_frac, None,
                          self.a_transform, self.a_normalize])
-        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket])
+        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket, None, self.a_add_to_figure])
+        menu("Figure", [self.a_fig_add, self.a_fig_text, None, self.a_fig_grid, self.a_fig_left, self.a_fig_top,
+                        self.a_fig_hc, self.a_fig_width, None, self.a_fig_front, self.a_fig_back, None,
+                        self.a_fig_format])
         menu("View", [self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
         menu("Help", [self.a_help])
@@ -528,8 +549,14 @@ class MainWindow(QMainWindow):
                 w = ResultsSheet(s)
             elif isinstance(s, InfoSheet):
                 w = InfoSheetView(s)
+            elif isinstance(s, FigureSheet):
+                from .figure.view import FigureSheetView
+                w = FigureSheetView(s, self.project)
+                w.openSheetRequested.connect(self.show_sheet)
+                w.editTextRequested.connect(self._edit_text_panel)
+                w.view.zoomChanged.connect(self._zoom_changed)
             else:
-                w = PlaceholderSheet("Figures (graphs and tables arranged as panels on a page) arrive in M8.")
+                w = PlaceholderSheet("This sheet has no view yet.")
             self.widgets[id(s)] = w
             self.stack.addWidget(w)
         return w
@@ -576,6 +603,12 @@ class MainWindow(QMainWindow):
             return f"Results · from “{s.table.name}”"
         if isinstance(s, InfoSheet):
             return "Notes"
+        if isinstance(s, FigureSheet):
+            from ..doc.model import PAGE_SIZES
+            n = len(s.panels)
+            size = PAGE_SIZES.get(s.page.get("size"), ("Custom",))[0]
+            return (f"Figure · {n} panel{'s' if n != 1 else ''} · {size} "
+                    f"{'landscape' if s.page.get('landscape') else 'portrait'}")
         return "Figure"
 
     def show_sheet(self, s: Sheet) -> None:
@@ -586,8 +619,9 @@ class MainWindow(QMainWindow):
         self.top.title.set_name(s.name)
         self.top.subtitle.setText(self._describe(s))
         is_graph, is_table = isinstance(s, Graph), isinstance(s, Table)
-        self.status.zoom_w.setVisible(is_graph)
-        if is_graph:
+        zooms = is_graph or isinstance(s, FigureSheet)          # graphs and figures zoom
+        self.status.zoom_w.setVisible(zooms)
+        if zooms:
             self._zoom_changed(w.view.transform().m11())
         if is_table:
             w.setFocus()
@@ -781,17 +815,163 @@ class MainWindow(QMainWindow):
             self.project.undo.push(SpecCommand(g, spec, "Significance"))
 
     def export(self, fmt: str) -> None:
+        filt = {"pdf": "PDF (*.pdf)", "svg": "SVG (*.svg)", "png": "PNG image (*.png)",
+                "tiff": "TIFF image (*.tif *.tiff)"}[fmt]
+        if isinstance(self.current, FigureSheet):
+            from .figure import export as fexport
+            f = self.current
+            start = os.path.join(os.path.dirname(self.path) if self.path else documents.last_dir(),
+                                 f"{f.name}.{'tif' if fmt == 'tiff' else fmt}")
+            path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", start, filt)
+            if not path:
+                return
+            if fmt == "pdf":
+                fexport.export_pdf(f, self.project, path)
+            elif fmt == "svg":
+                fexport.export_svg(f, self.project, path)
+            else:
+                fexport.export_image(f, self.project, path, int(documents.value("export/dpi", 300)))
+            self.flash(f"Exported {os.path.basename(path)}")
+            return
         g, _ = self._family_graph()
         if not g:
             return
-        filt = {"pdf": "PDF (*.pdf)", "svg": "SVG (*.svg)", "png": "PNG image (*.png)"}[fmt]
         start = os.path.join(os.path.dirname(self.path) if self.path else documents.last_dir(),
                              f"{g.name}.{fmt}")
         path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.upper()}", start, filt)
         if not path:
             return
-        {"pdf": gexport.export_pdf, "svg": gexport.export_svg, "png": gexport.export_png}[fmt](g, path)
+        if fmt == "tiff":
+            gexport.export_png(g, path)               # same raster path; the extension picks TIFF
+        else:
+            {"pdf": gexport.export_pdf, "svg": gexport.export_svg, "png": gexport.export_png}[fmt](g, path)
         self.flash(f"Exported {os.path.basename(path)}")
+
+    # ------------------------------------------------------------------ figures
+
+    def _figure_view(self):
+        from .figure.view import FigureSheetView
+        w = self.stack.currentWidget()
+        return w if isinstance(w, FigureSheetView) else None
+
+    def _figure_op(self, name: str, *args) -> None:
+        v = self._figure_view()
+        if v is not None:
+            getattr(v, name)(*args)
+
+    def _place_panels(self, figure, items: list[tuple[str, str]], columns: int = 2) -> None:
+        """Add panels below what is already on the page, `columns` to a row."""
+        import copy as _copy
+        from ..doc.commands import FigureCommand
+        from .figure.layout import build_figure
+        st = _copy.deepcopy(figure.state())
+        _, els = build_figure(figure, self.project)
+        from .graph.canvas import MM
+        bottom = max([e.rect.bottom() / MM for e in els if e.kind != "letter"] + [5.0])
+        new = []
+        for kind, ref in items:
+            pn = figure.new_panel(kind, ref, font_size=8.0 if kind in ("table", "results") else 10.0)
+            new.append(pn)
+        tmp = FigureSheet()                       # measure the new panels at their own size
+        tmp.page = dict(figure.page)
+        tmp.panels = new
+        _, nels = build_figure(tmp, self.project)
+        sizes = {e.panel: (e.rect.width() / MM, e.rect.height() / MM) for e in nels if e.kind != "letter"}
+        pw, _ = figure.page_mm()
+        margin, gap = 15.0, 10.0
+        y = bottom + gap if figure.panels else margin
+        for i in range(0, len(new), columns):
+            row = new[i:i + columns]
+            x = margin
+            for pn in row:
+                w, h = sizes.get(pn["id"], (60.0, 40.0))
+                avail = (pw - 2 * margin - gap * (len(row) - 1)) / len(row)
+                if pn["kind"] in ("graph", "table", "results") and w > avail:
+                    pn["scale"] = round(avail / w, 3)       # shrink to fit the row
+                    w, h = avail, h * pn["scale"]
+                pn["x"], pn["y"] = round(x, 1), round(y, 1)
+                x += w + gap
+            y += max(sizes.get(pn["id"], (0, 40.0))[1] * pn.get("scale", 1.0) for pn in row) + gap
+        st["panels"] += new
+        self.project.undo.push(FigureCommand(figure, st, "Add to Figure"))
+
+    def figure_add(self) -> None:
+        if not isinstance(self.current, FigureSheet):
+            return
+        from .dialogs.figure import AddPanelsDialog
+        d = AddPanelsDialog(self.project, parent=self)
+        if d.exec() and d.chosen():
+            self._place_panels(self.current, d.chosen(), d.columns.value())
+
+    def figure_add_text(self) -> None:
+        if not isinstance(self.current, FigureSheet):
+            return
+        import copy as _copy
+        from ..doc.commands import FigureCommand
+        from .dialogs.figure import TextPanelDialog
+        d = TextPanelDialog("Figure 1. ", 10.0, self)
+        if d.exec():
+            text, size = d.values()
+            st = _copy.deepcopy(self.current.state())
+            pw, ph = self.current.page_mm()
+            st["panels"].append(self.current.new_panel("text", "", x=15.0, y=ph - 40.0, w=pw - 30.0, h=15.0,
+                                                       text=text, font_size=size))
+            self.project.undo.push(FigureCommand(self.current, st, "Add Text"))
+
+    def _edit_text_panel(self, pid: str) -> None:
+        f = self.current
+        if not isinstance(f, FigureSheet):
+            return
+        import copy as _copy
+        from ..doc.commands import FigureCommand
+        from .dialogs.figure import TextPanelDialog
+        pn = next((p for p in f.panels if p["id"] == pid), None)
+        if pn is None:
+            return
+        d = TextPanelDialog(pn.get("text", ""), pn.get("font_size", 10.0), self)
+        if d.exec():
+            st = _copy.deepcopy(f.state())
+            q = next(p for p in st["panels"] if p["id"] == pid)
+            q["text"], q["font_size"] = d.values()
+            self.project.undo.push(FigureCommand(f, st, "Edit Text"))
+
+    def figure_grid(self) -> None:
+        v = self._figure_view()
+        if v is None:
+            return
+        from PySide6.QtWidgets import QInputDialog
+        n, ok = QInputDialog.getInt(self, "Arrange in a Grid", "Panels per row:", 2, 1, 6)
+        if ok:
+            v.arrange_grid(n)
+
+    def figure_format(self) -> None:
+        f = self.current
+        if not isinstance(f, FigureSheet):
+            return
+        import copy as _copy
+        from ..doc.commands import FigureCommand
+        from .dialogs.figure import FormatFigureDialog
+        d = FormatFigureDialog(f, self)
+        if d.exec():
+            st = _copy.deepcopy(f.state())
+            st["page"].update(d.page())
+            self.project.undo.push(FigureCommand(f, st, "Format Figure"))
+
+    def add_graph_to_figure(self) -> None:
+        g, _ = self._family_graph()
+        if g is None:
+            return
+        from PySide6.QtWidgets import QInputDialog
+        names = [f.name for f in self.project.figures] + ["New figure"]
+        name, ok = QInputDialog.getItem(self, "Add to Figure", "Add the graph to:", names, 0, False)
+        if not ok:
+            return
+        if name == "New figure":
+            f = self.project.add_figure()
+        else:
+            f = next(x for x in self.project.figures if x.name == name)
+        self._place_panels(f, [("graph", g.id)], 2)
+        self.show_sheet(f)
 
     def _delete_sheet(self, s: Sheet | None = None) -> None:
         s = s if isinstance(s, Sheet) else self.current
@@ -890,7 +1070,7 @@ class MainWindow(QMainWindow):
 
     def _zoom_slider(self, v: int) -> None:
         w = self.stack.currentWidget()
-        if isinstance(w, GraphSheet):
+        if isinstance(w, GraphSheet) or hasattr(w, "fit_page"):
             w.set_zoom(v / 100)
 
     def _zoom_changed(self, z: float) -> None:

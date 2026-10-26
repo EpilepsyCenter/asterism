@@ -42,7 +42,11 @@ The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
 - **M7 — Transforms and result tables:** done. Transform, normalize, remove baseline, prune,
   transpose, smooth/differentiate/integrate, residual plots; result tables are live and can be
   graphed and analysed further in chains. Also observed vs. expected and McNemar's test.
-- **Next — M8:** figures (graphs and tables arranged as panels on a page) and their export.
+- **M8 — Figures:** done. Pages of live panels (graphs, tables, results, text) with automatic
+  panel letters, snapping, alignment and grid arrangement; export at exact page size to SVG,
+  PDF, PNG and TIFF with every panel as its own group.
+- **Next — M9:** graph polish (colour schemes, copy formatting, drawing tools, right Y axis,
+  axis breaks, significance-bracket formatting).
 
 ## Run
 
