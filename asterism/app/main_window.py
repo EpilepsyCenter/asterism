@@ -238,6 +238,18 @@ class MainWindow(QMainWindow):
         text_later = [self.a_underline, self.a_sup, self.a_sub, self.a_symbol, self.a_text_color,
                       self.a_text_left, self.a_text_center, self.a_text_right]
         # View
+        self.a_overview = A("All Graphs", "square.grid.2x2", self.show_overview, "Ctrl+Shift+G")
+        self.a_tags = []
+        from ..doc.model import LABEL_NAMES
+        from .widgets import tag_icon
+        for k in range(0, 8):
+            a = QAction("No Label" if k == 0 else LABEL_NAMES[k], self)
+            a.triggered.connect(lambda _c=False, k=k: self.tag_selected(k))
+            a.setShortcut(QKeySequence(f"Meta+{k}"))
+            if k:
+                a.setIcon(tag_icon(k, 14))
+            self.a_tags.append(a)
+        self.a_label_names = A("Label Names…", "tag", self.edit_label_names)
         self.a_toggle_sidebar = A("Show Project Sidebar", "sidebar.left", self._toggle_sidebar, "Ctrl+Meta+S", "muted")
         self.a_toggle_tools = A("Show Tools", "sidebar.right", self._toggle_tools, "Ctrl+Alt+0", "muted")
         for a in (self.a_toggle_sidebar, self.a_toggle_tools):
@@ -289,9 +301,11 @@ class MainWindow(QMainWindow):
         menu("Edit", [self.a_undo, self.a_redo, None, self.a_cut, self.a_copy, self.a_paste, None,
                       self.a_insert_row, self.a_delete_row, self.a_insert_set, self.a_delete_set,
                       None, self.a_exclude, self.a_sort, self.a_transpose])
+        self.tag_menu = QMenu("Colour Label", self)
+        self.tag_menu.aboutToShow.connect(self._fill_tag_menu)
         menu("Sheet", [self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info,
                        None, self.a_table_format, None, self.a_duplicate, self.a_delete, None,
-                       self.a_prev, self.a_next])
+                       self.tag_menu, None, self.a_prev, self.a_next])
         menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_anova,
                          self.a_normality, self.a_freq, self.a_outliers, None, self.a_anova2,
                          self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
@@ -308,7 +322,7 @@ class MainWindow(QMainWindow):
         menu("Figure", [self.a_fig_add, self.a_fig_text, None, self.a_fig_grid, self.a_fig_left, self.a_fig_top,
                         self.a_fig_hc, self.a_fig_width, None, self.a_fig_front, self.a_fig_back, None,
                         self.a_fig_format])
-        menu("View", [self.a_toggle_sidebar, self.a_toggle_tools])
+        menu("View", [self.a_overview, None, self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
         menu("Help", [self.a_help])
 
@@ -345,6 +359,9 @@ class MainWindow(QMainWindow):
         self.sidebar.commandRequested.connect(self._command)
         self.sidebar.renameRequested.connect(lambda s, name: self.project.rename(s, name))
         self.sidebar.deleteRequested.connect(self._delete_sheet)
+        self.sidebar.overviewRequested.connect(self.show_overview)
+        self.sidebar.labelNamesRequested.connect(self.edit_label_names)
+        self.sidebar.overview_btn.setCheckable(True)
         self.sidebar.setMinimumWidth(180)
         self.sidebar.setMaximumWidth(480)
 
@@ -646,7 +663,111 @@ class MainWindow(QMainWindow):
                     f"{'landscape' if s.page.get('landscape') else 'portrait'}")
         return "Figure"
 
+    # --- all graphs at a glance, colour labels -----------------------------------------
+
+    def _overview(self):
+        if getattr(self, "overview", None) is None:
+            from .overview import GraphOverview
+            ov = GraphOverview(self.project, self._describe)
+            ov.openRequested.connect(self.show_sheet)
+            ov.deleteRequested.connect(self._delete_sheet)
+            ov.addToFigureRequested.connect(self.add_graphs_to_figure)
+            ov.copyFormattingRequested.connect(self._copy_format_to)
+            ov.duplicateRequested.connect(self.duplicate_graph)
+            ov.renameRequested.connect(self._rename_dialog)
+            ov.labelNamesRequested.connect(self.edit_label_names)
+            ov.selectionChanged.connect(self._overview_subtitle)
+            self.stack.addWidget(ov)
+            self.overview = ov
+        return self.overview
+
+    def show_overview(self) -> None:
+        prev = self.stack.currentWidget()
+        if isinstance(prev, GraphSheet) and prev.tool:
+            prev.set_tool(None)
+        self._tools_off()
+        ov = self._overview()
+        self.stack.setCurrentWidget(ov)
+        ov.setFocus()
+        self.current = None
+        self.sidebar.set_current(None)
+        self.sidebar.overview_btn.setChecked(True)
+        self.top.title.set_name("All graphs")
+        self._overview_subtitle()
+        self.status.zoom_w.setVisible(False)
+        self._sync_actions()
+        self._update_status()
+
+    def _overview_subtitle(self) -> None:
+        ov = getattr(self, "overview", None)
+        if ov is None or self.stack.currentWidget() is not ov:
+            return
+        n, k = ov.count(), len(ov.selected)
+        self.top.subtitle.setText(f"{n} graph{'s' if n != 1 else ''} shown" + (f" · {k} selected" if k else ""))
+
+    def tag_selected(self, k: int) -> None:
+        """Colour label on the selected sheets (overview cards, sidebar rows, or the current sheet)."""
+        ov = getattr(self, "overview", None)
+        if ov is not None and self.stack.currentWidget() is ov:
+            targets = list(ov.selected)
+        else:
+            sel = self.sidebar.selected_sheets()
+            targets = sel if (self.current in sel or self.current is None) else [self.current]
+            if not targets and self.current is not None:
+                targets = [self.current]
+        self.sidebar.set_tag(targets, k)
+
+    def _fill_tag_menu(self) -> None:
+        m = self.tag_menu
+        m.clear()
+        for k, a in enumerate(self.a_tags):
+            a.setText("No Label" if k == 0 else self.project.label_name(k))
+            m.addAction(a)
+        m.addSeparator()
+        m.addAction(self.a_label_names)
+
+    def edit_label_names(self) -> None:
+        from ..doc.commands import LabelNamesCommand
+        from .dialogs.labels import LabelNamesDialog
+        d = LabelNamesDialog(self.project, self)
+        if d.exec() and d.names() != self.project.label_names:
+            self.project.undo.push(LabelNamesCommand(self.project, d.names()))
+
+    def add_graphs_to_figure(self, graphs: list) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        if not graphs:
+            return
+        names = [f.name for f in self.project.figures] + ["New figure"]
+        what = "the graph" if len(graphs) == 1 else f"the {len(graphs)} graphs"
+        name, ok = QInputDialog.getItem(self, "Add to Figure", f"Add {what} to:", names, 0, False)
+        if not ok:
+            return
+        f = self.project.add_figure() if name == "New figure" else next(x for x in self.project.figures
+                                                                         if x.name == name)
+        self._place_panels(f, [("graph", g.id) for g in graphs], 2)
+        self.show_sheet(f)
+
+    def _copy_format_to(self, source, targets: list) -> None:
+        from ..doc.undo import Macro
+        from .graph.formatting import ASPECTS, copy_formatting
+        aspects = set(ASPECTS) - {"ranges"}
+        cmds = [SpecCommand(t, copy_formatting(source, t, aspects), "Format") for t in targets]
+        if cmds:
+            self.project.undo.push(Macro(f"Apply Formatting to {len(cmds)} Graph{'s' if len(cmds) != 1 else ''}", cmds))
+
+    def duplicate_graph(self, g) -> None:
+        from ..doc.model import Graph as _G
+        new = _G(f"{g.name} copy", g.home, copy.deepcopy(g.spec), source=g.source)
+        self.project.add_sheets([new], "Duplicate Graph")
+
+    def _rename_dialog(self, sheet) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "Rename", "Name:", text=sheet.name)
+        if ok and name.strip() and name.strip() != sheet.name:
+            self.project.rename(sheet, name.strip())
+
     def show_sheet(self, s: Sheet) -> None:
+        self.sidebar.overview_btn.setChecked(False)
         prev = self.stack.currentWidget()
         if isinstance(prev, GraphSheet) and prev.tool:
             prev.set_tool(None)

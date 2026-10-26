@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M9 done; M10 (import) next.** The Qt spike (M0) passed on
+Status: **M1–M9b done; M10 (import) next.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -708,7 +708,7 @@ Graph Type dialog.
 - Open: Prism's QQ plotting positions (`tests/golden/REQUESTS.md`); time-scale axes come
   with date/time columns (M10).
 
-**M9b — Finding your way (planned 2026-10-26).** Two navigation aids for large projects.
+**M9b — Finding your way. Done (2026-10-26).** Two navigation aids for large projects.
 
 *Graph overview* — every graph in the project on one page, to find and open graphs quickly.
 - Opened from an "All graphs" row at the top of the project sidebar (under the search field),
@@ -738,7 +738,11 @@ Finder tags folders, to recognise them at a glance.
   Each change is one undo step; labels are per sheet (children do not inherit them).
 - A colour strip under the sidebar's search field filters the sidebar to sheets with that
   label (parents stay visible, dimmed, for context); clicking again clears the filter.
-- Saved in the file as `label` on each sheet; older files load with no labels.
+- Saved in the file as `labels` (sheet id → colour) and `label_names`; older files load with
+  no labels. (In code the label is `Sheet.tag`, as tables already have column labels.)
+- As built: the overview's groups sit side by side and wrap to the window; Return opens the
+  selected card, ⌘A selects all, Shift- and ⌘-click extend the selection; labels can be set
+  from the overview's right-click menu and the ⌃0–⌃7 shortcuts act on selected cards too.
 
 **M10 — Import:** CSV/Excel, `.pzfx`, `.prism`, lab importers into typed tables.
 

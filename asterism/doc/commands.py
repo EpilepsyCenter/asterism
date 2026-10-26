@@ -113,6 +113,40 @@ class Rename(Command):
         self.sheet.auto_name = self.old_auto
 
 
+class LabelCommand(Command):
+    """Colour label on one or more sheets."""
+
+    def __init__(self, sheets: list, label: int):
+        from .model import LABEL_NAMES
+        self.sheets = list(sheets)
+        self.old = [sh.tag for sh in self.sheets]
+        self.new = int(label or 0)
+        self.text = "Remove Label" if not self.new else f"Label {LABEL_NAMES.get(self.new, '')}"
+
+    def redo(self) -> None:
+        for sh in self.sheets:
+            sh.tag = self.new
+
+    def undo(self) -> None:
+        for sh, v in zip(self.sheets, self.old):
+            sh.tag = v
+
+
+class LabelNamesCommand(Command):
+    def __init__(self, project, names: dict):
+        self.text = "Rename Labels"
+        self.project = project
+        self.old, self.new = dict(project.label_names), {int(k): v for k, v in names.items() if v}
+
+    def redo(self) -> None:
+        self.project.label_names = dict(self.new)
+        self.project.structure_changed.emit()
+
+    def undo(self) -> None:
+        self.project.label_names = dict(self.old)
+        self.project.structure_changed.emit()
+
+
 class AddSheets(Command):
     def __init__(self, project: "Project", sheets: list["Sheet"], text: str):
         self.project, self.sheets, self.text = project, list(sheets), text

@@ -32,15 +32,32 @@ class AnalysisEngine(Protocol):
 # Sheets
 # ---------------------------------------------------------------------------
 
+# Colour labels (like Finder tags): 0 = none, 1–7; projects may rename them.
+LABEL_NAMES = {1: "Red", 2: "Orange", 3: "Yellow", 4: "Green", 5: "Blue", 6: "Purple", 7: "Grey"}
+
+
 class Sheet:
     kind = "sheet"
 
     def __init__(self, name: str = "", id: str | None = None):
         self.id = id or uuid.uuid4().hex
         self._name = name
+        self._tag = 0
         self.auto_name = False       # name follows its table / analysis type
         self.project: Project | None = None
-        self.renamed = Signal()
+        self.renamed = Signal()      # name or colour label changed
+
+    @property
+    def tag(self) -> int:
+        """Colour label (0 = none, 1–7)."""
+        return self._tag
+
+    @tag.setter
+    def tag(self, v: int) -> None:
+        v = int(v or 0)
+        if v != self._tag:
+            self._tag = v
+            self.renamed.emit()
 
     @property
     def name(self) -> str:
@@ -283,6 +300,7 @@ class Project:
         self.engine = engine
         self.undo = UndoStack()
         self._touched = False
+        self.label_names: dict[int, str] = {}  # the project's own names for colour labels
         self.structure_changed = Signal()     # sheets added / removed / reordered
         self.analysis_changed = Signal()      # (analysis) recomputed or removed
         self.edited = Signal()                # modified state may have changed
@@ -317,6 +335,9 @@ class Project:
 
     def find(self, sheet_id: str) -> Sheet | None:
         return next((s for s in self.sheets() if s.id == sheet_id), None)
+
+    def label_name(self, k: int) -> str:
+        return self.label_names.get(k) or LABEL_NAMES.get(k, "")
 
     def root_table(self, sheet: Sheet) -> "Table | None":
         """The data table at the top of a sheet's chain (through analysis output tables)."""

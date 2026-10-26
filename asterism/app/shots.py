@@ -390,6 +390,22 @@ def take_shots(app, out: str) -> int:
     pump(10)
     shot(w, "75_function")
 
+    # M9b: colour labels and all graphs at a glance.
+    from ..doc.commands import LabelCommand, LabelNamesCommand
+    p.undo.push(LabelNamesCommand(p, {4: "Final", 2: "To check"}))
+    p.undo.push(LabelCommand([g9b, gmv], 4))
+    p.undo.push(LabelCommand([g10b], 2))
+    p.undo.push(LabelCommand([t9], 5))
+    w.show_overview()
+    w.overview.render_all()
+    pump(10)
+    shot(w, "76_all_graphs")
+    w.show_sheet(g9b)
+    w.sidebar._tag_filter_picked(4)
+    pump(10)
+    shot(w, "77_label_filter")
+    w.sidebar._tag_filter_picked(4)
+
     # Dark mode: a fresh window after switching the app's colour scheme.
     try:
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)

@@ -236,6 +236,9 @@ class CopyFormattingDialog(SectionDialog):
                 continue
             it = QListWidgetItem(g.name + ("" if g.table.table_type == source.table.table_type
                                            else f"  ({g.table.table_type} table)"))
+            if g.tag:
+                from ..widgets import tag_icon
+                it.setIcon(tag_icon(g.tag))
             it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Unchecked)
             it.setData(Qt.UserRole, g)

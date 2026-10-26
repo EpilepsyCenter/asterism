@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QHBoxLayout, 
 
 from ...doc.model import Table, Project
 from .. import theme
+from ..widgets import tag_icon
 from .common import FormGrid, Section, SectionDialog, combo, tab_page
 
 # (section key, title, icon, [(analysis name, key or None, description)])
@@ -135,9 +136,9 @@ class AnalyzeDialog(SectionDialog):
         trow.addWidget(QLabel("Table:"))
         self.table_combo = QComboBox()
         for t in project.tables:
-            self.table_combo.addItem(t.name, t)
+            self.table_combo.addItem(tag_icon(t.tag), t.name, t)
         for t in project.analysis_outputs():           # result tables of transforms etc.
-            self.table_combo.addItem(f"Results: {t.name}", t)
+            self.table_combo.addItem(tag_icon(t.tag), f"Results: {t.name}", t)
         idx = self.table_combo.findData(table)
         self.table_combo.setCurrentIndex(max(idx, 0))
         self.table_combo.currentIndexChanged.connect(self._fill_sets)

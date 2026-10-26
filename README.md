@@ -50,6 +50,9 @@ The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
   drawing tools, text formatting, horizontal and back-to-back bars, bubble plots of
   multiple-variable tables, plotted functions, QQ plots, waffles, and figure overlays and
   drag and drop.
+- **M9b — Finding your way:** done. All graphs at a glance (live thumbnails grouped by table,
+  search, filters, sort, multi-select actions) and Finder-style colour labels on sheets
+  (sidebar dots, a filter strip, nameable labels, shortcuts).
 - **Next — M10:** import (CSV/Excel, `.pzfx`, `.prism`, the lab's importers).
 
 ## Run

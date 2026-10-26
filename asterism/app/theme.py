@@ -79,6 +79,19 @@ def tokens() -> dict:
     return DARK if _state["dark"] else LIGHT
 
 
+# Colour labels 1–7 (red, orange, yellow, green, blue, purple, grey), light and dark mode.
+TAG_COLORS = {
+    1: ("#d73337", "#ff6f69"), 2: ("#e18600", "#fc9f30"), 3: ("#d9ab00", "#f2cd3c"),
+    4: ("#429c5a", "#69c27e"), 5: ("#2f6fd6", "#6ea2ff"), 6: ("#6a53bd", "#9e8afa"),
+    7: ("#8e939b", "#a3a8b0"),
+}
+
+
+def tag_color(k: int) -> QColor:
+    light, dark = TAG_COLORS.get(int(k or 0), ("#00000000", "#00000000"))
+    return QColor(dark if is_dark() else light)
+
+
 def color(name: str) -> QColor:
     v = tokens()[name]
     if isinstance(v, tuple):
@@ -214,6 +227,13 @@ QTreeWidget#NavTree::branch, QTreeWidget#NavTree::branch:selected,
 QTreeWidget#NavTree::branch:hover {{ background: transparent; }}
 QTreeWidget#NavTree::branch:has-children:closed {{ image: url({branch_closed}); }}
 QTreeWidget#NavTree::branch:has-children:open {{ image: url({branch_open}); }}
+
+QPushButton#NavButton {{ text-align: left; border: none; border-radius: 6px; background: transparent;
+                        color: {text}; padding: 3px 5px; min-height: 18px; }}
+QPushButton#NavButton:hover {{ background: {hover}; }}
+QPushButton#NavButton:checked {{ background: {accent}; color: {on_accent}; }}
+QToolButton#TagSwatch {{ padding: 2px; border-radius: 9px; }}
+QToolButton#TagSwatch:checked {{ background: {hover}; border: 1px solid {control_border}; }}
 
 /* Status bar ----------------------------------------------------------------- */
 QStatusBar {{ background: {chrome}; border-top: 1px solid {border}; min-height: 26px; }}

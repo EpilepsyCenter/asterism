@@ -61,6 +61,8 @@ def project_to_dict(p: Project) -> dict:
             "spec": spec_to_dict(g.spec),
         } for g in p.graphs],
         "figures": [{"id": f.id, "name": f.name, **f.state()} for f in p.figures],
+        "labels": {sh.id: sh.tag for sh in [*p.sheets(), *p.analysis_outputs()] if sh.tag},
+        "label_names": {str(k): v for k, v in p.label_names.items() if v},
     }
 
 
@@ -130,6 +132,11 @@ def project_from_dict(d: dict, engine: AnalysisEngine | None = None) -> Project:
             f.page.update(ld["page"])
         f.panels = [dict(pn) for pn in ld.get("panels", [])]
         p.insert(f)
+    labels = d.get("labels") or {}
+    for sh in [*p.sheets(), *p.analysis_outputs()]:
+        if sh.id in labels:
+            sh.tag = int(labels[sh.id])
+    p.label_names = {int(k): v for k, v in (d.get("label_names") or {}).items() if v}
     p.undo.clear()
     p.mark_saved()
     return p

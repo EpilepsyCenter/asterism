@@ -10,6 +10,7 @@ from ...doc.model import LETTER_STYLES, PAGE_SIZES
 from ..graph.layout import GRAPHABLE_TYPES
 from .common import FormGrid, Section, SectionDialog, combo, tab_page
 from .params import _note
+from ..widgets import tag_icon
 
 
 def _mm(v, lo=1.0, hi=2000.0) -> QDoubleSpinBox:
@@ -42,6 +43,9 @@ class AddPanelsDialog(SectionDialog):
             lst = QListWidget()
             for name, data in items:
                 it = QListWidgetItem(name)
+                sh = project.find(data[1])
+                if sh is not None and sh.tag:
+                    it.setIcon(tag_icon(sh.tag))
                 it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
                 it.setCheckState(Qt.Checked if preselect and data[1] in preselect else Qt.Unchecked)
                 it.setData(Qt.UserRole, data)
