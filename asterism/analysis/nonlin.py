@@ -654,10 +654,17 @@ def _interpolate(t, cols, lookup) -> ResultPage:
                 else:
                     txt = "Outside the curve's range"
                 rows.append((f"{column_letter(c)}, row {r + 1}", ["Y → X", fmt(y0), txt], "row"))
-            elif xv is not None and not len(yv):
+            elif xv is not None and not len(yv) and not _any_y(t, r):
                 rows.append((f"{column_letter(c)}, row {r + 1}", ["X → Y", fmt(xv), fmt(float(f_.predict(j, np.array([xv]))[0]))], "row"))
     if not rows:
         rows = [("No unknowns", ["Rows with a Y value but no X (or an X but no Y) are interpolated."], "row")]
     pg = ResultPage("Interpolated", ["Direction", "From", "Interpolated"], rows)
     pg.first_column = "Row"
     return pg
+
+
+def _any_y(t, r: int) -> bool:
+    """Whether any data set has a Y value in this row (then an empty cell isn't an unknown X)."""
+    if t.is_summary():
+        return any(t.summary(r, c) for c in t.used_columns())
+    return any(len(t.row_values(r, c)) for c in t.used_columns())

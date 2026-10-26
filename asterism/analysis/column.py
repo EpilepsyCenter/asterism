@@ -60,7 +60,7 @@ def _ttest(an) -> AnalysisResult:
 
     if design == "paired":
         n = min(len(t.cols[ca]), len(t.cols[cb]))
-        pairs = [(t.get(r, ca), t.get(r, cb)) for r in range(n)]
+        pairs = [(t._ok(r, t.flat(ca)), t._ok(r, t.flat(cb))) for r in range(n)]   # excluded values left out
         pairs = [(a, b) for a, b in pairs if a is not None and b is not None]
         a = np.array([x for x, _ in pairs], float)
         b = np.array([y for _, y in pairs], float)
@@ -192,7 +192,8 @@ def _ttest(an) -> AnalysisResult:
 
     elif test == "ks":
         r = sps.ks_2samp(a, b, method="exact")
-        p_rows(float(r.pvalue), "Exact")
+        tails = 2                          # no direction to predict: always two-sided
+        p_rows(float(r.pvalue), "Exact (two-sided; the one-sided option doesn't apply to this test)")
         rows.append(("D", [f"{r.statistic:.4f}"], "row"))
         rows += _data_analyzed(A, B, len(a), len(b))
 

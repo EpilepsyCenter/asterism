@@ -207,8 +207,10 @@ class NestedParamsDialog(SectionDialog):
         g.add(("Test:", self.method))
         g.add(("Confidence intervals:", self.conf))
         pl.addLayout(g)
-        if ngroups == 2:
-            page.setEnabled(False)
+        if ngroups == 2:                      # one comparison: only the interval's level applies
+            for b in self.g_compare.buttons():
+                b.setEnabled(False)
+            self.method.setEnabled(False)
         self.c_bracket = QCheckBox("Show significant comparisons on the linked graph")
         self.c_bracket.setChecked(p["bracket"])
         pl.addStretch(1)

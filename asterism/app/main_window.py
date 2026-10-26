@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
         """A tool that is not built yet: visible, greyed out, with a tooltip saying when."""
         a = QAction(text, self)
         set_icon(a, sf)
-        a.setToolTip(f"{text.replace('…', '')} — arrives in {milestone}")
+        a.setToolTip(f"{text.replace('…', '')} — not available yet")
         a.setEnabled(False)
         a.setIconVisibleInMenu(False)
         return a
@@ -276,7 +276,11 @@ class MainWindow(QMainWindow):
         for a in (self.a_toggle_sidebar, self.a_toggle_tools):
             a.setCheckable(True)
             a.setChecked(True)
-        self.a_help = A("ASTERISM Help", "questionmark.circle", self._about)
+        self.a_help = A("ASTERISM Help", "questionmark.circle", self.open_help, "Ctrl+?")
+        self.a_help_methods = A("How Results Are Calculated", "function", lambda: self.open_help_page("methods"))
+        self.a_help_shortcuts = A("Keyboard Shortcuts", "keyboard", lambda: self.open_help_page("shortcuts"))
+        self.a_about = A("About ASTERISM", "info.circle", self._about)
+        self.a_about.setMenuRole(QAction.AboutRole)
         self.a_settings = A("Settings…", "gearshape", self.open_settings, "Ctrl+,")
         self.a_settings.setMenuRole(QAction.PreferencesRole)
 
@@ -349,7 +353,7 @@ class MainWindow(QMainWindow):
                         self.a_fig_format])
         menu("View", [self.a_overview, None, self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
-        menu("Help", [self.a_help])
+        menu("Help", [self.a_help, None, self.a_help_methods, self.a_help_shortcuts, None, self.a_about])
 
     def _fill_recent(self) -> None:
         self.recent_menu.clear()
@@ -696,9 +700,9 @@ class MainWindow(QMainWindow):
 
     def open_settings(self) -> None:
         from .dialogs.settings import SettingsDialog
-        if SettingsDialog(self).exec():
-            for w in list(_windows):
-                w.apply_autosave_prefs()
+        SettingsDialog(self).exec()
+        for w in list(_windows) or [self]:       # also after Restore Defaults
+            w.apply_autosave_prefs()
 
     # --- autosave ---------------------------------------------------------------------
 
@@ -1629,6 +1633,25 @@ class MainWindow(QMainWindow):
         self.status.zoom.blockSignals(False)
         self.status.zoom_label.setText(f"{z * 100:.0f}%")
 
+    def open_help(self) -> None:
+        """Help opens where you are: the page for the kind of sheet in front."""
+        from .help_window import show_page
+        show_page(self._help_context())
+
+    def open_help_page(self, slug: str) -> None:
+        from .help_window import show_page
+        show_page(slug)
+
+    def _help_context(self) -> str:
+        from ..doc.model import Analysis, Graph
+        sh = getattr(self, "current", None)
+        name = type(sh).__name__
+        if isinstance(sh, Graph):
+            return "graphs"
+        if isinstance(sh, Analysis):
+            return "analyses"
+        return {"Table": "tables", "FigureSheet": "figures"}.get(name, "start")
+
     def _about(self) -> None:
         from asterism import __version__
         QMessageBox.about(self, APP_NAME, f"<b>{APP_NAME}</b> {__version__}"
@@ -1768,10 +1791,13 @@ def offer_recovery(origin: MainWindow | None = None) -> list[MainWindow]:
 
 def prism_report(parent, path: str, imp) -> None:
     """What came across from a Prism file, and what didn't (never dropped silently)."""
-    n_t, n_a = len(imp.tables), len(imp.analyses)
+    n_t, n_a, n_g = len(imp.tables), len(imp.analyses), len(imp.graphs)
+    parts = [f"{n_t} data table{'s' if n_t != 1 else ''}", f"{n_a} analys{'is' if n_a == 1 else 'es'}"]
+    if n_g:
+        parts.append(f"{n_g} graph{'s' if n_g != 1 else ''} with their formatting")
     box = QMessageBox(QMessageBox.Information, "Prism File Imported",
-                      f"From “{os.path.basename(path)}”: {n_t} data table{'s' if n_t != 1 else ''} and "
-                      f"{n_a} analys{'is' if n_a == 1 else 'es'}.", QMessageBox.Ok, parent)
+                      f"From “{os.path.basename(path)}”: " + ", ".join(parts[:-1]) + " and " + parts[-1] + ".",
+                      QMessageBox.Ok, parent)
     if imp.notes:
         box.setInformativeText("Not carried over:\n• " + "\n• ".join(imp.notes))
     else:

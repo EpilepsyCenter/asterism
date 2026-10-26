@@ -354,8 +354,8 @@ def smooth(an) -> AnalysisResult:
             "integral": "Integral (cumulative area)"}[op]
     info = [("Result", [what], "row")]
     if do_smooth:
-        info.append(("Smoothing", [f"Savitzky-Golay, {k} neighbours on each side, "
-                                   f"{'zero' if order == 0 else 'second'}-order polynomial "
+        method = "Moving average" if order == 0 else "Savitzky-Golay (second-order polynomial)"
+        info.append(("Smoothing", [f"{method}, {k} neighbours on each side "
                                    f"({k} points dropped at each end)"], "row"))
     if op != "smooth":
         info.append(("Note", ["Derivatives use the midpoints between adjacent X values" if "deriv" in op

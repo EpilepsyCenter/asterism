@@ -237,6 +237,10 @@ class OneSampleParamsDialog(SectionDialog):
         g.add(("P value:", self.tails), ("Confidence intervals:", self.conf))
         pl.addLayout(g)
         pl.addStretch(1)
+        # the Wilcoxon test reports no interval
+        sync = lambda *_: self.conf.setEnabled(_key(self.g_test) == "t")
+        self.g_test.buttonToggled.connect(sync)
+        sync()
         self.add_group("Settings")
         self.add_section("test", "Test", page, "function")
         self.show_section("test")

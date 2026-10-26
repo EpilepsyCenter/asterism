@@ -146,6 +146,11 @@ def multiple_t(an) -> AnalysisResult:
         a, b = t.row_values(r, ca), t.row_values(r, cb)
         if not len(a) and not len(b):
             continue
+        if test not in ("student", "welch", "mw"):          # paired: replicate k with replicate k
+            pairs = [(t._ok(r, t.flat(ca, k)), t._ok(r, t.flat(cb, k))) for k in range(t.width())]
+            pairs = [(x, y) for x, y in pairs if x is not None and y is not None]
+            a = np.array([x for x, _ in pairs], float)
+            b = np.array([y for _, y in pairs], float)
         try:
             results.append(row_test(a, b, test))
             rows.append(r)

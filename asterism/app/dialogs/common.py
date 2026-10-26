@@ -131,8 +131,12 @@ class HelpButton(QToolButton):
         self.setObjectName("HelpButton")
         self.setFixedSize(20, 20)
         self.setToolTip("Help")
-        self.clicked.connect(lambda: QMessageBox.information(
-            self, "Help", f"Help for “{topic}” will live here."))
+        self.topic = topic
+        self.clicked.connect(self._open)
+
+    def _open(self) -> None:
+        from ..help_window import show_topic
+        show_topic(self.topic)
 
 
 def combo(items: list[tuple[str, object]], current=None) -> QComboBox:

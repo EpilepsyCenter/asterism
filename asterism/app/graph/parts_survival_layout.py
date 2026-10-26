@@ -194,10 +194,14 @@ def build_survival(graph) -> tuple[list[Element], AxisRange]:
     scale = 100.0 if spec.surv_percent else 1.0
     death = spec.surv_death
     curves = {}
+    # the event/censored codes (and interval settings) of the table's survival analysis, if any
+    sa = next((a for a in graph.analyses() if a.kind == "survival"), None)
+    sp = sa.params if sa is not None else {}
+    ev_code, ce_code = sp.get("event_code", 1), sp.get("censor_code", 0)
     for c in cols:
-        tm, ev = subjects(t, c)
+        tm, ev = subjects(t, c, ev_code, ce_code)
         if len(tm):
-            curves[c] = (km(tm, ev), tm, ev)
+            curves[c] = (km(tm, ev, sp.get("conf", 0.95), sp.get("ci", "loglog")), tm, ev)
     xmax = max([float(v[1].max()) for v in curves.values()] or [1.0])
     xr = x_range(spec, [0.0, xmax])
     xm = XMap(spec.x, xr, pw)

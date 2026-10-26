@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M10 and M11a done; M11 (help, packaging, Windows) last.** The Qt spike (M0) passed on
+Status: **M1–M10, M11a and M11b (help) done; packaging and Windows last.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -817,6 +817,15 @@ curves the template volume is greyed out unless quantities are reported per µL 
   Checked against the lab's PNG exports of Seizure_data and Ephys_summary. Each Prism graph
   becomes an ASTERISM graph of its table (tables without one get a default graph). Not yet:
   fonts, axis gaps, extra lines (e.g. a dotted line at 0), free text placement.
+
+**M11b — Help (done 2026-10-26):** built-in help window (Help › ASTERISM Help, ⌘?): 14 Markdown
+pages in `asterism/help/pages/` shipped with the app (offline, matching the installed version),
+rendered by a small converter in `asterism/help/__init__.py`; contents, full-text search,
+back/forward; every dialog's ? button opens its section (`help.TOPICS`, checked by
+tests/test_help.py, which also checks every link); Keyboard Shortcuts is generated from the live
+menus; How Results Are Calculated documents the methods. Pages are written from the code; when
+behaviour changes, update the page (the help tests catch broken anchors, not stale text).
+Packaging must include `asterism/help/pages/*.md`.
 
 **M11 — Product:** autosave and recovery, preferences, help, Windows icon set, packaging,
 signing, file associations, sample projects.

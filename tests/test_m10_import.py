@@ -218,7 +218,7 @@ def test_prism_file_tables_exclusions_and_analyses():
     assert len(imp.tables) == 37 and len(imp.analyses) == 26 and len(imp.infos) == 1
     assert all(isinstance(x, str) for t in imp.tables for x in t.titles)
     assert sum(len(t.excluded) for t in imp.tables) == 204
-    assert any("graph" in n for n in imp.notes)
+    assert not any("graph" in n for n in imp.notes) and any("layout" in n for n in imp.notes)
     p = Project(engine)
     into_project(imp, p)
     assert not [a for a in p.analyses if a.result is None or a.result.error]

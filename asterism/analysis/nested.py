@@ -87,7 +87,8 @@ def nested(an) -> AnalysisResult:
         se = math.sqrt(cov[1, 1])
         tv = diff / se
         pv = float(2 * sps.t.sf(abs(tv), df_fixed))
-        tc = sps.t.ppf(0.975, df_fixed)
+        conf = float(p.get("conf", 0.95))
+        tc = sps.t.ppf(0.5 + conf / 2, df_fixed)
         rows += [("Nested t test", [], "section"),
                  ("t", [f"{abs(tv):.4g}"], "row"), ("Degrees of freedom", [str(df_fixed)], "row"),
                  ("P value", [fmt_p(pv)], "row"), ("Significance", [p_summary(pv)], "row"),
@@ -96,7 +97,7 @@ def nested(an) -> AnalysisResult:
                  (f"Mean, {letters[0]}", [fmt(means[0])], "row"), (f"Mean, {letters[1]}", [fmt(means[1])], "row"),
                  (f"Difference ({letters[1]} − {letters[0]})", [fmt(diff)], "row"),
                  ("Standard error of the difference", [fmt(se)], "row"),
-                 ("95% CI of the difference", [f"{fmt(diff - tc * se)} to {fmt(diff + tc * se)}"], "row")]
+                 (f"{100 * conf:g}% CI of the difference", [f"{fmt(diff - tc * se)} to {fmt(diff + tc * se)}"], "row")]
         res.p = pv
         res.comparisons = [(cols[0], cols[1], pv)]
         name = "Nested t test"
@@ -138,7 +139,7 @@ def nested(an) -> AnalysisResult:
             crow.append((c_["label"], [fmt(c_["diff"]), ci, "Yes" if c_["p"] < 0.05 else "No",
                                        p_summary(c_["p"]), fmt_p(c_["p"])], "row"))
             res.comparisons.append((cols[i], cols[j], c_["p"]))
-        cp = ResultPage("Comparisons", ["Mean difference", "95% CI of difference", "Significant?",
+        cp = ResultPage("Comparisons", ["Mean difference", f"{100 * p.get('conf', 0.95):g}% CI of difference", "Significant?",
                                         "Significance", "Adjusted P"], crow)
         cp.first_column = "Comparison"
         pages.append(cp)

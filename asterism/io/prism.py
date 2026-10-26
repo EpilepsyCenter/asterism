@@ -190,13 +190,9 @@ def read_prism(path: Path) -> PrismImport:
                     failed += 1
             out.graphs.append((table, _plain(gs.get("title"), table.name), gf, cols))
         nl = len(sheets.get("layouts", []))
-        if out.graphs:
-            out.notes.append(f"{len(out.graphs)} graph{'s' if len(out.graphs) != 1 else ''}: titles, axis titles, axis "
-                             "ranges, tick intervals, log scales, the data sets shown, bars or points, colours, "
-                             "symbols, error bars, dashed lines and legends come across; fonts don't yet.")
         if unmatched:
-            out.notes.append(f"{unmatched} graph{'s' if unmatched != 1 else ''} of analysis results: ASTERISM's own "
-                             "graphs of those results are used.")
+            out.notes.append(f"{unmatched} graph{'s' if unmatched != 1 else ''} of analysis results (Prism's "
+                             "formatting of those isn't read; ASTERISM's own graphs of the results are used).")
         if failed:
             out.notes.append(f"{failed} graph{'s' if failed != 1 else ''} couldn't be read.")
         if nl:

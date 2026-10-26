@@ -417,7 +417,7 @@ class TTestParamsDialog(SectionDialog):
             c = QCheckBox(s)
             c.setEnabled(False)
             pl.addWidget(c)
-        note = QLabel("Residual diagnostics arrive with the column analyses (M3).")
+        note = QLabel("Residual diagnostics aren't available for t tests yet.")
         note.setEnabled(False)
         pl.addWidget(note)
         pl.addStretch(1)

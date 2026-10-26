@@ -372,7 +372,7 @@ def _interpolate_page(t, cols, fits, conf) -> ResultPage:
                 lo, hi = x_at_y_ci(f, y0)
                 rows.append((f"{column_letter(c)}, row {r + 1}", ["Y → X", fmt(y0), fmt(x_),
                                                                  f"{fmt(lo)} to {fmt(hi)}"], "row"))
-            elif xv is not None and not len(yv) and t.get(r, "x") is not None and t.table_type == "xy":
+            elif xv is not None and not len(yv) and not _any_y(t, r) and t.get(r, "x") is not None and t.table_type == "xy":
                 y_ = f["intercept"] + f["slope"] * xv
                 lo, hi = band(f, np.array([xv]))
                 rows.append((f"{column_letter(c)}, row {r + 1}", ["X → Y", fmt(xv), fmt(y_),
@@ -619,3 +619,10 @@ def area_under_curve(an) -> AnalysisResult:
         pages.append(pg)
     res.pages = pages
     return res
+
+
+def _any_y(t, r: int) -> bool:
+    """Whether any data set has a Y value in this row (then an empty cell isn't an unknown X)."""
+    if t.is_summary():
+        return any(t.summary(r, c) for c in t.used_columns())
+    return any(len(t.row_values(r, c)) for c in t.used_columns())

@@ -178,5 +178,8 @@ class SettingsDialog(SectionDialog):
         super().accept()
 
     def _reset(self) -> None:
+        from .. import documents
+        from .start import SHOW_KEY
         prefs.reset()
+        documents.set_value(SHOW_KEY, True)
         self.reject()

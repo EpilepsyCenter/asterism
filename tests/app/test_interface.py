@@ -57,7 +57,7 @@ def test_tools_follow_the_current_sheet(win):
     win.show_sheet(g)
     assert win.a_fmt_graph.isEnabled() and not win.a_paste.isEnabled()
     assert win.font_family.isEnabled()
-    assert not win.a_print.isEnabled() and "arrives in" in win.a_print.toolTip()
+    assert not win.a_print.isEnabled() and "not available yet" in win.a_print.toolTip()
 
 
 def test_rename_from_the_top_bar_title(win):
