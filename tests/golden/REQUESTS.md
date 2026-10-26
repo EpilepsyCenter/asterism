@@ -67,3 +67,13 @@ Fisher's exact test already matches Prism on the lab's data; the methods below m
 3. Save as `.prism` into `sample_data/` and send; the harvester will be extended for
    SURVIVAL_ANALYSIS and the contingency effect sizes (especially the Baptista-Pike odds
    ratio interval, which has no reference implementation outside Prism).
+
+## QQ plot (M9)
+
+Prism's guide says the QQ plot puts the actual values on X and the values predicted from a
+Gaussian on Y, but not which plotting positions it uses. ASTERISM uses Blom's
+(i − 3/8)/(n + 1/4), scaled by the data's mean and SD.
+1. In any column table (e.g. "Dose response"), run Normality and lognormality tests with
+   "Create a QQ plot" ticked.
+2. Save as `.prism` into `sample_data/` and send; the predicted values in Prism's QQ results
+   table will show the formula (Blom, (i − 0.5)/n, or another).

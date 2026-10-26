@@ -35,6 +35,8 @@ COLUMN_PRESETS = [
     ("floating", "Floating bars (min to max)", S(appearance="floating", line_at="mean", show_points=False, bars=True)),
     ("aligned", "Aligned dots, median", S(appearance="scatter", line_at="median", show_points=True, bars=False, errors=False, spread="aligned")),
     ("before_after", "Before-after", S(appearance="scatter", line_at="none", show_points=True, bars=False, errors=False, spread="aligned")),
+    ("h_bar_sd", "Horizontal bars, mean ± SD", S(appearance="bar", line_at="mean_sd", show_points=False, bars=True, errors=True)),
+    ("h_scatter_bar", "Horizontal bars with points", S(appearance="scatter", line_at="mean_sem", show_points=True, bars=True, errors=True, spread="swarm")),
 ]
 
 
@@ -57,7 +59,10 @@ GROUPED_PRESETS = [
     ("g_stacked_pct", "Stacked bars to 100%", S(BAR, errors=False), S(grouped_layout="stacked_pct")),
     ("g_lines", "Connected means ± SEM",
      S(appearance="symbol", line_at="mean_sem", errors=True, bars=False, show_points=False),
-     S(grouped_layout="lines")),
+     S(grouped_layout="lines", lines_points=False)),
+    ("g_lines_reps", "Each replicate, with connected means",
+     S(appearance="symbol", line_at="mean", errors=False, bars=False, show_points=True),
+     S(grouped_layout="lines", lines_points=True)),
     ("g_heat", "Heat map", S(), S(grouped_layout="heatmap")),
 ]
 DOT = S(appearance="scatter", line_at="mean_sem", show_points=True, bars=False, errors=True, spread="swarm")
@@ -93,20 +98,39 @@ PARTS_PRESETS = [
     ("p_pie", "Pie chart", S(), S(parts_layout="pie")),
     ("p_donut", "Donut chart", S(), S(parts_layout="donut")),
     ("p_stack", "Bar stacked to 100%", S(), S(parts_layout="stacked100")),
+    ("p_waffle", "Percentage dot plot", S(), S(parts_layout="waffle")),
 ]
 SURV_PRESETS = [
     ("s_steps", "Survival curves with censoring ticks", S(), S(surv_ci="none", surv_death=False, surv_ticks=True)),
     ("s_dashed", "With confidence bands (dashed)", S(), S(surv_ci="dashed", surv_death=False)),
     ("s_shaded", "With confidence bands (shaded)", S(), S(surv_ci="shaded", surv_death=False)),
+    ("s_bars", "With confidence intervals as error bars", S(), S(surv_ci="bars", surv_death=False)),
     ("s_death", "Cumulative deaths", S(), S(surv_ci="none", surv_death=True)),
 ]
-PRESETS = {"column": [(k, n, f, S(connect_rows=k == "before_after")) for k, n, f in COLUMN_PRESETS],
+MV_PRESETS = [
+    ("mv_scatter", "Scatter of two variables", S(appearance="scatter"),
+     S(mv={"size": None, "color": None, "labels": False})),
+    ("mv_bubble", "Bubble plot (a third variable as size)", S(), S(mv={"size": "auto", "color": None})),
+    ("mv_colour", "Coloured by a variable", S(), S(mv={"size": None, "color": "auto"})),
+    ("mv_bubble_colour", "Bubbles sized and coloured by variables", S(), S(mv={"size": "auto", "color": "auto"})),
+    ("mv_labels", "Points labelled with row titles", S(), S(mv={"labels": True})),
+]
+GROUPED_PRESETS = [(k, n, f, {**g, "horizontal": k.startswith("gh_") or k == "g_pyramid"})
+                   for k, n, f, g in GROUPED_PRESETS + [
+    ("gh_bars", "Horizontal bars side by side", BAR, S(grouped_layout="interleaved")),
+    ("gh_stacked", "Horizontal stacked bars", S(BAR, line_at="mean_sem"), S(grouped_layout="stacked")),
+    ("g_pyramid", "Bars extending left and right", S(BAR, show_points=False), S(grouped_layout="pyramid")),
+]]
+PRESETS = {"column": [(k, n, f, S(connect_rows=k == "before_after", horizontal=k.startswith("h_")))
+                      for k, n, f in COLUMN_PRESETS],
            "grouped": GROUPED_PRESETS, "nested": NESTED_PRESETS, "xy": XY_PRESETS,
-           "contingency": CONT_PRESETS, "parts": PARTS_PRESETS, "survival": SURV_PRESETS}
+           "contingency": CONT_PRESETS, "parts": PARTS_PRESETS, "survival": SURV_PRESETS,
+           "multivar": MV_PRESETS}
 SECTIONS = {"column": ("Column graphs", "chart.bar"), "grouped": ("Grouped graphs", "square.grid.3x2"),
             "nested": ("Nested graphs", "square.stack.3d.down.right"),
             "xy": ("XY graphs", "chart.xyaxis.line"), "contingency": ("Contingency graphs", "tablecells"),
-            "parts": ("Parts of whole", "chart.pie"), "survival": ("Survival graphs", "waveform.path.ecg")}
+            "parts": ("Parts of whole", "chart.pie"), "survival": ("Survival graphs", "waveform.path.ecg"),
+            "multivar": ("Multiple-variable graphs", "circle.hexagongrid")}
 
 
 def apply_preset(spec: GraphSpec, key: str, columns: list[int]) -> GraphSpec:
@@ -116,7 +140,10 @@ def apply_preset(spec: GraphSpec, key: str, columns: list[int]) -> GraphSpec:
         for f, v in fields.items():
             setattr(st, f, v)
     for f, v in graph_fields.items():
-        setattr(new, f, v)
+        if f == "mv":
+            new.mv = {**new.mv, **v}
+        else:
+            setattr(new, f, v)
     return new
 
 
@@ -188,3 +215,47 @@ class GraphTypeDialog(SectionDialog):
             new = apply_preset(self.graph.spec, key, self.cols)
             self.project.undo.push(SpecCommand(self.graph, new, "Change Graph Type"))
         super().accept()
+
+
+# ---------------------------------------------------------------------------
+# Applying formatting from one graph to others
+# ---------------------------------------------------------------------------
+
+class CopyFormattingDialog(SectionDialog):
+    def __init__(self, source, project, parent=None):
+        from PySide6.QtWidgets import QCheckBox
+        from ..graph.formatting import ASPECTS
+        from ..graph.layout import GRAPHABLE_TYPES
+        super().__init__("Apply Formatting to Other Graphs", "Graph formatting", parent)
+        self.source, self.project = source, project
+        self.add_group("Apply")
+        page, pl = tab_page()
+        self.targets = QListWidget()
+        for g in project.graphs:
+            if g is source or g.table.table_type not in GRAPHABLE_TYPES:
+                continue
+            it = QListWidgetItem(g.name + ("" if g.table.table_type == source.table.table_type
+                                           else f"  ({g.table.table_type} table)"))
+            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Unchecked)
+            it.setData(Qt.UserRole, g)
+            self.targets.addItem(it)
+        pl.addWidget(self.targets, 1)
+        self.add_section("graphs", "To these graphs", page, "chart.xyaxis.line")
+        page, pl = tab_page()
+        self.aspects = {}
+        for key, text in ASPECTS.items():
+            c = QCheckBox(text)
+            c.setChecked(key not in ("ranges",))
+            pl.addWidget(c)
+            self.aspects[key] = c
+        pl.addStretch(1)
+        self.add_section("what", "What to copy", page, "paintbrush")
+        self.ok.setText("Apply")
+        self.show_section("graphs")
+        self.resize(720, 460)
+
+    def chosen(self) -> tuple[list, set[str]]:
+        gs = [self.targets.item(i).data(Qt.UserRole) for i in range(self.targets.count())
+              if self.targets.item(i).checkState() == Qt.Checked]
+        return gs, {k for k, c in self.aspects.items() if c.isChecked()}

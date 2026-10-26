@@ -197,24 +197,46 @@ class MainWindow(QMainWindow):
         self.a_axes = A("Axes…", "ruler", lambda: self.format_graph("y"), kinds=G)
         self.a_bracket = A("Show Significance", "asterisk", self._toggle_brackets, kinds=G)
         self.a_graph_type = A("Graph Type…", "square.grid.3x3.square", self.graph_type, kinds=G)
+        self.a_scheme = A("Colour Scheme", "paintpalette", self.colour_scheme_menu, kinds=G)
+        self.a_copy_format = A("Apply Formatting to Other Graphs…", "wand.and.rays", self.copy_formatting, kinds=G)
+        self.a_legend = A("Show or Hide Legend", "list.bullet.rectangle", self._toggle_legend, kinds=G)
+        self.a_function = A("Plot a Function…", "function", self.plot_function, kinds=G,
+                            tip="Draw a curve from an equation on an XY graph")
+        self.a_nudge = A("Nudge Data Set…", "arrow.up.and.down.and.arrow.left.and.right", self._nudge, kinds=G,
+                         tip="Shift a data set sideways (or up, on XY graphs): select it and use the arrow keys")
         graph_later = [self.a_graph_type,
-                       L("Colour Scheme", "paintpalette", "M9"),
-                       L("Copy Formatting to Other Graphs", "wand.and.rays", "M9"),
-                       L("Legend", "list.bullet.rectangle", "M4"),
-                       L("Nudge Data Set", "arrow.up.and.down.and.arrow.left.and.right", "M9")]
+                       self.a_scheme, self.a_copy_format,
+                       self.a_legend, self.a_nudge, self.a_function]
         # Draw (M9)
-        draw = [L("Line", "line.diagonal", "M9"), L("Arrow", "arrow.up.right", "M9"),
-                L("Box", "rectangle", "M9"), L("Ellipse", "circle", "M9"), L("Text", "textbox", "M9"),
-                L("Picture…", "photo", "M9"), L("Bring to Front", "square.3.layers.3d", "M9"),
-                L("Align", "align.horizontal.center", "M9")]
+        self.draw_tools = {}
+        for kind, text, icon_ in (("line", "Line", "line.diagonal"), ("arrow", "Arrow", "arrow.up.right"),
+                                  ("rect", "Box", "rectangle"), ("ellipse", "Ellipse", "circle"),
+                                  ("text", "Text", "textbox")):
+            a = A(text, icon_, lambda on=False, k=kind: self._draw_tool(k, on), kinds=G,
+                  tip=f"Draw {text.lower()} on the graph (Shift keeps lines at 45°, boxes square; Esc cancels)")
+            a.setCheckable(True)
+            self.draw_tools[kind] = a
+        self.a_picture = A("Picture…", "photo", self.add_picture, kinds=G)
+        self.a_draw_front = A("Bring to Front", "square.3.layers.3d.top.filled", lambda: self._drawing_op("front"), kinds=G)
+        self.a_draw_back = A("Send to Back", "square.3.layers.3d.bottom.filled", lambda: self._drawing_op("back"), kinds=G)
+        self.a_draw_align = A("Align Drawings", "align.horizontal.center", self._align_menu, kinds=G)
+        draw = [*self.draw_tools.values(), self.a_picture, self.a_draw_front, self.a_draw_align]
         # Text
         self.a_bold = A("Bold", "bold", lambda: self._font(bold=None), QKeySequence.Bold, kinds=G)
         self.a_italic = A("Italic", "italic", lambda: self._font(italic=None), QKeySequence.Italic, kinds=G)
-        text_later = [L("Underline", "underline", "M9"), L("Superscript", "textformat.superscript", "M9"),
-                      L("Subscript", "textformat.subscript", "M9"),
-                      L("Symbol (Greek, ±, µ…)", "character", "M9"), L("Text Colour", "textformat.alt", "M9"),
-                      L("Align Left", "text.alignleft", "M9"), L("Centre", "text.aligncenter", "M9"),
-                      L("Align Right", "text.alignright", "M9")]
+        self.a_underline = A("Underline", "underline", lambda: self._font(underline=None), QKeySequence.Underline,
+                             kinds=G)
+        self.a_sup = A("Superscript", "textformat.superscript", lambda: self._script("sup"), "Ctrl+Shift+=", kinds=G,
+                       tip="Superscript the selected characters (while editing a text)")
+        self.a_sub = A("Subscript", "textformat.subscript", lambda: self._script("sub"), "Ctrl+=", kinds=G,
+                       tip="Subscript the selected characters (while editing a text)")
+        self.a_symbol = A("Symbol (Greek, ±, µ…)", "character", self._symbol_menu, kinds=G)
+        self.a_text_color = A("Text Colour…", "textformat.alt", self._text_colour, kinds=G)
+        self.a_text_left = A("Align Left", "text.alignleft", lambda: self._align_text("left"), kinds=G)
+        self.a_text_center = A("Centre", "text.aligncenter", lambda: self._align_text("center"), kinds=G)
+        self.a_text_right = A("Align Right", "text.alignright", lambda: self._align_text("right"), kinds=G)
+        text_later = [self.a_underline, self.a_sup, self.a_sub, self.a_symbol, self.a_text_color,
+                      self.a_text_left, self.a_text_center, self.a_text_right]
         # View
         self.a_toggle_sidebar = A("Show Project Sidebar", "sidebar.left", self._toggle_sidebar, "Ctrl+Meta+S", "muted")
         self.a_toggle_tools = A("Show Tools", "sidebar.right", self._toggle_tools, "Ctrl+Alt+0", "muted")
@@ -275,7 +297,14 @@ class MainWindow(QMainWindow):
                          self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
                          self.a_corr, self.a_auc, None, self.a_cont, self.a_surv, self.a_frac, None,
                          self.a_transform, self.a_normalize])
-        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket, None, self.a_add_to_figure])
+        self.scheme_menu = QMenu("Colour Scheme", self)
+        self.scheme_menu.aboutToShow.connect(lambda: self._fill_scheme_menu(self.scheme_menu))
+        self.draw_menu = QMenu("Draw", self)
+        for a in [*self.draw_tools.values(), None, self.a_picture, None, self.a_draw_front, self.a_draw_back,
+                  self.a_draw_align]:
+            self.draw_menu.addSeparator() if a is None else self.draw_menu.addAction(a)
+        menu("Graph", [self.a_fmt_graph, self.a_graph_type, self.a_axes, self.a_bracket, None, self.scheme_menu,
+                       self.a_copy_format, None, self.a_function, self.draw_menu, None, self.a_add_to_figure])
         menu("Figure", [self.a_fig_add, self.a_fig_text, None, self.a_fig_grid, self.a_fig_left, self.a_fig_top,
                         self.a_fig_hc, self.a_fig_width, None, self.a_fig_front, self.a_fig_back, None,
                         self.a_fig_format])
@@ -545,6 +574,7 @@ class MainWindow(QMainWindow):
                 w.formatAxesRequested.connect(lambda section: self.format_graph(section))
                 w.selectionChanged.connect(self._sync_text_controls)
                 w.view.zoomChanged.connect(self._zoom_changed)
+                w.toolFinished.connect(self._tools_off)
             elif isinstance(s, Analysis):
                 w = ResultsSheet(s)
             elif isinstance(s, InfoSheet):
@@ -586,18 +616,23 @@ class MainWindow(QMainWindow):
                        and a.result.fit.get("kind") in ("line", "curve") for a in s.analyses()):
                     kind += " with fitted curve"
             elif s.table.table_type == "parts":
-                kind = {"pie": "pie chart", "donut": "donut chart", "stacked100": "bar stacked to 100%"}.get(
-                    s.spec.parts_layout, "pie chart")
+                kind = {"pie": "pie chart", "donut": "donut chart", "stacked100": "bar stacked to 100%",
+                        "waffle": "percentage dot plot"}.get(s.spec.parts_layout, "pie chart")
+            elif s.table.table_type == "multivar":
+                kind = "bubble plot" if s.spec.mv.get("size") is not None else "scatter of variables"
             elif s.table.table_type == "survival":
                 kind = "cumulative deaths" if s.spec.surv_death else "survival curves"
             elif s.table.table_type in ("grouped", "contingency"):
                 lay = s.spec.grouped_layout
                 kind = {"interleaved": f"{kind}, side by side", "separated": f"{kind}, separated",
                         "stacked": "stacked bars", "stacked_pct": "stacked bars to 100%",
-                        "lines": "connected means", "heatmap": "heat map"}.get(lay, kind)
+                        "lines": "connected means", "heatmap": "heat map",
+                        "pyramid": "bars extending both ways"}.get(lay, kind)
             elif s.table.table_type == "nested":
                 kind = {"subjects": "subjects side by side", "pooled": "values coloured by subject",
                         "superplot": "SuperPlot"}.get(s.spec.nested_layout, kind)
+            if s.spec.horizontal and s.table.table_type in ("column", "grouped", "contingency", "nested"):
+                kind = "horizontal " + kind
             return f"Graph · {kind} · {len(cols)} data set{'s' if len(cols) != 1 else ''}"
         if isinstance(s, Analysis):
             return f"Results · from “{s.table.name}”"
@@ -612,6 +647,10 @@ class MainWindow(QMainWindow):
         return "Figure"
 
     def show_sheet(self, s: Sheet) -> None:
+        prev = self.stack.currentWidget()
+        if isinstance(prev, GraphSheet) and prev.tool:
+            prev.set_tool(None)
+        self._tools_off()
         w = self._widget_for(s)
         self.stack.setCurrentWidget(w)
         self.current = s
@@ -779,7 +818,7 @@ class MainWindow(QMainWindow):
     def _result_graph(self, a: Analysis) -> None:
         """Analyses whose output is itself graphed (frequency distributions) get a graph."""
         if a.has_output() and not a.result.error and (a.analysis_type in OUTPUT_GRAPHED or
-                                                      a.params.get("residual_plot")):
+                                                      a.params.get("residual_plot") or a.params.get("qq")):
             self.project.add_sheets([self.project.new_result_graph(a)], "New Graph")
 
     def change_params(self) -> None:
@@ -806,6 +845,71 @@ class MainWindow(QMainWindow):
                 self.show_sheet(g)
             GraphTypeDialog(g, self.project, self).exec()
             self._edited()
+
+    def _fill_scheme_menu(self, m: QMenu) -> None:
+        from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+        from .graph.formatting import SCHEMES
+        m.clear()
+        for key, (name, pairs) in SCHEMES.items():
+            pm = QPixmap(64, 14)
+            pm.fill(QColor(0, 0, 0, 0))
+            p = QPainter(pm)
+            for i, (fill, ink) in enumerate(pairs[:6]):
+                p.fillRect(i * 10 + 1, 1, 9, 12, QColor(ink if fill.lower() in ("#ffffff",) else fill))
+            p.end()
+            m.addAction(QIcon(pm), name, lambda k=key: self.apply_scheme(k))
+
+    def colour_scheme_menu(self) -> None:
+        from PySide6.QtGui import QCursor
+        m = QMenu(self)
+        self._fill_scheme_menu(m)
+        m.exec(QCursor.pos())
+
+    def apply_scheme(self, key: str) -> None:
+        g, _ = self._family_graph()
+        if g is None:
+            return
+        from .graph.formatting import SCHEMES, apply_scheme
+        cols = [c for c in g.table.used_columns() if c not in g.spec.hidden]
+        self.project.undo.push(SpecCommand(g, apply_scheme(g.spec, key, cols), f"Colours: {SCHEMES[key][0]}"))
+
+    def copy_formatting(self) -> None:
+        g, _ = self._family_graph()
+        if g is None:
+            return
+        from ..doc.undo import Macro
+        from .dialogs.graph_type import CopyFormattingDialog
+        from .graph.formatting import copy_formatting
+        d = CopyFormattingDialog(g, self.project, self)
+        if d.exec():
+            targets, aspects = d.chosen()
+            if targets and aspects:
+                cmds = [SpecCommand(t, copy_formatting(g, t, aspects), "Format") for t in targets]
+                self.project.undo.push(Macro(f"Apply Formatting to {len(cmds)} Graph{'s' if len(cmds) != 1 else ''}", cmds))
+
+    def plot_function(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        if w.graph.table.table_type != "xy":
+            QMessageBox.information(self, "Plot a Function", "Functions are plotted on graphs of XY tables.")
+            return
+        w.edit_function(None)
+
+    def _toggle_legend(self) -> None:
+        g, _ = self._family_graph()
+        if g is None:
+            return
+        spec = copy.deepcopy(g.spec)
+        spec.show_legend = not spec.show_legend
+        self.project.undo.push(SpecCommand(g, spec, "Show Legend" if spec.show_legend else "Hide Legend"))
+
+    def _nudge(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        cols = [e.meta["column"] for e in w.selected_elements() if e.kind in ("dataset", "curve")]
+        self.format_graph("style", cols[0] if cols else None)
 
     def _toggle_brackets(self) -> None:
         g, _ = self._family_graph()
@@ -1045,16 +1149,106 @@ class MainWindow(QMainWindow):
             m.addSeparator() if a is None else m.addAction(a)
         m.exec(w.viewport().mapToGlobal(pos))
 
+    # --- drawing on graphs -----------------------------------------------------------
+
+    def _draw_tool(self, kind: str, on: bool) -> None:
+        w = self.stack.currentWidget()
+        for k, a in self.draw_tools.items():
+            if k != kind:
+                a.setChecked(False)
+        if isinstance(w, GraphSheet):
+            w.set_tool(kind if on else None)
+            w.view.setFocus()
+
+    def _tools_off(self) -> None:
+        for a in self.draw_tools.values():
+            a.setChecked(False)
+
+    def add_picture(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        from PySide6.QtWidgets import QFileDialog
+        from .graph.drawings import image_drawing
+        path, _ = QFileDialog.getOpenFileName(self, "Add Picture", "", "Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp *.gif)")
+        if not path:
+            return
+        c = w.plot_center()
+        d = image_drawing(path, c.x() - 60, c.y() - 40)
+        if d is None:
+            QMessageBox.warning(self, "Add Picture", "That file couldn't be read as an image.")
+            return
+        w.add_drawing(d, "Add Picture")
+
+    def _drawing_op(self, op: str) -> None:
+        w = self.stack.currentWidget()
+        if isinstance(w, GraphSheet):
+            w.restack_drawings(op == "front")
+
+    def _align_menu(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        from PySide6.QtGui import QCursor
+        from .graph.view import ALIGN
+        m = QMenu(self)
+        enough = len(w.selected_drawings()) > 1
+        for key, text in ALIGN:
+            a = m.addAction(text, lambda k=key: w.align_drawings(k))
+            a.setEnabled(enough)
+        if not enough:
+            m.addSeparator()
+            m.addAction("Select two or more drawings first").setEnabled(False)
+        m.exec(QCursor.pos())
+
     def _font(self, **changes) -> None:
         w = self.stack.currentWidget()
         if not isinstance(w, GraphSheet):
             return
         fs = w.current_font()
-        if "bold" in changes and changes["bold"] is None:
-            changes["bold"] = not fs.bold
-        if "italic" in changes and changes["italic"] is None:
-            changes["italic"] = not fs.italic
+        for k in ("bold", "italic", "underline"):
+            if k in changes and changes[k] is None:
+                changes[k] = not getattr(fs, k, False)
         w.apply_font(**changes)
+
+    def _script(self, kind: str) -> None:
+        w = self.stack.currentWidget()
+        if isinstance(w, GraphSheet) and not w.script_selection(kind):
+            self.statusBar().showMessage("Double-click a text, select characters, then choose "
+                                         + ("Superscript." if kind == "sup" else "Subscript."), 4000)
+
+    def _symbol_menu(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        from PySide6.QtGui import QCursor
+        from .graph.drawings import SYMBOLS
+        editor_open = w._editing is not None
+        m = QMenu(self)
+        for title, chars in SYMBOLS:
+            sm = m.addMenu(title)
+            for ch in chars.split():
+                sm.addAction(ch, lambda c=ch: w.insert_text(c) or self.statusBar().showMessage(
+                    "Select a text on the graph first.", 4000))
+        m.exec(QCursor.pos())
+        if editor_open and w._editing:
+            w._editing[0].setFocus()
+
+    def _text_colour(self) -> None:
+        w = self.stack.currentWidget()
+        if not isinstance(w, GraphSheet):
+            return
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QColorDialog
+        fs = w.current_font()
+        c = QColorDialog.getColor(QColor(getattr(fs, "color", "") or "#000000"), self, "Text Colour")
+        if c.isValid():
+            w.apply_font(color=c.name())
+
+    def _align_text(self, how: str) -> None:
+        w = self.stack.currentWidget()
+        if isinstance(w, GraphSheet):
+            w.align_text(how)
 
     def _sync_text_controls(self) -> None:
         w = self.stack.currentWidget()

@@ -156,7 +156,9 @@ def build_figure(fig, project) -> tuple[QRectF, list[FigElement]]:
                     e.draw(cv)
                     cv.end_group()
                 cv.end_group()
-            elements.append(FigElement(panel["id"], "graph", panel["id"], rect, draw, {"ref": panel["ref"]}))
+            elements.append(FigElement(panel["id"], "graph", panel["id"], rect, draw,
+                                       {"ref": panel["ref"], "origin": (dx, dy), "bounds": (b.x(), b.y()),
+                                        "scale": sc}))
         elif kind in ("table", "results"):
             data = _table_rows(project, panel)
             if data is None:

@@ -122,7 +122,16 @@ def test_start_screen_replaces_the_empty_project(app, close_later, monkeypatch):
     assert len(w.project.graphs) == 1 and not w.project.is_modified()
 
 
-def test_graph_placeholder_for_types_without_graphs_yet(app, close_later):
+@pytest.fixture
+def no_multivar_graphs():
+    """Every table type has graphs now; pretend one doesn't, to exercise the placeholder."""
+    from asterism.app.graph.layout import GRAPHABLE_TYPES
+    GRAPHABLE_TYPES.discard("multivar")
+    yield
+    GRAPHABLE_TYPES.add("multivar")
+
+
+def test_graph_placeholder_for_types_without_graphs_yet(app, close_later, no_multivar_graphs):
     w = _window(app, "multivar")
     close_later(w)
     g = w.project.graphs[0]
@@ -147,7 +156,7 @@ def test_summary_column_table_graphs_entered_error(app):
     assert rng2.vmax >= 11.0
 
 
-def test_placeholder_graph_disables_graph_tools(app, close_later):
+def test_placeholder_graph_disables_graph_tools(app, close_later, no_multivar_graphs):
     w = _window(app, "multivar")
     close_later(w)
     w.show_sheet(w.project.graphs[0])

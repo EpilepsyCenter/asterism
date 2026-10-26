@@ -45,8 +45,12 @@ The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
 - **M8 — Figures:** done. Pages of live panels (graphs, tables, results, text) with automatic
   panel letters, snapping, alignment and grid arrangement; export at exact page size to SVG,
   PDF, PNG and TIFF with every panel as its own group.
-- **Next — M9:** graph polish (colour schemes, copy formatting, drawing tools, right Y axis,
-  axis breaks, significance-bracket formatting).
+- **M9 — Graph polish:** done. Significance-bracket formatting, right Y axis, axis breaks,
+  grid lines and reference bands, colour schemes, copying formatting between graphs,
+  drawing tools, text formatting, horizontal and back-to-back bars, bubble plots of
+  multiple-variable tables, plotted functions, QQ plots, waffles, and figure overlays and
+  drag and drop.
+- **Next — M10:** import (CSV/Excel, `.pzfx`, `.prism`, the lab's importers).
 
 ## Run
 

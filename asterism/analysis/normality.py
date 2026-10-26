@@ -127,7 +127,23 @@ def normality(an) -> AnalysisResult:
             rows.append(("", [], "blank"))
         rows.append(("Number of values", [str(len(x)) if x is not None else "" for x in sets], "row"))
         pages.append(ResultPage(title, [t.label(c) for c in cols], rows))
-    return AnalysisResult(pages=pages)
+    res = AnalysisResult(pages=pages)
+    if p.get("qq", False):
+        from .xy import residual_table
+        series = [(c, t.label(c), *qq_points(x)) for c, x in zip(cols, data) if len(x) >= 3]
+        if series:
+            res.out_table = residual_table(f"QQ plot of {t.name}", series)
+    return res
+
+
+def qq_points(x) -> tuple[np.ndarray, np.ndarray]:
+    """Actual values (sorted) and the values predicted for them from a Gaussian with the
+    data's mean and SD, at Blom's plotting positions (i − 3/8)/(n + 1/4)."""
+    from scipy import stats
+    x = np.sort(np.asarray(x, float))
+    n = len(x)
+    q = (np.arange(1, n + 1) - 0.375) / (n + 0.25)
+    return x, x.mean() + x.std(ddof=1) * stats.norm.ppf(q)
 
 
 def _why(x, test: str) -> str:

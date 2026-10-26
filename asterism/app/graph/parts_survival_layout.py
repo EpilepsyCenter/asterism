@@ -43,6 +43,16 @@ def _parts_values(t, c):
     return rows, np.array(vals, float)
 
 
+def waffle_counts(vals) -> list[int]:
+    """Squares out of 100 for each part, by largest remainder (so they add to 100)."""
+    v = np.asarray(vals, float)
+    exact = v / v.sum() * 100 if v.sum() > 0 else np.zeros_like(v)
+    base = np.floor(exact).astype(int)
+    for k in np.argsort(-(exact - base))[: 100 - int(base.sum())]:
+        base[k] += 1
+    return [int(b) for b in base]
+
+
 def build_parts(graph) -> tuple[list[Element], AxisRange]:
     spec, t = graph.spec, graph.table
     cols = [c for c in t.used_columns() if c not in spec.hidden]
@@ -90,6 +100,28 @@ def build_parts(graph) -> tuple[list[Element], AxisRange]:
         elements.append(_x_axis(spec, [(gap / 2 + i * (bw + gap) + bw / 2, t.label(c)) for i, c in enumerate(cols)],
                                 [], pw, ph, 0.0))
         elements += _y_title(spec, num_left, ph)
+    elif lay == "waffle":                                 # percentage dot plot: 100 squares
+        rng = AxisRange(0.0, 100.0, 20.0)
+        gap = d * 0.25
+        cell = d / 10
+        for i, c in enumerate(cols):
+            rows, vals = _parts_values(t, c)
+            if not len(vals):
+                continue
+            counts = waffle_counts(vals)
+            x0 = i * (d + gap)
+            owner = [r for r, k in zip(rows, counts) for _ in range(k)]
+
+            def draw(cv, x0=x0, owner=owner, c=c):
+                for k, r in enumerate(owner):           # row by row from the top left
+                    row, col = divmod(k, 10)
+                    cv.rect(x0 + col * cell + cell * 0.08, row * cell + cell * 0.08, cell * 0.84, cell * 0.84,
+                            fill=color_of[r])
+                cv.text(x0 + d / 2, d + 6 + TM.ascent(fs), t.label(c), fs, anchor="middle")
+            box = QRectF(x0, 0, d, d + 8 + TM.ascent(fs) + TM.descent(fs))
+            elements.append(Element(f"data-{column_letter(c)}", "dataset", box, draw, _rect_path(box),
+                                    {"column": c, "label": t.label(c)}))
+        pw = max(len(cols), 1) * (d + gap) - gap
     else:
         rng = AxisRange(0.0, 1.0, 1.0)
         gap = d * 0.35
@@ -182,7 +214,7 @@ def build_survival(graph) -> tuple[list[Element], AxisRange]:
         pts = [(xm(0.0), ym(val(1.0)))]
         lo_pts, hi_pts = [(xm(0.0), ym(val(1.0)))], [(xm(0.0), ym(val(1.0)))]
         prev, prev_lo, prev_hi = 1.0, 1.0, 1.0
-        ticks = []
+        ticks, bars = [], []
         for r in cv_["rows"]:
             x = xm(r["time"])
             if r["events"]:
@@ -191,6 +223,7 @@ def build_survival(graph) -> tuple[list[Element], AxisRange]:
                     lo_pts += [(x, ym(val(prev_lo))), (x, ym(val(r["lo"])))]
                     hi_pts += [(x, ym(val(prev_hi))), (x, ym(val(r["hi"])))]
                     prev_lo, prev_hi = r["lo"], r["hi"]
+                    bars.append((x, ym(val(r["lo"])), ym(val(r["hi"]))))
                 prev = r["S"]
             if r["censored"]:
                 ticks.append((x, ym(val(prev))))
@@ -199,8 +232,15 @@ def build_survival(graph) -> tuple[list[Element], AxisRange]:
         lo_pts.append((last_x, ym(val(prev_lo))))
         hi_pts.append((last_x, ym(val(prev_hi))))
 
-        def draw(cv, pts=pts, ticks=ticks, lo_pts=lo_pts, hi_pts=hi_pts, st=st, col=col):
-            if spec.surv_ci == "shaded":
+        def draw(cv, pts=pts, ticks=ticks, lo_pts=lo_pts, hi_pts=hi_pts, st=st, col=col, bars=bars):
+            if spec.surv_ci == "bars":                 # error bars at each step
+                cap = 2.5
+                for x, ya, yb in bars:
+                    cv.line(x, ya, x, yb, st.error_color if st.error_color != "#000000" else col,
+                            st.error_width, "butt")
+                    for y_ in (ya, yb):
+                        cv.line(x - cap, y_, x + cap, y_, col, st.error_width, "butt")
+            elif spec.surv_ci == "shaded":
                 band = hi_pts + list(reversed(lo_pts))
                 cv.polygon(band, fill=st.bar_fill if st.bar_fill != "#b4b4b4" else col, opacity=0.2)
             elif spec.surv_ci == "dashed":

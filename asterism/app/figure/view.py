@@ -5,6 +5,8 @@ updates of the graphs all just redraw."""
 
 from __future__ import annotations
 
+import weakref
+
 import copy
 
 from PySide6.QtCore import QPointF, QRectF, QSizeF, Qt, Signal
@@ -114,9 +116,85 @@ class FigureSheetView(QWidget):
         theme.notifier.changed.connect(self._apply_theme)
         figure.changed.connect(self.rebuild)
         project.structure_changed.connect(self.rebuild)
-        self.scene.selectionChanged.connect(self.selectionChanged)
+        # Forward through a weak reference: when the sheet is destroyed, Python frees its
+        # items first and each selected one makes the scene report a selection change.
+        self.scene.selectionChanged.connect(_forward_selection(weakref.ref(self)))
+        self.view.setAcceptDrops(True)
+        self.view.viewport().setAcceptDrops(True)
+        self.view.viewport().installEventFilter(self)
         self.rebuild()
         self.fit_page()
+
+    # --- dropping sheets from the sidebar ----------------------------------------------
+
+    def eventFilter(self, obj, e):
+        from PySide6.QtCore import QEvent
+        from ..sidebar import SHEET_MIME
+        t = e.type()
+        if obj is self.view.viewport() and t in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
+            md = e.mimeData()
+            if not md.hasFormat(SHEET_MIME):
+                return False
+            if t == QEvent.Drop:
+                refs = [r.split(":", 1) for r in bytes(md.data(SHEET_MIME)).decode().split("\n") if ":" in r]
+                pt = self.view.mapToScene(e.position().toPoint())
+                self.drop_panels([(k, ref) for k, ref in refs], pt.x() / MM, pt.y() / MM)
+            e.acceptProposedAction()
+            return True
+        return super().eventFilter(obj, e)
+
+    def drop_panels(self, items: list[tuple[str, str]], x_mm: float, y_mm: float) -> None:
+        """New panels at a page position (each further one a little lower and to the right)."""
+        if not items:
+            return
+        st = copy.deepcopy(self.figure.state())
+        for i, (kind, ref) in enumerate(items):
+            x, y = x_mm + 8 * i, y_mm + 8 * i
+            g = float(self.figure.page.get("grid", 5.0) or 0)
+            if self.figure.page.get("snap", True) and g > 0:
+                x, y = round(x / g) * g, round(y / g) * g
+            st["panels"].append(self.figure.new_panel(kind, ref, x=x, y=y, font_size=8.0 if kind != "text" else 10.0))
+        self._push(st, "Add to Figure")
+
+    # --- overlay, letters, results page ------------------------------------------------
+
+    def overlay_selected(self) -> bool:
+        """Two graphs selected: the front one moves onto the other so their plot areas line up
+        (same scale), and loses its own letter."""
+        sel = [it for it in self.items if it.isSelected() and it.el.kind == "graph"]
+        if len(sel) != 2:
+            return False
+        order = [p["id"] for p in self.figure.panels]
+        back, front = sorted(sel, key=lambda it: order.index(it.el.panel))
+        (odx, ody), sc = back.el.meta["origin"], back.el.meta["scale"]
+        bx, by = front.el.meta["bounds"]
+        st = copy.deepcopy(self.figure.state())
+        pn = next(p for p in st["panels"] if p["id"] == front.el.panel)
+        pn["x"], pn["y"], pn["scale"] = (odx + bx * sc) / MM, (ody + by * sc) / MM, sc
+        pn["label"] = ""
+        self._push(st, "Overlay Graphs")
+        return True
+
+    def _custom_label(self, pid: str) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        cur = next((p.get("label") or "" for p in self.figure.panels if p["id"] == pid), "")
+        text, ok = QInputDialog.getText(self, "Panel Letter", "Letter or label for this panel:", text=cur)
+        if ok and text.strip():
+            self.set_label(pid, text.strip())
+
+    def set_label(self, pid: str, label) -> None:
+        st = copy.deepcopy(self.figure.state())
+        for p in st["panels"]:
+            if p["id"] == pid:
+                p["label"] = label
+        self._push(st, "Panel Letter")
+
+    def set_results_page(self, pid: str, page: int) -> None:
+        st = copy.deepcopy(self.figure.state())
+        for p in st["panels"]:
+            if p["id"] == pid:
+                p["page"] = page
+        self._push(st, "Results Page")
 
     def _apply_theme(self) -> None:
         self.view.setBackgroundBrush(theme.color("canvas"))
@@ -393,6 +471,24 @@ class FigureSheetView(QWidget):
         if self.selected_ids():
             if isinstance(item, PanelItem) and item.el.kind != "text":
                 m.addAction("Open", lambda: self._activated(item))
+            if isinstance(item, PanelItem) and item.el.kind == "results":
+                a = self.project.find(item.el.meta.get("ref"))
+                pages = a.result.pages if a is not None and a.result is not None else []
+                if len(pages) > 1:
+                    pm = m.addMenu("Show Results Page")
+                    cur = next((p.get("page", 0) for p in self.figure.panels if p["id"] == item.el.panel), 0)
+                    for k, pg in enumerate(pages):
+                        act = pm.addAction(pg.title, lambda k=k, pid=item.el.panel: self.set_results_page(pid, k))
+                        act.setCheckable(True)
+                        act.setChecked(k == cur)
+            if isinstance(item, PanelItem) and item.el.kind != "text":
+                pid = item.el.panel
+                lm = m.addMenu("Panel Letter")
+                lm.addAction("Automatic", lambda: self.set_label(pid, None))
+                lm.addAction("None", lambda: self.set_label(pid, ""))
+                lm.addAction("Custom…", lambda: self._custom_label(pid))
+            if len([it for it in self.items if it.isSelected() and it.el.kind == "graph"]) == 2:
+                m.addAction("Overlay Graphs (line up the plot areas)", self.overlay_selected)
             m.addAction("Bring to Front", lambda: self.restack(True))
             m.addAction("Send to Back", lambda: self.restack(False))
             m.addSeparator()
@@ -412,3 +508,19 @@ class _Static(QGraphicsItem):
 
     def paint(self, p, option, widget=None) -> None:
         self.el.draw(QtCanvas(p))
+
+
+def _forward_selection(ref):
+    """Scene selection → the sheet's selectionChanged, unless the sheet is being destroyed."""
+    def forward():
+        sheet = ref()
+        if sheet is None:
+            return
+        from shiboken6 import isValid
+        if not isValid(sheet) or not all(isValid(i) for i in getattr(sheet, "items", [])):
+            return                              # the scene is tearing its items down
+        try:
+            sheet.selectionChanged.emit()
+        except (RuntimeError, TypeError):      # its Qt side is already gone
+            pass
+    return forward

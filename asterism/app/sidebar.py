@@ -20,6 +20,28 @@ SECTIONS = [("Data", "new_table", "New data table"), ("Notes", "new_info", "New 
             ("Figures", "new_figure", "New figure")]
 
 
+SHEET_MIME = "application/x-asterism-sheet"
+
+
+class NavTree(QTreeWidget):
+    """The sheet list; graphs, tables and results can be dragged onto a figure."""
+
+    def mimeTypes(self):
+        return [SHEET_MIME]
+
+    def mimeData(self, items):
+        from PySide6.QtCore import QMimeData
+        md = QMimeData()
+        refs = []
+        for it in items:
+            sh = it.data(0, Qt.UserRole)
+            kind = {"graph": "graph", "table": "table", "analysis": "results"}.get(getattr(sh, "kind", ""))
+            if kind:
+                refs.append(f"{kind}:{sh.id}")
+        md.setData(SHEET_MIME, "\n".join(refs).encode())
+        return md
+
+
 class _SectionHeader(QWidget):
     def __init__(self, title: str, tip: str, on_add):
         super().__init__()
@@ -74,8 +96,10 @@ class ProjectSidebar(QWidget):
                  "magnifyingglass", "muted")
         self.search.textChanged.connect(self._filter)
         body.addWidget(self.search)
-        self.tree = QTreeWidget()
+        self.tree = NavTree()
         self.tree.setObjectName("NavTree")
+        self.tree.setDragEnabled(True)
+        self.tree.setDragDropMode(QTreeWidget.DragOnly)
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(16)
         self.tree.setRootIsDecorated(False)
@@ -100,7 +124,10 @@ class ProjectSidebar(QWidget):
         it = QTreeWidgetItem(parent, [sheet.name])
         it.setIcon(0, icon(KIND_ICON[sheet.kind], "accent", selected=True))
         it.setData(0, Qt.UserRole, sheet)
-        it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+        flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+        if sheet.kind in ("graph", "table", "analysis"):
+            flags |= Qt.ItemIsDragEnabled
+        it.setFlags(flags)
         if id(sheet) not in self._watched:
             self._watched.add(id(sheet))
             sheet.renamed.connect(self._rebuild_later)

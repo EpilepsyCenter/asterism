@@ -27,6 +27,7 @@ def qfont(fs: FontSpec, dpi: float = 72.0) -> QFont:
     f.setPointSizeF(fs.size * 72.0 / dpi)
     f.setBold(fs.bold)
     f.setItalic(fs.italic)
+    f.setUnderline(getattr(fs, "underline", False))
     f.setKerning(True)
     return f
 
@@ -105,6 +106,19 @@ class QtCanvas:
         self.p.setBrush(self._brush(fill))
         self.p.drawEllipse(QPointF(cx, cy), r, r)
 
+    def shape(self, kind, x, y, w, h, fill=None, stroke=None, width=1.0, dash=None):
+        """A drawn box or ellipse (drawing tools), dashed if asked."""
+        self.p.setPen(self._pen(stroke, width, "butt", dash))
+        self.p.setBrush(self._brush(fill))
+        r = QRectF(x, y, w, h)
+        self.p.drawEllipse(r) if kind == "ellipse" else self.p.drawRect(r)
+
+    def image(self, x, y, w, h, png: bytes):
+        from PySide6.QtGui import QImage
+        img = QImage.fromData(png)
+        if not img.isNull():
+            self.p.drawImage(QRectF(x, y, w, h), img)
+
     def polygon(self, pts, fill=None, stroke=None, width=1.0, opacity=1.0):
         self.p.setPen(self._pen(stroke, width))
         if fill and opacity < 1.0:
@@ -115,7 +129,8 @@ class QtCanvas:
             self.p.setBrush(self._brush(fill))
         self.p.drawPolygon(QPolygonF([QPointF(x, y) for x, y in pts]))
 
-    def text(self, x, y, s, fs: FontSpec, color="#000", anchor="start", rotate=0.0):
+    def text(self, x, y, s, fs: FontSpec, color=None, anchor="start", rotate=0.0):
+        color = color or getattr(fs, "color", "") or "#000"
         self.p.setFont(qfont(fs, self.dpi))
         self.p.setPen(QColor(color))
         w = TextMetrics.width(s, fs)
@@ -182,18 +197,36 @@ class SvgCanvas:
         self._emit(f'<circle cx="{_n(cx)}" cy="{_n(cy)}" r="{_n(r)}" '
                    f'fill="{fill or "none"}" {self._stroke(stroke, width)}/>')
 
+    def shape(self, kind, x, y, w, h, fill=None, stroke=None, width=1.0, dash=None):
+        st = self._stroke(stroke, width, "butt", dash)
+        if kind == "ellipse":
+            self._emit(f'<ellipse cx="{_n(x + w / 2)}" cy="{_n(y + h / 2)}" rx="{_n(w / 2)}" ry="{_n(h / 2)}" '
+                       f'fill="{fill or "none"}" {st}/>')
+        else:
+            self._emit(f'<rect x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(h)}" '
+                       f'fill="{fill or "none"}" {st}/>')
+
+    def image(self, x, y, w, h, png: bytes):
+        import base64
+        data = base64.b64encode(png).decode("ascii")
+        self._emit(f'<image x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(h)}" '
+                   f'preserveAspectRatio="none" href="data:image/png;base64,{data}"/>')
+
     def polygon(self, pts, fill=None, stroke=None, width=1.0, opacity=1.0):
         p = " ".join(f"{_n(x)},{_n(y)}" for x, y in pts)
         op = f' fill-opacity="{_n(opacity)}"' if fill and opacity < 1.0 else ""
         self._emit(f'<polygon points="{p}" fill="{fill or "none"}"{op} {self._stroke(stroke, width)}/>')
 
-    def text(self, x, y, s, fs: FontSpec, color="#000", anchor="start", rotate=0.0):
+    def text(self, x, y, s, fs: FontSpec, color=None, anchor="start", rotate=0.0):
+        color = color or getattr(fs, "color", "") or "#000"
         attrs = (f'x="{_n(x)}" y="{_n(y)}" font-family={quoteattr(fs.family)} '
                  f'font-size="{_n(fs.size)}" fill="{color}" text-anchor="{anchor}"')
         if fs.bold:
             attrs += ' font-weight="bold"'
         if fs.italic:
             attrs += ' font-style="italic"'
+        if getattr(fs, "underline", False):
+            attrs += ' text-decoration="underline"'
         if rotate:
             attrs += f' transform="rotate({_n(rotate)} {_n(x)} {_n(y)})"'
         self._emit(f"<text {attrs}>{escape(s)}</text>")

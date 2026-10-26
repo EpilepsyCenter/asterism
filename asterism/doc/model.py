@@ -420,6 +420,11 @@ class Project:
             g.spec.x.title = "Time"
             g.spec.y.title = "Percent survival"
             g.spec.default_style.line_width = 1.5
+        elif table.table_type == "multivar":
+            g.spec.palette = True
+            g.spec.x.ticks_dir = "out"
+            g.spec.x.title = g.spec.y.title = ""          # the variables' names are used
+            g.spec.show_legend = True
         elif table.table_type == "xy":
             g.spec.palette = True
             g.spec.x.ticks_dir = "out"
@@ -443,6 +448,14 @@ class Project:
                 g.spec.offsets = {}
             if a.analysis_type == "normalize" and g.spec.y.title in ("Title", ""):
                 g.spec.y.title = "Percent" if a.params.get("percent", True) else "Fraction"
+            if a.analysis_type == "normality":       # QQ plot: points and the line of identity
+                g.spec.x.title, g.spec.y.title = "Actual", "Predicted"
+                g.spec.default_style.xy_show = "replicates"
+                g.spec.palette = True
+                g.spec.datasets = {}
+                g.spec.show_legend = len(a.columns) > 1
+                g.spec.functions = [{"id": "identity", "text": "Y = X", "params": {}, "from": None, "to": None,
+                                     "color": "#000000", "width": 1.0, "dash": "solid"}]
             g.home, g.source = a.table, a
             g.name = a.name
             return g

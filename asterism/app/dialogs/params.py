@@ -179,7 +179,7 @@ class NormalityParamsDialog(SectionDialog):
     def __init__(self, params: dict | None, parent=None):
         super().__init__("Normality Test Settings", "Normality tests", parent)
         p = {"dagostino": True, "anderson": True, "shapiro": True, "ks": True,
-             "lognormal": False, "alpha": 0.05, **(params or {})}
+             "lognormal": False, "alpha": 0.05, "qq": False, **(params or {})}
         page, pl = tab_page()
         pl.addWidget(Section("Tests"))
         self.checks = {}
@@ -199,6 +199,10 @@ class NormalityParamsDialog(SectionDialog):
         self.alpha = combo([("0.05", 0.05), ("0.01", 0.01), ("0.10", 0.10)], p["alpha"])
         g.add(("Significance level (α):", self.alpha))
         pl.addLayout(g)
+        pl.addWidget(Section("Graph"))
+        self.c_qq = QCheckBox("Create a QQ plot (actual values against those predicted from a Gaussian)")
+        self.c_qq.setChecked(p["qq"])
+        pl.addWidget(self.c_qq)
         pl.addStretch(1)
         self.add_group("Settings")
         self.add_section("tests", "Tests", page, "checkmark.seal")
@@ -207,7 +211,7 @@ class NormalityParamsDialog(SectionDialog):
 
     def params(self) -> dict:
         out = {k: c.isChecked() for k, c in self.checks.items()}
-        out.update(lognormal=self.c_log.isChecked(), alpha=self.alpha.currentData())
+        out.update(lognormal=self.c_log.isChecked(), alpha=self.alpha.currentData(), qq=self.c_qq.isChecked())
         return out
 
 

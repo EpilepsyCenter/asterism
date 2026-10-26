@@ -65,18 +65,61 @@ def auto_decimals(step: float) -> int:
 
 
 class YMap:
+    """Value → position along the axis (0 at the top). A linear axis can have a break:
+    two segments, the bottom one ending at low_to and the top one starting at high_from,
+    with a gap between them."""
+
     def __init__(self, ax: AxisSpec, rng: AxisRange, h: float):
         self.ax, self.r, self.h = ax, rng, h
         self.log = ax.scale == "log10"
+        self.brk = None
+        b = getattr(ax, "brk", None) or {}
+        if b.get("on") and not self.log:
+            lt, hf = float(b.get("low_to", 0)), float(b.get("high_from", 0))
+            if rng.vmin < lt < hf < rng.vmax:
+                gap = max(0.0, min(float(b.get("gap", 14.0)), h * 0.4))
+                split = min(max(float(b.get("split", 0.5)), 0.1), 0.9)
+                hl = (h - gap) * split
+                ls = float(b.get("low_step") or 0) or nice_range(rng.vmin, lt).interval
+                hs = float(b.get("high_step") or 0) or nice_range(hf, rng.vmax).interval
+                self.brk = {"lt": lt, "hf": hf, "gap": gap, "hl": hl, "ls": ls, "hs": hs}
 
     def __call__(self, v: float) -> float:
         lo, hi = self.r.vmin, self.r.vmax
+        if self.brk:
+            b, h = self.brk, self.h
+            top_len = h - b["hl"] - b["gap"]
+            if v <= b["lt"]:
+                return h - (v - lo) / (b["lt"] - lo) * b["hl"]
+            if v >= b["hf"]:
+                return top_len - (v - b["hf"]) / (hi - b["hf"]) * top_len
+            return (h - b["hl"]) - (v - b["lt"]) / (b["hf"] - b["lt"]) * b["gap"]
         if self.log:
             v = math.log10(max(v, 1e-300))
             lo, hi = math.log10(lo), math.log10(hi)
         return self.h - (v - lo) / (hi - lo) * self.h
 
+    def segments(self) -> list[tuple[float, float]]:
+        """(top, bottom) positions of the axis line's pieces."""
+        if not self.brk:
+            return [(0.0, self.h)]
+        b = self.brk
+        return [(self.h - b["hl"], self.h), (0.0, self.h - b["hl"] - b["gap"])]
+
+    def gap(self) -> tuple[float, float] | None:
+        if not self.brk:
+            return None
+        return self.h - self.brk["hl"] - self.brk["gap"], self.h - self.brk["hl"]
+
+    @staticmethod
+    def _steps(a: float, b: float, step: float) -> list[float]:
+        n = int(math.floor((b - a) / step + 1e-9))
+        return [a + i * step for i in range(n + 1)]
+
     def majors(self) -> list[float]:
+        if self.brk:
+            b = self.brk
+            return self._steps(self.r.vmin, b["lt"], b["ls"]) + self._steps(b["hf"], self.r.vmax, b["hs"])
         if self.log:
             k0, k1 = round(math.log10(self.r.vmin)), round(math.log10(self.r.vmax))
             return [10.0 ** k for k in range(k0, k1 + 1)]
@@ -92,6 +135,12 @@ class YMap:
             for v in self.majors()[:-1]:
                 out += [v * k for k in range(2, 10)]
             return out
+        if self.brk:
+            b, out = self.brk, []
+            for a_, b_, st in ((self.r.vmin, b["lt"], b["ls"]), (b["hf"], self.r.vmax, b["hs"])):
+                for v in self._steps(a_, b_, st)[:-1]:
+                    out += [v + st / (m + 1) * (i + 1) for i in range(m)]
+            return out
         out, step = [], self.r.interval / (m + 1)
         for v in self.majors()[:-1]:
             out += [v + step * (i + 1) for i in range(m)]
@@ -105,15 +154,16 @@ class YMap:
         elif ax.fmt == "scientific":
             s = f"{v:.{max(ax.decimals, 1)}e}"
         else:
-            d = auto_decimals(self.r.interval) if ax.decimals < 0 else ax.decimals
+            step = min(self.brk["ls"], self.brk["hs"]) if self.brk else self.r.interval
+            d = auto_decimals(step) if ax.decimals < 0 else ax.decimals
             s = f"{v:.{d}f}"
             if s.startswith("-") and float(s) == 0:
                 s = s[1:]
         return f"{ax.prefix}{s}{ax.suffix}"
 
 
-def y_range(graph: Graph, summaries: dict[int, dict]) -> AxisRange:
-    ax = graph.spec.y
+def y_range(graph: Graph, summaries: dict[int, dict], ax: AxisSpec | None = None) -> AxisRange:
+    ax = ax or graph.spec.y
     if not ax.auto:
         if ax.scale == "log10":
             return AxisRange(max(ax.vmin, 1e-12), max(ax.vmax, ax.vmin * 10), ax.interval)
@@ -200,7 +250,7 @@ def violin_curve(x: np.ndarray, smooth: str, n: int = 81) -> list[tuple[float, f
     return list(zip(grid.tolist(), dens.tolist()))
 
 
-GRAPHABLE_TYPES = {"column", "grouped", "nested", "xy", "contingency", "parts", "survival"}
+GRAPHABLE_TYPES = {"column", "grouped", "nested", "xy", "contingency", "parts", "survival", "multivar"}
 
 
 def summarize_entered(sm: dict | None, st: DataSetStyle) -> dict:
@@ -431,6 +481,18 @@ def plan_grouped(graph, cols: list[int], colw: float) -> Plan:
                 base = top
             labels.append((xc, t.row_label(r)))
         return Plan(slots, len(rows) * (bw + gap), labels, legend=list(cols), swatch="bar")
+    if lay == "pyramid":                     # two data sets back to back: the first leftwards (or down)
+        bw = colw * 1.6
+        step = bw + gap
+        for i, r in enumerate(rows):
+            xc = gap / 2 + i * step + bw / 2
+            for k, c in enumerate(cols):
+                s, x = _summary(t, r, c, spec.style(c))
+                if k == 0:
+                    s, x = _negate(s), -np.asarray(x, float)
+                slots.append(Slot(((r, c),), c, xc, bw, s, x))
+            labels.append((xc, t.row_label(r)))
+        return Plan(slots, max(1, len(rows)) * step, labels, legend=list(cols), swatch="bar")
     if lay == "lines":
         step = colw * 2.0
         lines: dict[int, list] = {c: [] for c in cols}
@@ -441,7 +503,7 @@ def plan_grouped(graph, cols: list[int], colw: float) -> Plan:
                 s, x = _summary(t, r, c, st)
                 if s["center"] is None and s["mean"] is not None:
                     s["center"] = s["mean"]
-                s["points"] = []
+                s["points"] = [float(v) for v in x] if spec.lines_points else []
                 slots.append(Slot(((r, c),), c, xc, colw, s, x, no_line=True))
                 if s["center"] is not None:
                     lines[c].append((xc, s["center"]))
@@ -458,6 +520,19 @@ def plan_grouped(graph, cols: list[int], colw: float) -> Plan:
         labels.append(((start + x0) / 2, t.row_label(r)))
         x0 += gap
     return Plan(slots, max(x0 - gap / 2, colw), labels, legend=list(cols))
+
+
+def _negate(s: dict) -> dict:
+    """A summary mirrored through zero (bars extending the other way); error ends keep their
+    meaning (hi stays the end away from zero)."""
+    out = dict(s)
+    for k in ("center", "mean", "lo", "hi", "median", "q1", "q3", "wlo", "whi"):
+        if isinstance(out.get(k), (int, float)):
+            out[k] = -out[k]
+    if out.get("min") is not None and out.get("max") is not None:
+        out["min"], out["max"] = -s["max"], -s["min"]
+    out["points"] = [-v for v in s.get("points", [])]
+    return out
 
 
 def plan_nested(graph, cols: list[int], colw: float) -> Plan:
@@ -600,8 +675,11 @@ class _SlotGeom:
                        stroke=st.bar_border_color, width=border)
             vals = [cv_[0] for cv_ in curve]
             dens_ = [cv_[1] for cv_ in curve]
-            for v, dash, w in ((s["q1"], "dash", border), (s["q3"], "dash", border),
-                               (s["center"], None, border * 1.5)):
+            ql, ml = st.violin_quartiles, st.violin_median
+            for v, sty, w in ((s["q1"], ql, border), (s["q3"], ql, border), (s["center"], ml, border * 1.5)):
+                if sty == "none" or v is None:
+                    continue
+                dash = None if sty == "solid" else sty
                 hw = float(np.interp(v, vals, dens_)) * half
                 cv.line(xc - hw, ym(v), xc + hw, ym(v), st.bar_border_color, w, "butt", dash)
         if self.is_float and s["min"] is not None:
@@ -663,12 +741,25 @@ def _key_id(k) -> str:
 # ---------------------------------------------------------------------------
 
 def build(graph: Graph) -> tuple[list[Element], AxisRange]:
+    """Every element of the graph, with the things drawn on it on top."""
+    els, rng = _build(graph)
+    if graph.spec.drawings:
+        from .drawings import drawing_elements
+        els = els + drawing_elements(graph.spec)
+        els.sort(key=lambda e: ORDER[e.kind])
+    return els, rng
+
+
+def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
     spec, table = graph.spec, graph.table
     if table.table_type in ("grouped", "contingency") and spec.grouped_layout == "heatmap":
         return build_heatmap(graph)
     if table.table_type == "xy":
         from .xy_layout import build_xy
         return build_xy(graph)
+    if table.table_type == "multivar":
+        from .multivar_layout import build_multivar
+        return build_multivar(graph)
     if table.table_type == "parts":
         from .parts_survival_layout import build_parts
         return build_parts(graph)
@@ -688,10 +779,28 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
     off = 6.0 if spec.frame == "offset" else 0.0
     yx, xy = -off, ph + off                     # where the Y and X axis lines sit
 
-    rng = y_range(graph, {i: sl.summary for i, sl in enumerate(plan.slots)})
+    stacked = table.table_type in ("grouped", "contingency") and spec.grouped_layout in ("stacked", "stacked_pct")
+    horizontal = spec.horizontal
+    right = set() if (stacked or horizontal) else {c for c in cols if spec.style(c).axis == "right"}
+    rng = y_range(graph, {i: sl.summary for i, sl in enumerate(plan.slots) if sl.column not in right})
     if table.table_type in ("grouped", "contingency") and spec.grouped_layout == "stacked_pct" and spec.y.auto:
         rng = AxisRange(0.0, 100.0, 20.0)
+    pyramid = table.table_type in ("grouped", "contingency") and spec.grouped_layout == "pyramid"
+    if pyramid:                                 # symmetric about zero, numbered without signs
+        if spec.y.auto:
+            m = max(abs(rng.vmin), abs(rng.vmax))
+            r_ = nice_range(0.0, m)
+            rng = AxisRange(-r_.vmax, r_.vmax, r_.interval)
     ym = YMap(spec.y, rng, ph)
+    if pyramid:
+        ym.label = (lambda f: (lambda v: f(abs(v))))(ym.label)
+    ym2 = rng2 = None
+    if right:
+        rng2 = y_range(graph, {i: sl.summary for i, sl in enumerate(plan.slots) if sl.column in right}, spec.y2)
+        ym2 = YMap(spec.y2, rng2, ph)
+
+    def ymap(c):
+        return (ym2, rng2) if c in right else (ym, rng)
     elements: list[Element] = []
 
     # --- data sets (one selectable element per data set, however many slots) ---------
@@ -700,23 +809,25 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
     by_col: dict[int, list[_SlotGeom]] = {}
     for sl in plan.slots:
         st = spec.style(sl.column)
+        if st.nudge:
+            sl.x += st.nudge
         if not len(sl.values) and sl.summary["center"] is not None:
             sl.values = np.array([sl.summary["center"]])     # entered mean/error: no raw values
         if not len(sl.values) and not sl.marks:
             continue
-        g = _SlotGeom(sl, st, ym, rng, spec, aligned or st.spread == "aligned")
+        m_, r_ = ymap(sl.column)
+        g = _SlotGeom(sl, st, m_, r_, spec, aligned or st.spread == "aligned")
         geoms.append(g)
         by_col.setdefault(sl.column, []).append(g)
-    stacked = table.table_type in ("grouped", "contingency") and spec.grouped_layout in ("stacked", "stacked_pct")
     for c, gs in by_col.items():
         st = spec.style(c)
-        pts = plan.lines.get(c, [])
+        pts = [(x_ + st.nudge, v) for x_, v in plan.lines.get(c, [])]
 
         part = "body" if stacked else "all"
 
-        def draw_ds(cv, gs=gs, pts=pts, st=st, part=part):
+        def draw_ds(cv, gs=gs, pts=pts, st=st, part=part, m_=ymap(c)[0]):
             if len(pts) > 1:
-                cv.polyline([(x_, ym(v)) for x_, v in pts], st.symbol_color, max(st.error_width, 1.0), "round")
+                cv.polyline([(x_, m_(v)) for x_, v in pts], st.symbol_color, max(st.error_width, 1.0), "round")
             for g in gs:
                 g.draw(cv, part)
         hit = _rect_path(*[r for g in gs for r in g.hit])
@@ -742,7 +853,7 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
             for c in cols:
                 v = table.row_values(r, c)
                 if len(v) == 1:
-                    pts.append((xpos[c], ym(float(v[0]))))
+                    pts.append((xpos[c], ymap(c)[0](float(v[0]))))
                 elif pts:
                     if len(pts) > 1:
                         lines.append(pts)
@@ -761,28 +872,64 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
                     box = box.united(QRectF(x_ - 1, y_ - 1, 2, 2))
             elements.append(Element("connecting-lines", "lines", box, draw_lines, _rect_path(box), {}))
 
-    # --- Y axis -------------------------------------------------------------
-    ay = spec.y
+    # --- before-after: mean (or median) with error beside each data set ------------
+    if spec.connect_rows and spec.ba_summary != "none" and table.table_type == "column" and geoms:
+        import copy as _copy
+        marks = []
+        n_slots = len(plan.slots)
+        for i, g in enumerate(geoms):
+            st = _copy.copy(g.st)
+            st.line_at = spec.ba_summary
+            sm = summarize(np.asarray(g.sl.values, float), st)
+            if sm["center"] is None:
+                continue
+            side = -1.0 if (i == 0 and n_slots > 1) else 1.0         # outward on the first data set
+            x = g.sl.x + side * g.sl.w * 0.42
+            m_ = ymap(g.sl.column)[0]
+            marks.append((x, m_(sm["center"]), m_(sm["lo"]) if sm["lo"] is not None else None,
+                          m_(sm["hi"]) if sm["hi"] is not None else None, g.st))
+        if marks:
+            def draw_marks(cv, marks=marks):
+                for x, yc, ylo, yhi, st in marks:
+                    cap = 3.0
+                    for ye in (ylo, yhi):
+                        if ye is not None:
+                            cv.line(x, yc, x, ye, st.error_color, st.error_width, "butt")
+                            cv.line(x - cap, ye, x + cap, ye, st.error_color, st.error_width, "butt")
+                    draw_symbol(cv, "square", x, yc, max(4.0, st.symbol_size * 2.2), st.symbol_color)
+            box = QRectF()
+            for x, yc, ylo, yhi, _st in marks:
+                box = box.united(QRectF(x - 4, min(v for v in (yc, ylo, yhi) if v is not None) - 2, 8,
+                                        abs(max(v for v in (yc, ylo, yhi) if v is not None)
+                                            - min(v for v in (yc, ylo, yhi) if v is not None)) + 4))
+            elements.append(Element("summary-beside", "errors", box, draw_marks, QPainterPath(), {}))
+
+    # --- grid lines, extra ticks, axis break -------------------------------------
+    elements += _guides(spec, ym, pw, ph, ym2)
+
+    # --- Y axes -------------------------------------------------------------
     y_el, num_left = _y_axis(spec, ym, ph, yx)
     elements.append(y_el)
+    legend_x = pw + 12.0
+    if ym2 is not None:
+        y2_el, num_right = _y_axis(spec, ym2, ph, pw + off, "right")
+        elements.append(y2_el)
+        t2 = _y_title(spec, num_right, ph, "right")
+        elements += t2
+        legend_x = max(num_right, *(e.bounds.right() for e in t2)) + 12.0 if t2 else num_right + 12.0
 
     # --- X axis -------------------------------------------------------------
     elements.append(_x_axis(spec, plan.labels, plan.groups, pw, xy, yx))
 
     if spec.frame == "box":
-        def draw_frame(cv):
-            cv.line(0, 0, pw, 0, ac, aw)
-            cv.line(pw, 0, pw, ph, ac, aw)
-        fb = QRectF(-2, -2, pw + 4, ph + 4)
-        hit = _rect_path(QRectF(-2, -2, pw + 4, 4), QRectF(pw - 2, -2, 4, ph + 4))
-        elements.append(Element("frame", "frame", fb, draw_frame, hit))
+        elements.append(_frame(spec, pw, ph, ym, right_axis=ym2 is not None))
 
     # --- Y title ------------------------------------------------------------
     elements += _y_title(spec, num_left, ph)
 
     # --- legend ---------------------------------------------------------------
     if spec.show_legend and plan.legend and len(plan.legend) > 0:
-        elements.append(_legend(spec, table, plan, pw + 12.0, 0.0))
+        elements.append(_legend(spec, table, plan, legend_x, 0.0))
 
     # --- brackets -------------------------------------------------------------
     tops = [(g.sl.x, g.top) for g in geoms]
@@ -795,9 +942,20 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
     content_top = min((t_ for _, t_ in tops), default=0.0)
     content_top = min(content_top, 0.0)
     if spec.show_brackets:
-        for gid, br, draw_br in _brackets(graph, anchors, tops, ac, aw):
-            elements.append(Element(gid, "bracket", br, draw_br, _rect_path(br), {"font_keys": ["bracket"]}))
+        for gid, br, draw_br, label, fs_lab in _brackets(graph, anchors, tops, ac, aw):
+            elements.append(Element(gid, "bracket", br, draw_br, _rect_path(br),
+                                    {"font_keys": ["bracket", "stars"], "label": label, "label_font": fs_lab}))
             content_top = min(content_top, br.top())
+
+    # --- horizontal: the same graph turned on its side --------------------------
+    if horizontal:
+        from .horizontal import horizontalize
+        legend = (table, plan) if spec.show_legend and plan.legend else None
+        elements = horizontalize(spec, elements, plan, ym, ph, off, legend)
+        content_top = min([0.0] + [e.bounds.top() for e in elements if e.kind in ("dataset", "bracket")])
+        elements += _title(spec, graph, ph, content_top)
+        elements.sort(key=lambda e: ORDER[e.kind])
+        return elements, rng
 
     # --- graph title ----------------------------------------------------------
     content_top = min([content_top] + [e.bounds.top() for e in elements if e.id == "y-title"])
@@ -807,56 +965,175 @@ def build(graph: Graph) -> tuple[list[Element], AxisRange]:
     return elements, rng
 
 
-def _y_axis(spec, ym: YMap, ph: float, yx: float) -> tuple[Element, float]:
-    """The Y axis line, ticks and numbers; returns the element and the numbers' left edge."""
-    ay, aw, ac = spec.y, spec.axis_width, spec.axis_color
+def _y_axis(spec, ym: YMap, ph: float, yx: float, side: str = "left") -> tuple[Element, float]:
+    """A Y axis line (in pieces when broken), ticks and numbers; returns the element and the
+    numbers' outer edge (left edge for the left axis, right edge for the right one)."""
+    right = side == "right"
+    ay = spec.y2 if right else spec.y
+    aw, ac = spec.axis_width, spec.axis_color
     tl = TICK_LEN[ay.ticks_len]
     out_len = tl if ay.ticks_dir in ("out", "cross") else 0.0
     in_len = tl if ay.ticks_dir in ("in", "cross") else 0.0
+    sgn = 1.0 if right else -1.0                  # outward direction
     fs_num = spec.fonts["y_numbers"]
     majors = ym.majors()
     labels = [ym.label(v) for v in majors]
     num_w = max((TM.width(s, fs_num) for s in labels), default=0.0) if ay.numbering else 0.0
-    num_x = yx - out_len - 3.0
-    num_left = num_x - num_w
+    num_x = yx + sgn * (out_len + 3.0)
+    edge = num_x + sgn * num_w
 
     def draw_y(cv):
-        cv.line(yx, 0, yx, ph, ac, aw)
+        for top, bot in ym.segments():
+            cv.line(yx, top, yx, bot, ac, aw)
+        g = ym.gap()
+        if g:                                     # break marks: short slashes at both ends of the gap
+            for y in g:
+                cv.line(yx - 4, y + 2, yx + 4, y - 2, ac, aw, "butt")
         if ay.ticks_dir != "none":
             for v in majors:
                 y = ym(v)
-                cv.line(yx - out_len, y, yx + in_len, y, ac, aw)
+                cv.line(yx + sgn * out_len, y, yx - sgn * in_len, y, ac, aw)
             for v in ym.minors():
                 y = ym(v)
-                cv.line(yx - out_len * 0.55, y, yx + in_len * 0.55, y, ac, aw)
+                cv.line(yx + sgn * out_len * 0.55, y, yx - sgn * in_len * 0.55, y, ac, aw)
         if ay.numbering:
             capc = TM.cap_height(fs_num) / 2
             for v, s in zip(majors, labels):
-                cv.text(num_x, ym(v) + capc, s, fs_num, anchor="end")
+                cv.text(num_x, ym(v) + capc, s, fs_num, anchor="start" if right else "end")
 
-    yb = QRectF(num_left - 2, -TM.ascent(fs_num) / 2 - 2, (yx + in_len + 3) - (num_left - 2), ph + TM.ascent(fs_num) + 4)
-    return Element("y-axis", "y-axis", yb, draw_y, _rect_path(yb), {"font_keys": ["y_numbers"]}), num_left
+    x0, x1 = sorted((edge + 2 * sgn, yx - sgn * (in_len + 5)))
+    yb = QRectF(x0, -TM.ascent(fs_num) / 2 - 2, x1 - x0, ph + TM.ascent(fs_num) + 4)
+    gid = "y2-axis" if right else "y-axis"
+    return Element(gid, "y-axis", yb, draw_y, _rect_path(yb), {"font_keys": ["y_numbers"], "range": ym.r}), edge
 
 
-def _y_title(spec, num_left: float, ph: float) -> list[Element]:
+def _frame(spec, pw: float, ph: float, ym: YMap, right_axis: bool = False) -> Element:
+    """Top and right lines of a boxed graph (the right one broken like the Y axis)."""
+    aw, ac = spec.axis_width, spec.axis_color
+
+    def draw_frame(cv):
+        cv.line(0, 0, pw, 0, ac, aw)
+        if not right_axis:
+            for top, bot in ym.segments():
+                cv.line(pw, top, pw, bot, ac, aw)
+    fb = QRectF(-2, -2, pw + 4, ph + 4)
+    hit = _rect_path(QRectF(-2, -2, pw + 4, 4), QRectF(pw - 2, -2, 4, ph + 4))
+    return Element("frame", "frame", fb, draw_frame, hit)
+
+
+def _y_title(spec, num_left: float, ph: float, side: str = "left") -> list[Element]:
     fs_yt = spec.fonts["y_title"]
-    ay = spec.y
+    right = side == "right"
+    ay = spec.y2 if right else spec.y
     if not ay.title:
         return []
-    dx, dy = spec.offsets.get("y-title", (0.0, 0.0))
-    tx = num_left - 6.0 - TM.descent(fs_yt) + dx
+    key = "y2-title" if right else "y-title"
+    dx, dy = spec.offsets.get(key, (0.0, 0.0))
+    if right:
+        tx = num_left + 6.0 + TM.ascent(fs_yt) + dx
+    else:
+        tx = num_left - 6.0 - TM.descent(fs_yt) + dx
     ty = ph / 2 + dy
 
     def draw_yt(cv, tx=tx, ty=ty):
         cv.text(tx, ty, ay.title, fs_yt, anchor="middle", rotate=-90)
     r = _text_rect(tx, ty, ay.title, fs_yt, "middle", -90)
-    return [Element("y-title", "text", r, draw_yt, _rect_path(r),
-                    {"font_keys": ["y_title"], "field": "y_title", "text": ay.title,
+    return [Element(key, "text", r, draw_yt, _rect_path(r),
+                    {"font_keys": ["y_title"], "field": "y2_title" if right else "y_title", "text": ay.title,
                      "rotate": -90, "anchor_pt": (tx, ty)})]
 
 
+def _guides(spec, ym: YMap, pw: float, ph: float, ym2: YMap | None = None, xm=None) -> list[Element]:
+    """Grid lines at major ticks and extra ticks / lines at chosen values (behind the data),
+    plus the white band that carries an axis break across the plot."""
+    out = []
+    bands = []          # (x, y, w, h, color)
+    lines = []          # (x1, y1, x2, y2, color, width, dash)
+    labels = []         # (x, y, text, anchor)
+    fs = spec.fonts["y_numbers"]
+    for ax, m, side in ((spec.y, ym, "left"), (spec.y2, ym2, "right")):
+        if m is None:
+            continue
+        if ax.grid:
+            for v in m.majors():
+                y = m(v)
+                if 0.5 < y < ph + 0.5 or ax.grid:
+                    lines.append((0.0, y, pw, y, ax.grid_color, ax.grid_width, None))
+        for e in ax.extra or []:
+            try:
+                v = float(e.get("value"))
+            except (TypeError, ValueError):
+                continue
+            y = m(v)
+            to = e.get("to")
+            if to not in (None, ""):                 # a shaded band from value to "to"
+                try:
+                    y2 = m(float(to))
+                except (TypeError, ValueError):
+                    y2 = None
+                if y2 is not None:
+                    top, bot = max(min(y, y2), 0.0), min(max(y, y2), ph)
+                    if bot > top:
+                        bands.append((0.0, top, pw, bot - top, e.get("band_color") or "#e6e6e6"))
+                    if e.get("label"):
+                        labels.append((pw - 2.0 if side == "right" else 2.0, top + TM.ascent(fs) + 1.0,
+                                       e["label"], "end" if side == "right" else "start"))
+                    continue
+            if not (-0.5 <= y <= ph + 0.5):
+                continue
+            dash = None if e.get("dash", "dash") == "solid" else e.get("dash", "dash")
+            col = e.get("color") or spec.axis_color
+            if e.get("line", True):
+                lines.append((0.0, y, pw, y, col, float(e.get("width", spec.axis_width)), dash))
+            if e.get("tick", False):
+                x0 = pw if side == "right" else 0.0
+                d = 6.0 if side == "right" else -6.0
+                lines.append((x0, y, x0 + d, y, spec.axis_color, spec.axis_width, None))
+            if e.get("label"):
+                if side == "right":
+                    labels.append((pw - 2.0, y - 3.0, e["label"], "end"))
+                else:
+                    labels.append((2.0, y - 3.0, e["label"], "start"))
+    if xm is not None:
+        ax = spec.x
+        if ax.grid:
+            for v in xm.majors():
+                x = xm(v)
+                lines.append((x, 0.0, x, ph, ax.grid_color, ax.grid_width, None))
+        for e in ax.extra or []:
+            try:
+                x = xm(float(e.get("value")))
+            except (TypeError, ValueError):
+                continue
+            if not (-0.5 <= x <= pw + 0.5):
+                continue
+            dash = None if e.get("dash", "dash") == "solid" else e.get("dash", "dash")
+            if e.get("line", True):
+                lines.append((x, 0.0, x, ph, e.get("color") or spec.axis_color,
+                              float(e.get("width", spec.axis_width)), dash))
+            if e.get("label"):
+                labels.append((x + 3.0, TM.ascent(fs) + 1.0, e["label"], "start"))
+    if lines or labels or bands:
+        def draw_guides(cv, lines=lines, labels=labels, bands=bands):
+            for x, y, w, h, c in bands:
+                cv.rect(x, y, w, h, fill=c)
+            for x1, y1, x2, y2, c, w, dash in lines:
+                cv.line(x1, y1, x2, y2, c, w, "butt", dash)
+            for x, y, t, anchor in labels:
+                cv.text(x, y, t, fs, anchor=anchor)
+        box = QRectF(0, 0, pw, ph)
+        out.append(Element("guides", "grid", box, draw_guides, QPainterPath(), {}))
+    gaps = [g for g in (ym.gap(), ym2.gap() if ym2 else None) if g]
+    if gaps:
+        def draw_gap(cv, gaps=gaps):
+            for top, bot in gaps:
+                cv.rect(0.5, top + 0.5, pw - 0.5, max(bot - top - 1.0, 0.1), fill="#ffffff", stroke=None)
+        out.append(Element("axis-break", "gap", QRectF(0, 0, pw, ph), draw_gap, QPainterPath(), {}))
+    return out
+
+
 # z-order: data underneath, axes, then annotations on top
-ORDER = {"lines": -1, "dataset": 0, "curve": 0.3, "errors": 0.5, "frame": 1, "x-axis": 2, "y-axis": 2, "bracket": 3,
+ORDER = {"grid": -2, "lines": -1, "dataset": 0, "gap": 0.8, "drawing": 3.5, "curve": 0.3, "errors": 0.5, "frame": 1, "x-axis": 2, "y-axis": 2, "bracket": 3,
          "legend": 3, "text": 4}
 
 
@@ -916,7 +1193,8 @@ def _legend(spec, table, plan: Plan, x0: float, y0: float) -> Element:
     row_h = max(TM.ascent(fs) + TM.descent(fs), 9.0) + 4.0
     sw = 12.0
     entries = []
-    for i, c in enumerate(plan.legend):
+    shown = [c for c in plan.legend if spec.style(c).legend]
+    for i, c in enumerate(shown):
         st = spec.style(c)
         kind = plan.swatch
         if kind == "auto":
@@ -941,10 +1219,48 @@ def _legend(spec, table, plan: Plan, x0: float, y0: float) -> Element:
     return Element("legend", "legend", box, draw_legend, _rect_path(box), {"font_keys": ["legend"]})
 
 
+def sig_settings(spec) -> dict:
+    """The graph's significance options, with the older fields (p_format, brackets_ns) still
+    honoured."""
+    sig = dict(spec.sig)
+    if spec.p_format == "exact" and sig.get("label") == "stars":
+        sig["label"] = "p"
+    if spec.brackets_ns and sig.get("which") == "significant":
+        sig["which"] = "all"
+    return sig
+
+
+STAR_LEVELS = {"four": [0.05, 0.01, 0.001, 0.0001], "three": [0.05, 0.01, 0.001],
+               "gp": [0.0332, 0.0021, 0.0002, 0.0001]}
+
+
+def star_label(p: float, sig: dict) -> str:
+    cuts = STAR_LEVELS.get(sig.get("levels", "four"), sig.get("cuts") or STAR_LEVELS["four"])
+    n = sum(1 for c in sorted(cuts, reverse=True) if p < c)
+    n = min(n, int(sig.get("max_stars", 4) or 4))
+    return "*" * n if n else "ns"
+
+
+def bracket_label(p: float, sig: dict) -> str:
+    stars = star_label(p, sig)
+    exact = "P < 0.0001" if p < 0.0001 else f"P = {fmt_p(p)}"
+    return {"stars": stars, "p": exact, "number": "<0.0001" if p < 0.0001 else fmt_p(p),
+            "both": f"{stars}  {exact}"}.get(sig.get("label", "stars"), stars)
+
+
+def bracket_id(ka, kb) -> str:
+    return f"bracket-{_key_id(ka)}-{_key_id(kb)}"
+
+
 def _comparisons(graph, anchors: dict) -> list[tuple]:
-    """(key a, key b, P) for every comparison a linked analysis wants drawn. Two-group tests
-    always show theirs; multiple comparisons show the significant ones (or all)."""
-    spec = graph.spec
+    """(key a, key b, P) for every comparison to draw, in the analysis's order. A two-group
+    test shows its result (also "ns", unless switched off); multiple comparisons follow the
+    'which' choice: all, the significant ones, those against a control, or none. Brackets
+    hidden one by one are left out."""
+    sig = sig_settings(graph.spec)
+    alpha = float(sig.get("alpha", 0.05))
+    hidden = set(sig.get("hidden") or [])
+    which, control = sig.get("which", "significant"), sig.get("control")
     comps = []
     for a in graph.analyses():
         r = a.result
@@ -957,26 +1273,45 @@ def _comparisons(graph, anchors: dict) -> list[tuple]:
             ca, cb = a.columns
             cand += [((row, ca), (row, cb), padj, True) for row, _p, padj in r.rows]
         for ka, kb, pv, m in cand:
-            if ka in anchors and kb in anchors and (not m or pv < 0.05 or spec.brackets_ns):
-                if abs(anchors[ka][0] - anchors[kb][0]) > 1e-6:
-                    comps.append((ka, kb, pv))
+            if ka not in anchors or kb not in anchors or abs(anchors[ka][0] - anchors[kb][0]) <= 1e-6:
+                continue
+            if bracket_id(ka, kb) in hidden:
+                continue
+            if not m:
+                if pv >= alpha and not sig.get("ns_single", True):
+                    continue
+            elif which == "none":
+                continue
+            elif which == "significant" and pv >= alpha:
+                continue
+            elif which == "control":
+                col = lambda k: k[1] if isinstance(k, tuple) else k
+                if control not in (col(ka), col(kb)):
+                    continue
+            comps.append((ka, kb, pv))
     return comps
 
 
 def _brackets(graph, anchors: dict, tops: list, ac: str, aw: float):
     spec = graph.spec
+    sig = sig_settings(spec)
     fs_b = spec.fonts["bracket"]
+    fs_s = spec.fonts.get("stars", fs_b)
+    color = sig.get("color") or ac
+    width = float(sig.get("width") or 0) or aw
+    tick = float(sig.get("tick", 4.5)) if sig.get("shape", "bracket") == "bracket" else 0.0
+    gap = float(sig.get("label_gap", 2.5))
     comps = _comparisons(graph, anchors)
-    # narrow spans first, each placed at the lowest level that doesn't collide
-    comps.sort(key=lambda t: (abs(anchors[t[1]][0] - anchors[t[0]][0]), min(anchors[t[0]][0], anchors[t[1]][0])))
+    if sig.get("order", "shortest") == "shortest":   # narrow spans lowest
+        comps.sort(key=lambda t: (abs(anchors[t[1]][0] - anchors[t[0]][0]), min(anchors[t[0]][0], anchors[t[1]][0])))
     placed: list[tuple[float, float, float]] = []        # (x1, x2, y)
-    step = TM.ascent(fs_b) + 9.0
+    step = max(TM.ascent(fs_b), TM.ascent(fs_s)) + float(sig.get("level_gap", 9.0)) + gap - 2.5
     out = []
     for ka, kb, pv in comps:
         x1, x2 = sorted((anchors[ka][0], anchors[kb][0]))
         span_top = min([t_ for x_, t_ in tops if x1 - 1e-6 <= x_ <= x2 + 1e-6] +
                        [anchors[ka][1], anchors[kb][1]])
-        y = span_top - 8.0
+        y = span_top - float(sig.get("distance", 8.0))
         moved = True
         while moved:
             moved = False
@@ -985,18 +1320,21 @@ def _brackets(graph, anchors: dict, tops: list, ac: str, aw: float):
                     y = py - step
                     moved = True
         placed.append((x1, x2, y))
-        label = p_summary(pv) if spec.p_format == "stars" else (
-            "P<0.0001" if pv < 0.0001 else f"P={fmt_p(pv)}")
-        gid = f"bracket-{_key_id(ka)}-{_key_id(kb)}"
+        label = bracket_label(pv, sig)
+        fs = fs_s if sig.get("label", "stars") == "stars" else fs_b
+        gid = bracket_id(ka, kb)
         dx, dy = spec.offsets.get(gid, (0.0, 0.0))
         ytop = y + dy
 
-        def draw_br(cv, x1=x1 + dx, x2=x2 + dx, ytop=ytop, label=label):
-            cv.polyline([(x1, ytop + 4.5), (x1, ytop), (x2, ytop), (x2, ytop + 4.5)], ac, aw, "butt")
-            cv.text((x1 + x2) / 2, ytop - 2.5, label, fs_b, anchor="middle")
-        tr = _text_rect((x1 + x2) / 2 + dx, ytop - 2.5, label, fs_b, "middle")
-        br = QRectF(x1 + dx - 1, ytop - 1, (x2 - x1) + 2, 6.5).united(tr)
-        out.append((gid, br, draw_br))
+        def draw_br(cv, x1=x1 + dx, x2=x2 + dx, ytop=ytop, label=label, fs=fs):
+            if tick > 0:
+                cv.polyline([(x1, ytop + tick), (x1, ytop), (x2, ytop), (x2, ytop + tick)], color, width, "butt")
+            else:
+                cv.line(x1, ytop, x2, ytop, color, width, "butt")
+            cv.text((x1 + x2) / 2, ytop - gap, label, fs, color=color, anchor="middle")
+        tr = _text_rect((x1 + x2) / 2 + dx, ytop - gap, label, fs, "middle")
+        br = QRectF(x1 + dx - 1, ytop - 1, (x2 - x1) + 2, max(tick, 2.0) + 2).united(tr)
+        out.append((gid, br, draw_br, label, fs))
     return out
 
 

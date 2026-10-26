@@ -304,6 +304,92 @@ def take_shots(app, out: str) -> int:
     shot(dlg, "67_add_to_figure")
     dlg.close()
 
+    # Graph polish (M9): significance options, right axis, axis break, drawings.
+    from .graph.drawings import new_drawing
+    from .graph.canvas import MM as _MM
+    import numpy as _np
+    t9 = p.add_table(table_type="column", example=False)
+    t9.name = "Dose groups"
+    rng9 = _np.random.default_rng(3)
+    for c, m in enumerate((10, 14, 11, 18)):
+        t9.titles[c] = ["Vehicle", "Low", "Mid", "High"][c]
+        for r in range(6):
+            t9.set(r, c, float(m + rng9.normal(0, 1.5)), emit=False)
+    t9.changed.emit()
+    from ..doc.model import Analysis as _An
+    p.add_analysis(_An("anova1", t9, [0, 1, 2, 3], {}))
+    g9b = next(x for x in p.graphs if x.table is t9)
+    g9b.spec.y.title = "Seizures per week"
+    g9b.spec.sig.update(which="control", control=0, shape="line", label="both")
+    g9b.spec.fonts["bracket"].size = 9
+    g9b.spec.drawings = [new_drawing("text", 6, 2, 6, 2, text="n = 6 mice per group", size=9, italic=True),
+                         new_drawing("arrow", 120, -12, 150, 8)]
+    w.show_sheet(g9b)
+    pump(10)
+    shot(w, "68_significance_and_drawings")
+    dlg = FormatGraphDialog(g9b, p, "significance", parent=w)
+    dlg.show()
+    shot(dlg, "69_significance_options")
+    dlg.close()
+    t10 = p.add_table(table_type="xy", example=False)
+    t10.name = "Temperature and seizures"
+    t10.titles[0], t10.titles[1] = "Temperature", "Seizures"
+    for r in range(10):
+        t10.set(r, "x", float(r), emit=False)
+        t10.set(r, 0, 36.5 + 0.3 * r + 0.2 * _np.sin(r), emit=False)
+        t10.set(r, 1, 12 + 6 * _np.cos(r / 2), emit=False)
+    t10.changed.emit()
+    g10b = next(x for x in p.graphs if x.table is t10)
+    sp = g10b.spec
+    sp.style(0).connect = sp.style(1).connect = True
+    sp.style(1).axis = "right"
+    sp.style(1).symbol_shape = "square"
+    sp.style(1).symbol_color = "#08519c"
+    sp.y.title, sp.y2.title, sp.x.title = "Temperature (°C)", "Seizures per day", "Day"
+    sp.y.grid = True
+    sp.y.extra = [{"value": 38.0, "line": True, "dash": "dash", "label": "fever"}]
+    sp.show_legend = True
+    w.show_sheet(g10b)
+    pump(10)
+    shot(w, "70_right_axis")
+    dlg = FormatGraphDialog(g10b, p, "y", parent=w)
+    dlg.show()
+    pump(5)
+    dlg.stack.currentWidget().verticalScrollBar().setValue(10000)
+    shot(dlg, "71_axis_break_options")
+    dlg.close()
+
+    # More M9 graphs: bubble plot, horizontal bars, waffle, a plotted function.
+    from .dialogs.graph_type import apply_preset as _ap
+    tmv = p.add_table(table_type="multivar", example=True)
+    tmv.name = "Mouse cohort"
+    gmv = next(x for x in p.graphs if x.table is tmv)
+    gmv.spec.mv.update(x=1, y=[2], size=0, color=3, labels=False)
+    w.show_sheet(gmv)
+    pump(10)
+    shot(w, "72_bubble_plot")
+    gh = g9b
+    gh.spec = _ap(gh.spec, "h_scatter_bar", t9.used_columns())
+    gh.spec.drawings = []
+    gh.spec.sig.update(which="significant", shape="bracket", label="stars")
+    gh.changed.emit()
+    w.show_sheet(gh)
+    pump(10)
+    shot(w, "73_horizontal")
+    tw = p.add_table(table_type="parts", example=True)
+    gw = next(x for x in p.graphs if x.table is tw)
+    gw.spec.parts_layout = "waffle"
+    gw.spec.show_legend = True
+    w.show_sheet(gw)
+    pump(10)
+    shot(w, "74_waffle")
+    sp.functions = [{"id": "f", "text": "Y = 36.5 + 0.3*X", "params": {}, "from": None, "to": None,
+                     "color": "#b3261e", "width": 1.0, "dash": "dash"}]
+    g10b.changed.emit()
+    w.show_sheet(g10b)
+    pump(10)
+    shot(w, "75_function")
+
     # Dark mode: a fresh window after switching the app's colour scheme.
     try:
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)

@@ -15,7 +15,7 @@ from PySide6.QtGui import QPainterPath
 
 from ...doc.model import column_letter
 from .canvas import MM, TextMetrics as TM
-from .layout import (ORDER, TICK_LEN, AxisRange, Element, Plan, YMap, _legend, _rect_path,
+from .layout import (ORDER, TICK_LEN, AxisRange, Element, Plan, YMap, _frame, _guides, _legend, _rect_path,
                      _text_rect, _title, _y_axis, _y_title, draw_symbol, nice_range, summarize,
                      summarize_entered)
 
@@ -61,7 +61,7 @@ def series(t, c: int, st) -> list[dict]:
             if s["center"] is None:
                 continue
             out.append({"x": x, "center": s["center"], "lo": s["lo"], "hi": s["hi"], "reps": [],
-                        "xerr": xe})
+                        "xerr": xe, "row": r})
             continue
         reps = [(k, v) for k in range(t.width()) if (v := t._ok(r, t.flat(c, k))) is not None]
         if not reps:
@@ -69,7 +69,7 @@ def series(t, c: int, st) -> list[dict]:
         v = np.array([b for _, b in reps])
         s = summarize(v, st)
         center = s["center"] if s["center"] is not None else float(v.mean())
-        out.append({"x": x, "center": center, "lo": s["lo"], "hi": s["hi"], "reps": reps, "xerr": xe})
+        out.append({"x": x, "center": center, "lo": s["lo"], "hi": s["hi"], "reps": reps, "xerr": xe, "row": r})
     return out
 
 
@@ -135,12 +135,14 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
     xs_all += [row["x"] + (row["xerr"] or 0) for c in cols for row in data[c] if row["xerr"]]
     xr = x_range(spec, xs_all)
     xm = XMap(spec.x, xr, pw)
-    summaries = {}
+    right = {c for c in cols if spec.style(c).axis == "right"}
+    summaries, summaries2 = {}, {}
     k = 0
     for c in cols:
         for row in data[c]:
             vals = [row["center"]] + [v for _, v in row["reps"]]
-            summaries[k] = {"min": min(vals), "max": max(vals), "lo": row["lo"], "hi": row["hi"]}
+            (summaries2 if c in right else summaries)[k] = {"min": min(vals), "max": max(vals),
+                                                            "lo": row["lo"], "hi": row["hi"]}
             k += 1
     for cv_ in curves:
         g = grid(*cv_["range"], 60)
@@ -150,13 +152,19 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
             lo_b, hi_b = cv_["band"](g)
             ys += [float(v) for v in np.concatenate([lo_b, hi_b]) if math.isfinite(v)]
         if ys:
-            summaries[k] = {"min": min(ys), "max": max(ys), "lo": None, "hi": None}
+            (summaries2 if cv_["column"] in right else summaries)[k] = {"min": min(ys), "max": max(ys),
+                                                                        "lo": None, "hi": None}
             k += 1
     from .layout import y_range
     rng = y_range(graph, summaries)
     ym = YMap(spec.y, rng, ph)
+    ym2 = rng2 = None
+    if right:
+        rng2 = y_range(graph, summaries2, spec.y2)
+        ym2 = YMap(spec.y2, rng2, ph)
     elements: list[Element] = []
-    base_v = max(rng.vmin, 0.0) if spec.y.scale != "log10" else rng.vmin
+    elements += _guides(spec, ym, pw, ph, ym2, xm)
+    base_v0 = max(rng.vmin, 0.0) if spec.y.scale != "log10" else rng.vmin
 
     # XY bars: width from the bin width, else most of the smallest X spacing
     uniq = sorted({row["x"] for c in cols for row in data[c]})
@@ -168,8 +176,13 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
     nb = max(len(bar_cols), 1)
 
     tops = []
+    ym_left, rng_left = ym, rng
     for c in cols:
+        ym, rng_c = (ym2, rng2) if c in right else (ym_left, rng_left)
+        base_v = base_v0 if c not in right else (max(rng2.vmin, 0.0) if spec.y2.scale != "log10" else rng2.vmin)
         st = spec.style(c)
+        xmc = (lambda f, n: (lambda v: f(v) + n))(xm, st.nudge)
+        ymc = (lambda f, n: (lambda v: f(v) - n))(ym, st.nudge_y)
         rows = sorted(data[c], key=lambda r: r["x"])
         if not rows:
             continue
@@ -179,32 +192,53 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
         is_bar = st.appearance == "bar"
         bi = bar_cols.index(c) if c in bar_cols else 0
         hit_rects = []
-        pts_mean = [(xm(r_["x"]), ym(r_["center"])) for r_ in rows]
+        pts_mean = [(xmc(r_["x"]), ymc(r_["center"])) for r_ in rows]
+        from ...doc.spec import SUBJECT_COLORS
+        row_cols = [SUBJECT_COLORS[r_["row"] % len(SUBJECT_COLORS)] if st.by_row else None for r_ in rows]
+        rep_cols = [SUBJECT_COLORS[r_["row"] % len(SUBJECT_COLORS)] if st.by_row else None
+                    for r_ in rows for _ in r_["reps"]]
+        fs_lab = spec.fonts["legend"]
+        labels = [(x_, y_, t.row_label(r_["row"])) for r_, (x_, y_) in zip(rows, pts_mean)] if st.row_labels else []
+        for x_, y_, lab in labels:
+            hit_rects.append(_text_rect(x_ + d / 2 + 2, y_ + TM.cap_height(fs_lab) / 2, lab, fs_lab, "start"))
+        runs = [pts_mean]
+        if st.gaps and len(rows) > 1:          # break the line where a value is missing
+            present = {r_["row"] for r_ in rows}
+            missing = sorted(xv for r in range(t.nrows_used()) if r not in present
+                             and (xv := t.x_value(r)) is not None)
+            runs, cur = [], [pts_mean[0]]
+            for (a_, pa), (b_, pb) in zip(zip(rows, pts_mean), zip(rows[1:], pts_mean[1:])):
+                if any(a_["x"] < m < b_["x"] for m in missing):
+                    runs.append(cur)
+                    cur = []
+                cur.append(pb)
+            runs.append(cur)
         for x_, y_ in pts_mean:
             hit_rects.append(QRectF(x_ - d, y_ - d, 2 * d, 2 * d))
-        rep_pts = [(xm(r_["x"]), ym(v), k_) for r_ in rows for k_, v in r_["reps"]]
+        rep_pts = [(xmc(r_["x"]), ymc(v), k_) for r_ in rows for k_, v in r_["reps"]]
         show_reps = st.xy_show in ("replicates", "spaghetti") and rep_pts
         if show_reps:
             hit_rects += [QRectF(x_ - d, y_ - d, 2 * d, 2 * d) for x_, y_, _ in rep_pts]
         bars = []
         if is_bar:
-            full = abs(xm(uniq[0] + bin_w) - xm(uniq[0])) if uniq else 10.0
+            full = abs(xmc(uniq[0] + bin_w) - xmc(uniq[0])) if uniq else 10.0
             w_each = full * (0.98 if getattr(t, "bin_width", None) else 0.8) / nb
             for r_ in rows:
-                x0 = xm(r_["x"]) - full * (0.98 if getattr(t, "bin_width", None) else 0.8) / 2 + bi * w_each
-                yb, y0 = ym(r_["center"]), ym(base_v)
+                x0 = xmc(r_["x"]) - full * (0.98 if getattr(t, "bin_width", None) else 0.8) / 2 + bi * w_each
+                yb, y0 = ymc(r_["center"]), ymc(base_v)
                 bars.append((x0, min(yb, y0), w_each, abs(y0 - yb)))
                 hit_rects.append(QRectF(x0, min(yb, y0), w_each, abs(y0 - yb)))
         top = min([y for _, y in pts_mean] + [y for _, y, _ in rep_pts]) - d
         for r_ in rows:
             if st.errors and r_["hi"] is not None and st.xy_show == "mean":
-                top = min(top, ym(r_["hi"]))
+                top = min(top, ymc(r_["hi"]))
         tops.append(top)
 
         def draw_ds(cv, st=st, rows=rows, pts_mean=pts_mean, rep_pts=rep_pts, show_reps=show_reps, d=d,
-                    col=col, dash=dash, bars=bars, is_bar=is_bar):
+                    col=col, dash=dash, bars=bars, is_bar=is_bar, ymc=ymc, xmc=xmc, base_v=base_v, runs=runs,
+                    row_cols=row_cols, rep_cols=rep_cols, labels=labels, fs_lab=fs_lab):
             if st.fill and len(pts_mean) > 1:
-                y0 = ym(base_v)
+                y0 = ymc(base_v)
                 poly = [(pts_mean[0][0], y0)] + pts_mean + [(pts_mean[-1][0], y0)]
                 cv.polygon(poly, fill=st.bar_fill if st.bar_fill != "#b4b4b4" else col, opacity=st.fill_alpha)
             for x0, y0, w, h in bars:
@@ -215,20 +249,20 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
             if st.xy_show == "mean" and st.errors:
                 cap = max(d * 0.75, 2.5)
                 for r_ in rows:
-                    xc = xm(r_["x"])
-                    yc = ym(r_["center"])
+                    xc = xmc(r_["x"])
+                    yc = ymc(r_["center"])
                     ends = []
                     if r_["hi"] is not None and st.error_dir in ("both", "above") and r_["hi"] != r_["center"]:
-                        ends.append(ym(r_["hi"]))
+                        ends.append(ymc(r_["hi"]))
                     if (r_["lo"] is not None and st.error_dir in ("both", "below") and not is_bar
                             and r_["lo"] != r_["center"]):
-                        ends.append(ym(r_["lo"]))
+                        ends.append(ymc(r_["lo"]))
                     for ye in ends:
                         cv.line(xc, yc, xc, ye, st.error_color, st.error_width, "butt")
                         if st.error_style == "T":
                             cv.line(xc - cap, ye, xc + cap, ye, st.error_color, st.error_width, "butt")
                     if r_["xerr"]:
-                        xl, xh = xm(r_["x"] - r_["xerr"]), xm(r_["x"] + r_["xerr"])
+                        xl, xh = xmc(r_["x"] - r_["xerr"]), xmc(r_["x"] + r_["xerr"])
                         cv.line(xl, yc, xh, yc, st.error_color, st.error_width, "butt")
                         if st.error_style == "T":
                             cv.line(xl, yc - cap, xl, yc + cap, st.error_color, st.error_width, "butt")
@@ -239,14 +273,18 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
                     if len(line) > 1:
                         cv.polyline(line, col, st.line_width, "round", dash)
             elif st.connect and len(pts_mean) > 1 and not is_bar:
-                cv.polyline(pts_mean, col, st.line_width, "round", dash)
+                for run in runs:
+                    if len(run) > 1:
+                        cv.polyline(run, col, st.line_width, "round", dash)
             if st.show_points and not is_bar:
                 if show_reps:
-                    for x_, y_, _ in rep_pts:
-                        draw_symbol(cv, st.symbol_shape, x_, y_, d, col)
+                    for (x_, y_, _), rc in zip(rep_pts, rep_cols):
+                        draw_symbol(cv, st.symbol_shape, x_, y_, d, rc or col)
                 else:
-                    for x_, y_ in pts_mean:
-                        draw_symbol(cv, st.symbol_shape, x_, y_, d, col)
+                    for (x_, y_), rc in zip(pts_mean, row_cols):
+                        draw_symbol(cv, st.symbol_shape, x_, y_, d, rc or col)
+            for x_, y_, lab in labels:
+                cv.text(x_ + d / 2 + 2, y_ + TM.cap_height(fs_lab) / 2, lab, fs_lab, anchor="start")
         hit = _rect_path(*hit_rects) if hit_rects else QPainterPath()
         elements.append(Element(f"data-{column_letter(c)}", "dataset", hit.boundingRect().adjusted(-2, -2, 2, 2),
                                 draw_ds, hit, {"column": c, "label": t.label(c)}))
@@ -255,18 +293,20 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
     seen: dict[int, int] = {}
     for cv_ in curves:
         c = cv_["column"]
+        ym, rng = (ym2, rng2) if c in right else (ym_left, rng_left)
         i = seen.get(c, 0)
         seen[c] = i + 1
         st = spec.style(c)
         g = grid(*cv_["range"])
         y = np.asarray(cv_["fn"](g), float)
         ok = np.isfinite(y) & (y >= rng.vmin - (rng.vmax - rng.vmin) * 2) & (y <= rng.vmax + (rng.vmax - rng.vmin) * 2)
-        pts = [(xm(a), ym(b)) for a, b in zip(g[ok], y[ok])]
+        nx, ny = st.nudge, st.nudge_y
+        pts = [(xm(a) + nx, ym(b) - ny) for a, b in zip(g[ok], y[ok])]
         band_pts = None
         if cv_["band"] is not None:
             lo_b, hi_b = cv_["band"](g)
-            band_pts = ([(xm(a), ym(b)) for a, b in zip(g, lo_b) if math.isfinite(b)],
-                        [(xm(a), ym(b)) for a, b in zip(g, hi_b) if math.isfinite(b)])
+            band_pts = ([(xm(a) + nx, ym(b) - ny) for a, b in zip(g, lo_b) if math.isfinite(b)],
+                        [(xm(a) + nx, ym(b) - ny) for a, b in zip(g, hi_b) if math.isfinite(b)])
 
         def draw_curve(cv, pts=pts, band_pts=band_pts, st=st):
             if band_pts:
@@ -291,17 +331,61 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
         elements.append(Element(f"fit-{column_letter(c)}" + (f"-{i}" if i else ""), "curve", box, draw_curve,
                                 path, {"column": c}))
 
+    # functions typed by the user ("Plot a function"), over the X axis range unless limited
+    for i, fn in enumerate(spec.functions):
+        from ...analysis.function import evaluate
+        lo = fn.get("from") if fn.get("from") is not None else xr.vmin
+        hi = fn.get("to") if fn.get("to") is not None else xr.vmax
+        try:
+            g = grid(float(lo), float(hi), 400)
+            yv = evaluate(fn.get("text", ""), fn.get("params") or {}, g)
+        except (ValueError, SyntaxError, TypeError, ZeroDivisionError):
+            continue
+        span = rng_left.vmax - rng_left.vmin
+        runs, cur = [], []
+        for a_, b_ in zip(g, yv):              # break where the function leaves the plot or is undefined
+            if math.isfinite(b_) and rng_left.vmin - span * 0.05 <= b_ <= rng_left.vmax + span * 0.05:
+                cur.append((xm(a_), ym_left(min(max(b_, rng_left.vmin), rng_left.vmax))))
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        col, lw = fn.get("color") or "#000000", float(fn.get("width", 1.0))
+        dash = None if fn.get("dash", "solid") == "solid" else fn.get("dash")
+
+        def draw_fn(cv, runs=runs, col=col, lw=lw, dash=dash):
+            for run in runs:
+                if len(run) > 1:
+                    cv.polyline(run, col, lw, "round", dash)
+        box, path = QRectF(), QPainterPath()
+        for run in runs:
+            for x_, y_ in run:
+                box = box.united(QRectF(x_ - 1.5, y_ - 1.5, 3, 3))
+            if len(run) > 1:
+                path.moveTo(*run[0])
+                for p_ in run[1:]:
+                    path.lineTo(*p_)
+        from PySide6.QtGui import QPainterPathStroker
+        st_ = QPainterPathStroker()
+        st_.setWidth(6.0)
+        elements.append(Element(f"function-{i + 1}", "curve", box, draw_fn, st_.createStroke(path),
+                                {"function": fn.get("id"), "column": None}))
+
     # axes
+    ym, rng = ym_left, rng_left
     y_el, num_left = _y_axis(spec, ym, ph, yx)
     elements.append(y_el)
     elements.append(_x_axis_numeric(spec, xm, pw, xy, yx))
+    legend_x = pw + 12.0
+    if ym2 is not None:
+        y2_el, num_right = _y_axis(spec, ym2, ph, pw + off, "right")
+        elements.append(y2_el)
+        t2 = _y_title(spec, num_right, ph, "right")
+        elements += t2
+        legend_x = (max(e.bounds.right() for e in t2) if t2 else num_right) + 12.0
     if spec.frame == "box":
-        def draw_frame(cv):
-            cv.line(0, 0, pw, 0, ac, aw)
-            cv.line(pw, 0, pw, ph, ac, aw)
-        fb = QRectF(-2, -2, pw + 4, ph + 4)
-        elements.append(Element("frame", "frame", fb, draw_frame,
-                                _rect_path(QRectF(-2, -2, pw + 4, 4), QRectF(pw - 2, -2, 4, ph + 4))))
+        elements.append(_frame(spec, pw, ph, ym, right_axis=ym2 is not None))
     elements += _y_title(spec, num_left, ph)
     xt = _x_title(spec, pw, elements[-1] if False else None, xy)
     if xt:
@@ -309,7 +393,7 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
     if spec.show_legend and len(cols) > 1:
         sw = "bar" if all(spec.style(c).appearance == "bar" for c in cols) else (
             "line" if any(spec.style(c).connect for c in cols) or curves else "auto")
-        elements.append(_legend(spec, t, Plan([], pw, [], legend=list(cols), swatch=sw), pw + 12.0, 0.0))
+        elements.append(_legend(spec, t, Plan([], pw, [], legend=list(cols), swatch=sw), legend_x, 0.0))
     content_top = min(tops + [0.0] + [e.bounds.top() for e in elements if e.id == "y-title"])
     elements += _title(spec, graph, pw, content_top)
     elements.sort(key=lambda e: ORDER[e.kind])

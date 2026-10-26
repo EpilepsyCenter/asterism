@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M8 done; M9 (graph polish) next.** The Qt spike (M0) passed on
+Status: **M1–M9 done; M10 (import) next.** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -254,12 +254,12 @@ Status: ✅ done · ◐ partly done · blank = to do.
 2. ✅ Column bar: mean ± SD/SEM/95% CI/range, with or without points
 3. ✅ Box and whiskers: seven whisker methods, outliers, mean "+", optional all points
 4. ✅ Violin plot: truncated at the extremes (as Prism), light/medium/heavy smoothing, median and quartile lines, optional points
-5. ✅ Before-after: symbols + lines (mean ± error beside: M9)
+5. ✅ Before-after: symbols + lines, optional mean/median ± error beside (M9)
 6. ✅ Mean (or median) with error only: one symbol per data set
 7. ✅ Floating bars: min to max
 8. ✅ Aligned dot plot (frequency dot plot: M5 with frequency-distribution graphs)
 9. ✅ Significance brackets from multiple comparisons, stars or exact P, stacked
-   - Formatting (requested 2026-10-23; scheduled with M9). Format Graph › Significance:
+   - ✅ Formatting (requested 2026-10-23; done in M9). Format Graph › Significance:
      - **Shape:** bracket with end ticks or a plain line; tick length; line thickness and colour.
      - **Label:** stars or exact P ("P = 0.012", "P < 0.0001", or just the number); font and
        size of the stars separately from P text; gap between line and label.
@@ -277,8 +277,8 @@ Status: ✅ done · ◐ partly done · blank = to do.
 11. ✅ Stacked bars and 100% stacked bars (error bars drawn above each segment)
 12. ✅ Interleaved / separated scatter with mean ± error
 13. ✅ Grouped box and whiskers, grouped violin
-14. ◐ Connected means (done); replicates with connected means (M9)
-15. Bars extending left and right (population pyramid, fold change both ways) — M9 with horizontal graphs
+14. ✅ Connected means; each replicate with connected means (M9)
+15. ✅ Bars extending left and right (population pyramid, fold change both ways), and horizontal column/grouped graphs (M9)
 16. ✅ Heat map of a grouped table (colour range from the Y axis range)
 - ✅ Legends (draggable), palette colours per data set, brackets from two-way comparisons
   and multiple t tests, crowded X labels tilt automatically
@@ -289,29 +289,29 @@ Status: ✅ done · ◐ partly done · blank = to do.
 
 **XY (M5)**
 19. ✅ Points only, points + connecting line, line only; mean ± error or each replicate; X error bars; XY bars
-20. ◐ Spaghetti plot (each replicate connected) done; discontinuous lines (M9)
+20. ✅ Spaghetti plot (each replicate connected); discontinuous lines at missing values (M9)
 21. ✅ Area fills, including semitransparent overlapping fills
 22. ✅ Fitted curves with confidence / prediction bands (any linked linear or nonlinear fit)
-23. ◐ Fit over a selected range and curve drawn over a chosen range done; plot a function (M9)
-24. Bubble plot (third variable as symbol size) — with multiple-variable graphs (M9)
+23. ✅ Fit over a selected range, curve drawn over a chosen range; plot a typed function (M9)
+24. ✅ Bubble plot (a third variable as symbol size), with multiple-variable graphs (M9)
 25. ✅ Frequency distribution: histogram and cumulative, as a graph of the analysis's results (live)
 
 **Survival, contingency, parts of whole (M6)**
-26. ✅ Kaplan-Meier staircase with censor ticks, CI bands (dashed or shaded), % or fraction, survival or death (CI as error bars: M9)
+26. ✅ Kaplan-Meier staircase with censor ticks, CI bands (dashed or shaded), % or fraction, survival or death or as error bars (M9)
 27. ✅ Contingency: interleaved, separated and stacked bars of counts, stacked to 100%, heat map
 28. ✅ Pie and donut charts (labels by percent or value, readable on any slice colour)
-29. ◐ 100% stacked bar done; percentage dot plot (waffle) in M9
+29. ✅ 100% stacked bar; percentage dot plot (waffle, M9)
 
 **Graphs created by analyses (with each analysis, M3–M7)**
 30. Estimation plots (t test: Gardner-Altman; one-way ANOVA: Cumming)
-31. ◐ Residual plots for linear and nonlinear regression ✅ (result tables, graphed); normality QQ plot (M9)
+31. ✅ Residual plots for linear and nonlinear regression (result tables, graphed); normality QQ plot (M9; plotting positions to confirm against Prism)
 32. Bland-Altman plot
 33. ROC curve
 34. Volcano plot (multiple t tests)
 35. Forest plot (odds ratios, hazard ratios)
 
 **Multiple variables (later, on demand)**
-36. Scatter coloured / sized by a variable, confidence ellipses, convex hulls
+36. ◐ Scatter coloured / sized by a variable, labelled points (M9); confidence ellipses, convex hulls
 37. Correlation matrix heat map, dendrograms (clustering)
 38. PCA plots: scree, loadings, biplot / vector plot
 
@@ -320,7 +320,7 @@ Error bar direction (above/below/both); left and right Y axes; log axes; axis ga
 time-scale axes; grid lines and shaded bands (QC graphs); nudging data sets
 (waterfall); labelling points with row titles; colour by row ("rainbow"); colour
 schemes; legends; text, lines, arrows and pictures on graphs; overlaying graphs in a
-figure (M9).
+figure. All done by M9 except time-scale axes (with date/time columns, M10).
 
 ## 9. Figures
 
@@ -549,7 +549,7 @@ graphs for the other table types arrive with their milestones (placeholder sheet
 - Graphs: stacked significance brackets for multiple comparisons, violin (truncated,
   three smoothing levels), floating bars, one-symbol mean/median, aligned dots, range
   error bars, before-after lines, Graph Type gallery previewed with the graph's data.
-- Deferred to M9: horizontal orientation; quartile-line styles for violins.
+- Horizontal orientation and quartile-line styles for violins: done in M9.
 
 **M3 (original plan)** §7 tier 1 with golden tests; column graph types
 (scatter, bars, box, violin), error-bar options, brackets from multiple comparisons,
@@ -582,7 +582,7 @@ Graph Type dialog.
   missing — the default). Same for one-way RM ANOVA. Checked against R (nlme compound
   symmetry, lmerTest). Open: Prism's df method with gaps and its Geisser-Greenhouse
   handling (requested in `tests/golden/REQUESTS.md`).
-- Deferred: three-way ANOVA; horizontal and left-right bars (M9).
+- Deferred: three-way ANOVA. (Horizontal and left-right bars: done in M9.)
 
 **M5 — XY. Done (2026-10-23).**
 - Golden-tested against Prism 11 (Seizure_data): simple linear regression (each replicate a
@@ -610,9 +610,9 @@ Graph Type dialog.
   graphs of analysis results (Graph.source), Format Graph XY options, XY gallery.
 - X values can be excluded (strike-through; leaves the row out).
 - Open: Prism golden values for nonlinear fits, ROUT and the exact-Spearman cut-off
-  (`tests/golden/REQUESTS.md`). Deferred: date/time X columns (M10 with import), plot a
-  function and discontinuous lines (M9), residual plots as graphs (with M7's result
-  tables), smoothing / derivatives (M7 transforms).
+  (`tests/golden/REQUESTS.md`). Deferred: date/time X columns (M10 with import). Done
+  since: plot a function and discontinuous lines (M9), residual plots as graphs (M7),
+  smoothing / derivatives (M7).
 
 **M6 — Contingency, survival, parts of whole. Done (2026-10-26).**
 - Contingency: Fisher's exact test (2 × 2, golden-tested against Prism 11 on Seizure_data;
@@ -672,11 +672,73 @@ Graph Type dialog.
   "Add to Figure…" from a graph (to an existing or a new figure); "Add Text".
 - Export at the exact page size: SVG (each panel a named group "panel-A" holding the graph's
   own groups "A-data-A" …, live text), PDF, PNG and TIFF; graphs export to TIFF too.
-- Deferred: overlaying graphs, drag and drop from the sidebar, choosing which results page a
-  panel shows (M9).
+- Done in M9: overlaying graphs, drag and drop from the sidebar, choosing which results page a
+  panel shows, per-panel letters (automatic, none, custom).
 
-**M9 — Graph polish:** colour schemes, Copy formatting, drawing tools, right Y axis, axis breaks,
-significance bracket formatting (§8a item 9).
+**M9 — Graph polish. Done (2026-10-26).**
+- Significance brackets (§8 item 9): bracket or plain line, end ticks, thickness, colour;
+  stars, P value, number or both; four, three, Prism-style (0.0332/0.0021/0.0002/0.0001) or
+  custom thresholds and the most stars; which comparisons (significant, all, against a
+  control, none, or ticked one by one; hide from the bracket's menu); "ns" for two-group
+  tests; stacking order, distance, spacing, label gap; separate font for stars.
+- Axes: a right Y axis (any data set on column, grouped, contingency and XY graphs, own
+  range, ticks, numbers and title); a break on linear Y axes (two segments, own tick
+  spacing, bottom share, gap; data cut across the gap); grid lines; extra ticks, reference
+  lines and shaded bands with labels; numeric X axis controls for multiple-variable and
+  survival graphs.
+- Colour schemes (ASTERISM, greys, colour-blind safe, viridis, NED-Net teal, warm,
+  pastel, black and white) and "Apply Formatting to Other Graphs" (chosen aspects, one
+  undo step).
+- Drawing on graphs: lines, arrows (one or both heads), boxes, ellipses, text, pictures;
+  Shift for 45° / squares; handles to reshape; move, nudge with arrows, delete, bring to
+  front / send to back, align; Format dialog (colour, thickness, dash, fill, position in mm).
+- Text: underline, colour, superscript / subscript (Unicode, so they survive every export),
+  symbols (Greek, maths, units, marks), alignment of drawn text.
+- Graph types: horizontal column and grouped graphs; bars extending left and right;
+  replicates with connected means; before-after with mean/median ± error beside;
+  discontinuous XY lines; plotted functions; normality QQ plot; Kaplan-Meier CIs as error
+  bars; waffle; multiple-variable graphs (any variable against others, bubble size and
+  colour by variables, row-title labels, legends); XY row labels and colour by row;
+  nudging data sets (left/right, and up/down on XY for waterfalls); per-data-set legend
+  entries; violin quartile and median line styles.
+- Figures: drag graphs, tables and results from the sidebar onto a page; overlay two graphs
+  (plot areas lined up); per-panel letters; which results page a panel shows.
+- Fixed on the way: a crash when a graph or figure view was destroyed with something
+  selected.
+- Open: Prism's QQ plotting positions (`tests/golden/REQUESTS.md`); time-scale axes come
+  with date/time columns (M10).
+
+**M9b — Finding your way (planned 2026-10-26).** Two navigation aids for large projects.
+
+*Graph overview* — every graph in the project on one page, to find and open graphs quickly.
+- Opened from an "All graphs" row at the top of the project sidebar (under the search field),
+  the View menu and a shortcut (⌘⇧G). It is a view, not a sheet: nothing is saved in the file
+  except the user's last thumbnail size and filters (in settings).
+- A grid of live thumbnails drawn by the graph layout engine (cached, redrawn when a graph
+  changes, drawn lazily as cards scroll into view), grouped under their data table's name in
+  sidebar order. Each card: thumbnail, graph name, one-line description ("Scatter dot plot ·
+  4 data sets"), its colour label.
+- Click selects; double-click or Return opens the graph; right-click: open, rename,
+  duplicate, delete, add to figure, colour label. Several selected: add to a figure (or drag
+  them onto one), apply formatting from one to the others, set a colour label.
+- Above the grid: a search field (names), filters by table type and by colour label, a
+  switch to include graphs of analysis results, sort (project order, name, last changed) and
+  a thumbnail-size slider. Figures can be shown too, as a second group.
+
+*Colour labels* — mark tables, graphs, analyses, notes and figures with a colour, as macOS
+Finder tags folders, to recognise them at a glance.
+- Seven colours and none (red, orange, yellow, green, blue, purple, grey; the theme's tokens,
+  readable in light and dark mode). Each colour can be given a name for the project ("Final",
+  "To check", "Supplement"), edited from the label menu; names are saved in the project.
+- Shown as a dot at the end of the sheet's row in the sidebar (rows keep their normal look
+  otherwise), on overview cards, and in sheet lists elsewhere (Analyze dialog, Add to figure,
+  Apply formatting).
+- Set from the sidebar's right-click menu (a row of colour swatches, like Finder's), the
+  Sheet menu, and ⌃1–⌃7 / ⌃0 for the current sheet; works on several selected rows at once.
+  Each change is one undo step; labels are per sheet (children do not inherit them).
+- A colour strip under the sidebar's search field filters the sidebar to sheets with that
+  label (parents stay visible, dimmed, for context); clicking again clears the filter.
+- Saved in the file as `label` on each sheet; older files load with no labels.
 
 **M10 — Import:** CSV/Excel, `.pzfx`, `.prism`, lab importers into typed tables.
 

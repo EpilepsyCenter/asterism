@@ -13,8 +13,8 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QDoubleValidator, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFontComboBox,
                                QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-                               QTableWidget, QToolButton, QWidget)
+                               QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSpinBox,
+                               QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 from ...doc.commands import SpecCommand
 from ...doc.model import Graph, Project
@@ -45,7 +45,8 @@ GROUPED_ARRANGEMENTS = [("Side by side (data sets next to each other in each row
                         ("Separated (one group per data set)", "separated"),
                         ("Stacked", "stacked"), ("Stacked to 100%", "stacked_pct"),
                         ("Connected means (one line per data set)", "lines"),
-                        ("Heat map", "heatmap")]
+                        ("Heat map", "heatmap"),
+                        ("Back to back (first data set left or down, second right or up)", "pyramid")]
 NESTED_ARRANGEMENTS = [("Each subject in its own column", "subjects"),
                        ("All values together, coloured by subject", "pooled"),
                        ("SuperPlot: values coloured by subject, with subject means", "superplot")]
@@ -95,10 +96,12 @@ class FormatGraphDialog(SectionDialog):
         self.spec = copy.deepcopy(graph.spec)
         self.auto_range = auto_range
         self.xy = graph.table.table_type == "xy"
+        self.numx = graph.table.table_type in ("xy", "multivar", "survival")      # numeric X axis
         self.cols = graph.table.used_columns()
         for c in self.cols:
             self.spec.style(c)
         self._loading = False
+        self.axis_ctl: dict = {}            # per axis ("x", "y", "y2"): its controls
 
         self._make_picker()
         self.add_group("Graph")
@@ -110,6 +113,8 @@ class FormatGraphDialog(SectionDialog):
             self.add_section("arrangement", "Arrangement", self._arrangement_page(tt),
                              {"nested": "square.stack.3d.down.right", "parts": "chart.pie",
                               "survival": "waveform.path.ecg"}.get(tt, "square.grid.3x2"))
+        if tt == "multivar":
+            self.add_section("arrangement", "Variables", self._variables_page(), "circle.hexagongrid")
         self.add_group("Data sets")
         self.add_section("style", "Style", self._style_page(), "circle.grid.2x2")
         self.add_section("datasets", "Show and order", self._datasets_page(), "eye")
@@ -176,10 +181,14 @@ class FormatGraphDialog(SectionDialog):
         self.col_w = mm_spin(self.spec.col_width_mm, 4, 80)
         self.height_mm = mm_spin(self.spec.y_len_mm, 10, 250)
         self.x_axis_len = mm_spin(self.spec.x_len_mm, 10, 300)
-        if self.xy:
+        if self.numx:
             g.add(("X-axis length:", self.x_axis_len), ("Plot height:", self.height_mm))
         else:
             g.add(("Column width:", self.col_w), ("Plot height:", self.height_mm))
+        self.orient = combo([("Vertical (columns go up)", False), ("Horizontal (bars go across)", True)],
+                            self.spec.horizontal)
+        if self.graph.table.table_type in ("column", "grouped", "contingency", "nested"):
+            g.add(("Orientation:", self.orient))
         pl.addLayout(g)
         pl.addWidget(Section("Axis lines and frame"))
         g = FormGrid()
@@ -217,7 +226,8 @@ class FormatGraphDialog(SectionDialog):
         for i, (key, label) in enumerate((("title", "Graph title"), ("y_title", "Y-axis title"),
                                           ("y_numbers", "Y-axis numbers"),
                                           ("x_labels", "X-axis labels"),
-                                          ("bracket", "Significance labels"),
+                                          ("bracket", "Significance P values"),
+                                          ("stars", "Significance stars"),
                                           ("legend", "Legend"))):
             fs = self.spec.fonts[key]
             fam = QFontComboBox()
@@ -242,13 +252,67 @@ class FormatGraphDialog(SectionDialog):
 
     # --- Graph: arrangement (grouped and nested tables) -------------------------------
 
+    def _variables_page(self) -> QWidget:
+        from ..graph.multivar_layout import roles
+        page, pl = tab_page()
+        t, mv = self.graph.table, self.spec.mv
+        ro = roles(self.spec, t)
+        nums = ro["numeric"]
+        name = lambda c: t.short_label(c)
+        pl.addWidget(Section("Axes"))
+        g = FormGrid()
+        self.mv_x = combo([(name(c), c) for c in nums], ro["x"])
+        g.add(("X axis:", self.mv_x))
+        pl.addLayout(g)
+        pl.addWidget(QLabel("Y axis (each ticked variable is a data set):"))
+        self.mv_y = QListWidget()
+        self.mv_y.setMaximumHeight(140)
+        for c in nums:
+            it = QListWidgetItem(name(c))
+            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked if c in ro["ys"] else Qt.Unchecked)
+            it.setData(Qt.UserRole, c)
+            self.mv_y.addItem(it)
+        pl.addWidget(self.mv_y)
+        pl.addWidget(Section("Size and colour"))
+        g = FormGrid()
+        self.mv_size = combo([("Nothing (same size)", None)] + [(name(c), c) for c in nums], ro["size"])
+        self.mv_color = combo([("Nothing (data set colour)", None)] + [(name(c), c) for c in t.used_columns()],
+                              ro["color"])
+        self.mv_smin, self.mv_smax = QDoubleSpinBox(), QDoubleSpinBox()
+        for w, v in ((self.mv_smin, mv.get("size_min", 4.0)), (self.mv_smax, mv.get("size_max", 22.0))):
+            w.setRange(1, 80)
+            w.setSuffix(" pt")
+            w.setValue(float(v))
+        g.add(("Symbol size shows:", self.mv_size), ("Colour shows:", self.mv_color))
+        g.add(("Smallest bubble:", self.mv_smin), ("Largest bubble:", self.mv_smax))
+        pl.addLayout(g)
+        note = QLabel("Bubble areas grow with the value. A numeric colour variable uses the colour range "
+                      "below; a text variable (e.g. Sex) gives one colour per group.")
+        note.setWordWrap(True)
+        note.setEnabled(False)
+        pl.addWidget(note)
+        g = FormGrid()
+        self.heat_low, self.heat_high = ColorButton(self.spec.heat_low), ColorButton(self.spec.heat_high)
+        g.add(("Low values:", self.heat_low), ("High values:", self.heat_high))
+        pl.addLayout(g)
+        self.mv_labels = QCheckBox("Label each point with its row title")
+        self.mv_labels.setChecked(bool(mv.get("labels")))
+        pl.addWidget(self.mv_labels)
+        self.legend = QCheckBox("Show a legend")
+        self.legend.setChecked(self.spec.show_legend)
+        pl.addWidget(self.legend)
+        pl.addStretch(1)
+        return page
+
     def _arrangement_page(self, tt: str) -> QWidget:
         page, pl = tab_page()
         s = self.spec
         g = FormGrid()
         if tt == "parts":
             self.arrangement = combo([("Pie chart", "pie"), ("Donut chart", "donut"),
-                                      ("Bar stacked to 100%", "stacked100")], s.parts_layout)
+                                      ("Bar stacked to 100%", "stacked100"),
+                                      ("Percentage dot plot (100 squares)", "waffle")], s.parts_layout)
             self.parts_labels = combo([("Percentages", "percent"), ("Values", "value"), ("No labels", "none")],
                                       s.parts_labels)
             self.hole = QDoubleSpinBox()
@@ -271,7 +335,7 @@ class FormatGraphDialog(SectionDialog):
                                  ("Fraction with the event", "frac_death")],
                                 ("pct" if s.surv_percent else "frac") + ("_death" if s.surv_death else ""))
             self.surv_ci = combo([("No confidence bands", "none"), ("Dashed lines", "dashed"),
-                                  ("Shaded band", "shaded")], s.surv_ci)
+                                  ("Shaded band", "shaded"), ("Error bars at each step", "bars")], s.surv_ci)
             g.add(("Plot:", self.surv_y))
             g.add(("Confidence intervals:", self.surv_ci))
             pl.addLayout(g)
@@ -292,6 +356,10 @@ class FormatGraphDialog(SectionDialog):
             self.arrangement = combo(GROUPED_ARRANGEMENTS, s.grouped_layout)
             g.add(("Arrange as:", self.arrangement))
             pl.addLayout(g)
+            self.lines_points = QCheckBox("Connected means: also show each replicate")
+            self.lines_points.setChecked(s.lines_points)
+            self.lines_points.toggled.connect(lambda v: setattr(self.spec, "lines_points", v))
+            pl.addWidget(self.lines_points)
             pl.addWidget(Section("Legend"))
             self.legend = QCheckBox("Show a legend for the data sets")
             self.legend.setChecked(s.show_legend)
@@ -321,21 +389,143 @@ class FormatGraphDialog(SectionDialog):
     # --- Graph: significance --------------------------------------------------------
 
     def _significance_page(self) -> QWidget:
+        from ..graph.layout import bracket_id
         page, pl = tab_page()
-        pl.addWidget(Section("Comparisons from analyses"))
+        sig = dict(self.spec.sig)
+        if self.spec.p_format == "exact" and sig.get("label") == "stars":
+            sig["label"] = "p"
+        if self.spec.brackets_ns and sig.get("which") == "significant":
+            sig["which"] = "all"
         self.show_br = QCheckBox("Draw significance brackets for comparisons in linked analyses")
         self.show_br.setChecked(self.spec.show_brackets)
         pl.addWidget(self.show_br)
+
+        pl.addWidget(Section("Which comparisons"))
         g = FormGrid()
-        self.p_fmt = combo([("Stars (ns, *, **, ***, ****)", "stars"),
-                            ("P value (P = 0.0123)", "exact")], self.spec.p_format)
-        g.add(("Label:", self.p_fmt))
+        self.sig_which = combo([("Only the significant ones", "significant"), ("All of them", "all"),
+                                ("Only those against a control", "control"), ("None", "none")], sig["which"])
+        self.sig_control = QComboBox()
+        for c in self.cols:
+            self.sig_control.addItem(self.graph.table.short_label(c), c)
+        set_combo(self.sig_control, sig.get("control"))
+        self.sig_alpha = combo([("0.05", 0.05), ("0.01", 0.01), ("0.001", 0.001), ("0.10", 0.10)], sig["alpha"])
+        g.add(("Multiple comparisons:", self.sig_which))
+        g.add(("Control:", self.sig_control), ("Significant when P <", self.sig_alpha))
+        pl.addLayout(g)
+        self.sig_ns = QCheckBox("Show “ns” for a two-group test that isn't significant")
+        self.sig_ns.setChecked(sig.get("ns_single", True))
+        pl.addWidget(self.sig_ns)
+        self.sig_list = QListWidget()
+        self.sig_list.setMaximumHeight(130)
+        hidden = set(sig.get("hidden") or [])
+        t = self.graph.table
+
+        def lab(k):
+            return f"{t.row_label(k[0])}: {t.label(k[1])}" if isinstance(k, tuple) else t.label(k)
+        for a in self.graph.analyses():
+            r = a.result
+            if r is None or r.error:
+                continue
+            pairs = [(ka, kb, pv) for ka, kb, pv in r.comparisons] + list(r.cell_comparisons)
+            if a.analysis_type == "multiple_t" and len(a.columns) == 2:
+                pairs += [((row, a.columns[0]), (row, a.columns[1]), padj) for row, _p, padj in r.rows]
+            for ka, kb, pv in pairs:
+                gid = bracket_id(ka, kb)
+                it = QListWidgetItem(f"{lab(ka)}  vs.  {lab(kb)}    (P = {pv:.4g})")
+                it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                it.setCheckState(Qt.Unchecked if gid in hidden else Qt.Checked)
+                it.setData(Qt.UserRole, gid)
+                self.sig_list.addItem(it)
+        if self.sig_list.count():
+            note = QLabel("Untick a comparison to hide its bracket (or right-click the bracket on the graph).")
+            note.setEnabled(False)
+            pl.addWidget(note)
+            pl.addWidget(self.sig_list)
+
+        pl.addWidget(Section("Label"))
+        g = FormGrid()
+        self.sig_label = combo([("Stars (ns, *, **, ***, ****)", "stars"), ("P value (P = 0.0123)", "p"),
+                                ("Number only (0.0123)", "number"), ("Stars and P value", "both")], sig["label"])
+        self.sig_levels = combo([("Four levels: 0.05, 0.01, 0.001, 0.0001", "four"),
+                                 ("Three levels: 0.05, 0.01, 0.001", "three"),
+                                 ("Prism's style: 0.0332, 0.0021, 0.0002, 0.0001", "gp"),
+                                 ("My own thresholds", "custom")], sig["levels"])
+        self.sig_max = combo([("1", 1), ("2", 2), ("3", 3), ("4", 4)], int(sig.get("max_stars", 4)))
+        self.sig_cuts = QLineEdit(", ".join(f"{c:g}" for c in sig.get("cuts", [0.05, 0.01, 0.001, 0.0001])))
+        g.add(("Show:", self.sig_label))
+        g.add(("Stars:", self.sig_levels))
+        g.add(("Thresholds:", self.sig_cuts), ("At most:", self.sig_max))
+        self.sig_star_size, self.sig_p_size = QDoubleSpinBox(), QDoubleSpinBox()
+        for w, key in ((self.sig_star_size, "stars"), (self.sig_p_size, "bracket")):
+            w.setRange(4, 48)
+            w.setDecimals(1)
+            w.setSuffix(" pt")
+            w.setValue(float(self.spec.fonts[key].size))
+            other = self.font_rows.get(key, (None, None))[1]
+            if other is not None:                      # the same size as on "Titles and fonts"
+                w.valueChanged.connect(lambda v, o=other: o.value() != v and o.setValue(v))
+                other.valueChanged.connect(lambda v, me=w: me.value() != v and me.setValue(v))
+        g.add(("Size of stars:", self.sig_star_size), ("Size of P values:", self.sig_p_size))
+        pl.addLayout(g)
+
+        pl.addWidget(Section("Lines"))
+        g = FormGrid()
+        self.sig_shape = combo([("Bracket with end ticks", "bracket"), ("Plain line", "line")], sig["shape"])
+        self.sig_tick = QDoubleSpinBox()
+        self.sig_tick.setRange(0, 30)
+        self.sig_tick.setSuffix(" pt")
+        self.sig_tick.setValue(sig["tick"])
+        self.sig_width = combo([("Same as the axes", 0.0)] + THICK[1:], sig.get("width", 0.0))
+        self.sig_color = ColorButton(sig.get("color") or self.spec.axis_color)
+        g.add(("Shape:", self.sig_shape), ("End ticks:", self.sig_tick))
+        g.add(("Thickness:", self.sig_width), ("Colour:", self.sig_color))
+        pl.addLayout(g)
+
+        pl.addWidget(Section("Placement"))
+        g = FormGrid()
+        self.sig_order = combo([("Shortest brackets lowest", "shortest"), ("In the analysis's order", "table")],
+                               sig["order"])
+        self.sig_dist, self.sig_level, self.sig_gap = QDoubleSpinBox(), QDoubleSpinBox(), QDoubleSpinBox()
+        for w, v in ((self.sig_dist, sig["distance"]), (self.sig_level, sig["level_gap"]), (self.sig_gap, sig["label_gap"])):
+            w.setRange(0, 60)
+            w.setSuffix(" pt")
+            w.setValue(float(v))
+        g.add(("Stacking:", self.sig_order), ("Label gap:", self.sig_gap))
+        g.add(("Above the data:", self.sig_dist), ("Between levels:", self.sig_level))
         pl.addLayout(g)
         pl.addStretch(1)
-        self.show_br.toggled.connect(lambda v: setattr(self.spec, "show_brackets", v))
-        self.p_fmt.currentIndexChanged.connect(
-            lambda _: setattr(self.spec, "p_format", self.p_fmt.currentData()))
+        self.sig_which.currentIndexChanged.connect(lambda *_: self._sync_sig())
+        self.sig_levels.currentIndexChanged.connect(lambda *_: self._sync_sig())
+        self.sig_shape.currentIndexChanged.connect(lambda *_: self._sync_sig())
+        self._sync_sig()
         return page
+
+    def _sync_sig(self) -> None:
+        self.sig_control.setEnabled(self.sig_which.currentData() == "control")
+        self.sig_cuts.setEnabled(self.sig_levels.currentData() == "custom")
+        self.sig_tick.setEnabled(self.sig_shape.currentData() == "bracket")
+
+    def _collect_sig(self) -> None:
+        s = self.spec
+        s.show_brackets = self.show_br.isChecked()
+        try:
+            cuts = sorted({float(v) for v in self.sig_cuts.text().replace(";", ",").split(",") if v.strip()},
+                          reverse=True) or [0.05, 0.01, 0.001, 0.0001]
+        except ValueError:
+            cuts = list(s.sig.get("cuts", [0.05, 0.01, 0.001, 0.0001]))
+        hidden = [self.sig_list.item(i).data(Qt.UserRole) for i in range(self.sig_list.count())
+                  if self.sig_list.item(i).checkState() != Qt.Checked]
+        color = self.sig_color.color()
+        s.sig = {**s.sig, "which": self.sig_which.currentData(), "control": self.sig_control.currentData(),
+                 "alpha": self.sig_alpha.currentData(), "ns_single": self.sig_ns.isChecked(),
+                 "label": self.sig_label.currentData(), "levels": self.sig_levels.currentData(), "cuts": cuts,
+                 "max_stars": self.sig_max.currentData(),
+                 "shape": self.sig_shape.currentData(), "tick": self.sig_tick.value(),
+                 "width": self.sig_width.currentData(), "color": "" if color == s.axis_color else color,
+                 "order": self.sig_order.currentData(), "distance": self.sig_dist.value(),
+                 "level_gap": self.sig_level.value(), "label_gap": self.sig_gap.value(), "hidden": hidden}
+        s.p_format = "exact" if s.sig["label"] == "p" else "stars"       # older readers
+        s.brackets_ns = False
 
     # --- Data sets ------------------------------------------------------------------
 
@@ -365,7 +555,19 @@ class FormatGraphDialog(SectionDialog):
         g.addWidget(self.smooth_label, g._row, 0, Qt.AlignRight | Qt.AlignVCenter)
         g.addWidget(self.smooth, g._row, 1)
         g._row += 1
+        styles = [("Dashed", "dash"), ("Dotted", "dot"), ("Solid", "solid"), ("None", "none")]
+        self.v_quart = combo(styles)
+        self.v_median = combo([("Solid", "solid"), ("Dashed", "dash"), ("Dotted", "dot"), ("None", "none")])
+        self.v_lines_label = QLabel("Quartile / median lines:")
+        row = QHBoxLayout()
+        row.addWidget(self.v_quart)
+        row.addWidget(self.v_median)
+        row.addStretch(1)
+        g.addWidget(self.v_lines_label, g._row, 0, Qt.AlignRight | Qt.AlignVCenter)
+        g.addLayout(row, g._row, 1)
+        g._row += 1
         pl.addLayout(g)
+        plot_at = pl.count()                     # "Plotting" (axis, legend, nudge) goes right here
         self.box_note = QLabel("The box spans the 25th to 75th percentile, with a line at the "
                                "median. Without individual points, values beyond the whiskers "
                                "are still drawn.")
@@ -384,7 +586,8 @@ class FormatGraphDialog(SectionDialog):
         for sh in SHAPES:
             self.sym_shape.addItem(shape_icon(sh), "", sh)
         self.sym_size = combo([(str(i), i) for i in range(1, 11)])
-        g.add(("Colour:", self.sym_color), ("Shape:", self.sym_shape), ("Size:", self.sym_size))
+        g.add(("Colour:", self.sym_color), ("Size:", self.sym_size))
+        g.add(("Shape:", self.sym_shape))
         pl.addWidget(self.symbols_box)
 
         self.xy_box = QWidget()                 # XY graphs: replicates, lines, area fill
@@ -401,8 +604,14 @@ class FormatGraphDialog(SectionDialog):
         self.fill_alpha.setRange(5, 100)
         self.fill_alpha.setSuffix(" % opaque")
         self.fill_alpha.setDecimals(0)
+        self.gaps = QCheckBox("Break the line where a value is missing")
         g.add(("Show:", self.xy_show))
         g.add((None, self.connect_line))
+        g.add((None, self.gaps))
+        self.row_labels = QCheckBox("Label points with their row titles")
+        self.by_row = QCheckBox("A different colour for each row")
+        g.add((None, self.row_labels))
+        g.add((None, self.by_row))
         g.add(("Line thickness:", self.line_w), ("Line style:", self.line_dash))
         g.add((None, self.fill_area), ("Shading:", self.fill_alpha))
         lines_sec = Section("Lines and replicates")
@@ -421,8 +630,8 @@ class FormatGraphDialog(SectionDialog):
         self.bar_fill = ColorButton()
         self.bar_border = combo(THICK)
         self.bar_border_color = ColorButton()
-        g.add(("Fill:", self.bar_fill), ("Border:", self.bar_border),
-              ("Border colour:", self.bar_border_color))
+        g.add(("Fill:", self.bar_fill), ("Border colour:", self.bar_border_color))
+        g.add(("Border:", self.bar_border))
         pl.addLayout(g)
 
         self.sec_err = Section("Error bars", checkable=True)
@@ -432,8 +641,8 @@ class FormatGraphDialog(SectionDialog):
         self.err_dir = combo([("Up and down", "both"), ("Up only", "above"), ("Down only", "below")])
         self.err_style = combo([("With caps", "T"), ("No caps", "line")])
         self.err_width = combo(THICK[1:])
-        g.add(("Colour:", self.err_color), ("Direction:", self.err_dir), ("Ends:", self.err_style))
-        g.add(("Thickness:", self.err_width))
+        g.add(("Colour:", self.err_color), ("Thickness:", self.err_width))
+        g.add(("Direction:", self.err_dir), ("Ends:", self.err_style))
         self.whisk_box = QWidget()             # box and whiskers: the method comes first
         wl = FormGrid()
         wl.setContentsMargins(18, 2, 0, 0)
@@ -444,21 +653,39 @@ class FormatGraphDialog(SectionDialog):
         pl.addWidget(self.whisk_box)
         pl.addLayout(g)
 
-        pl.addSpacing(6)
-        pl.addWidget(Section("Plotting"))
+        plot_box = QWidget()
+        bl = QVBoxLayout(plot_box)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.addWidget(Section("Axis, legend and position"))
         g = FormGrid()
-        left, legend = QCheckBox("Left Y axis"), QCheckBox("Show in legend")
-        left.setChecked(True)
-        for c in (left, legend):
-            c.setEnabled(False)
-            c.setToolTip("A right Y axis and per-data-set legend choices arrive in M9")
-        g.add(("Plot against:", left), (None, legend))
-        pl.addLayout(g)
+        self.plot_axis = combo([("Left Y axis", "left"), ("Right Y axis", "right")])
+        self.in_legend = QCheckBox("Show in legend")
+        g.add(("Plot against:", self.plot_axis), (None, self.in_legend))
+        self.nudge, self.nudge_y = QDoubleSpinBox(), QDoubleSpinBox()
+        for w in (self.nudge, self.nudge_y):
+            w.setRange(-500, 500)
+            w.setDecimals(1)
+            w.setSuffix(" pt")
+            w.valueChanged.connect(self._store)
+        g.add(("Nudge right:", self.nudge), ("Nudge up:", self.nudge_y))
+        self.nudge_y.setEnabled(self.xy)
+        bl.addLayout(g)
+        note = QLabel("Tip: select a data set on the graph and nudge it with the arrow keys (Shift: 5 pt).")
+        note.setEnabled(False)
+        bl.addWidget(note)
+        pl.insertWidget(plot_at, plot_box)
+        self.plot_axis.currentIndexChanged.connect(self._store)
+        self.in_legend.toggled.connect(self._store)
+        self.gaps.toggled.connect(self._store)
+        self.row_labels.toggled.connect(self._store)
+        self.by_row.toggled.connect(self._store)
+        if self.graph.table.table_type not in ("column", "grouped", "xy", "contingency"):
+            self.plot_axis.setEnabled(False)
         pl.addStretch(1)
 
         for w in (self.appearance, self.line_at, self.bar_border, self.sym_shape, self.sym_size,
                   self.err_dir, self.err_style, self.err_width, self.whiskers, self.spread,
-                  self.smooth):
+                  self.smooth, self.v_quart, self.v_median):
             w.currentIndexChanged.connect(self._store)
         for w in (self.bar_fill, self.bar_border_color, self.sym_color, self.err_color):
             w.colorChanged.connect(self._store)
@@ -492,6 +719,12 @@ class FormatGraphDialog(SectionDialog):
             lambda _: setattr(self.spec, "connect_width", self.connect_w.currentData()))
         self.connect_c.colorChanged.connect(lambda c: setattr(self.spec, "connect_color", c))
         g.add(("Line thickness:", self.connect_w), ("Line colour:", self.connect_c))
+        self.ba_summary = combo([("Nothing", "none"), ("Mean ± SD", "mean_sd"), ("Mean ± SEM", "mean_sem"),
+                                 ("Mean with 95% CI", "mean_ci"), ("Median with interquartile range", "median_iqr")],
+                                self.spec.ba_summary)
+        self.ba_summary.currentIndexChanged.connect(
+            lambda _: setattr(self.spec, "ba_summary", self.ba_summary.currentData()))
+        g.add(("Beside the points:", self.ba_summary))
         pl.addLayout(g)
         pl.addSpacing(8)
         pl.addWidget(QLabel("Data sets drawn on this graph:"))
@@ -538,11 +771,20 @@ class FormatGraphDialog(SectionDialog):
         set_combo(self.whiskers, "minmax" if legacy_all else st.whiskers)
         set_combo(self.spread, st.spread)
         set_combo(self.smooth, st.violin_smooth)
+        set_combo(self.v_quart, st.violin_quartiles)
+        set_combo(self.v_median, st.violin_median)
         self.mean_plus.setChecked(st.mean_plus)
         set_combo(self.xy_show, st.xy_show)
         self.connect_line.setChecked(st.connect)
         set_combo(self.line_w, st.line_width)
         set_combo(self.line_dash, st.line_dash)
+        set_combo(self.plot_axis, st.axis)
+        self.in_legend.setChecked(st.legend)
+        self.gaps.setChecked(st.gaps)
+        self.row_labels.setChecked(st.row_labels)
+        self.by_row.setChecked(st.by_row)
+        self.nudge.setValue(st.nudge)
+        self.nudge_y.setValue(st.nudge_y)
         self.fill_area.setChecked(st.fill)
         self.fill_alpha.setValue(st.fill_alpha * 100)
         self._loading = False
@@ -565,6 +807,8 @@ class FormatGraphDialog(SectionDialog):
         self.sec_err.setEnabled(not violin and kind != "floating")
         self.smooth.setVisible(violin)
         self.smooth_label.setVisible(violin)
+        for w in (self.v_quart, self.v_median, self.v_lines_label):
+            w.setVisible(violin)
         points_ok = kind != "symbol"
         self.show_points.setEnabled(points_ok)
         self.spread.setEnabled(points_ok)
@@ -593,9 +837,13 @@ class FormatGraphDialog(SectionDialog):
             whiskers=self.whiskers.currentData(), mean_plus=self.mean_plus.isChecked(),
             show_points=self.show_points.isChecked(), spread=self.spread.currentData(),
             violin_smooth=self.smooth.currentData(), xy_show=self.xy_show.currentData(),
+            violin_quartiles=self.v_quart.currentData(), violin_median=self.v_median.currentData(),
             connect=self.connect_line.isChecked(), line_width=self.line_w.currentData(),
             line_dash=self.line_dash.currentData(), fill=self.fill_area.isChecked(),
-            fill_alpha=self.fill_alpha.value() / 100)
+            fill_alpha=self.fill_alpha.value() / 100, axis=self.plot_axis.currentData(),
+            legend=self.in_legend.isChecked(), gaps=self.gaps.isChecked(), nudge=self.nudge.value(),
+            row_labels=self.row_labels.isChecked(), by_row=self.by_row.isChecked(),
+            nudge_y=self.nudge_y.value())
         sender = self.sender()
         # With "All data sets", only the field that was touched is pushed, so per-data-set
         # differences (e.g. one red group) survive a change elsewhere.
@@ -605,13 +853,14 @@ class FormatGraphDialog(SectionDialog):
         for st in self._targets():
             for k, v in changed.items():
                 setattr(st, k, v)
+        self._sync_right_list()
 
     # --- Axes -----------------------------------------------------------------------
 
     def _x_page(self) -> QWidget:
         page, pl = tab_page()
         x = self.spec.x
-        if self.xy:
+        if self.numx:
             pl.addWidget(Section("Range"))
             g = FormGrid()
             self.x_scale = combo([("Linear", "linear"), ("Logarithmic (base 10)", "log10")], x.scale)
@@ -642,91 +891,251 @@ class FormatGraphDialog(SectionDialog):
                            x.label_rotation)
         g.add(("Label angle:", self.x_rot))
         pl.addLayout(g)
+        if self.numx:
+            self.axis_ctl["x"] = {}
+            self._guide_controls(pl, x, self.axis_ctl["x"], "X value")
         pl.addStretch(1)
         return page
 
     def _y_page(self) -> QWidget:
+        page, w = self._axis_controls(self.spec.y, self.auto_range, "y")
+        for k in ("scale", "auto", "min", "max", "step", "ticks", "len", "minor", "num", "fmt", "dec",
+                  "prefix", "suffix"):
+            setattr(self, f"y_{k}", w[k])           # older names, used by tests and callers
+        return page
+
+    def _right_page(self) -> QWidget:
+        tt = self.graph.table.table_type
+        supported = tt in ("column", "grouped", "xy", "contingency")
+        rng = None
+        try:
+            from ..graph.layout import build
+            rng = next((e.meta.get("range") for e in build(self.graph)[0] if e.id == "y2-axis"), None)
+        except Exception:
+            rng = None
+        page, w = self._axis_controls(self.spec.y2, rng, "y2")
+        lay = page.layout()
+        self.right_list = QListWidget()
+        self.right_list.setMaximumHeight(120)
+        for c in self.cols:
+            it = QListWidgetItem(self.graph.table.short_label(c))
+            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked if self.spec.style(c).axis == "right" else Qt.Unchecked)
+            it.setData(Qt.UserRole, c)
+            self.right_list.addItem(it)
+        self.right_list.itemChanged.connect(self._right_ticked)
+        if supported:
+            msg = QLabel("Tick the data sets to plot against the right Y axis (the same as “Plot against” "
+                         "under Data sets › Style).")
+        else:
+            msg = QLabel("This kind of graph has no right Y axis.")
+            page.setEnabled(False)
+        msg.setWordWrap(True)
+        msg.setEnabled(False)
+        lay.insertWidget(0, Section("Data sets on the right axis"))
+        lay.insertWidget(1, msg)
+        lay.insertWidget(2, self.right_list)
+        g = FormGrid()
+        self.y2_title = QLineEdit(self.spec.y2.title)
+        g.add(("Title:", self.y2_title))
+        lay.insertWidget(3, Section("Title"))
+        lay.insertLayout(4, g)
+        return page
+
+    def _right_ticked(self, it) -> None:
+        if self._loading:
+            return
+        self.spec.style(it.data(Qt.UserRole)).axis = "right" if it.checkState() == Qt.Checked else "left"
+        self._load()                                   # the Style page's "Plot against" follows
+
+    def _sync_right_list(self) -> None:
+        if not hasattr(self, "right_list"):
+            return
+        self.right_list.blockSignals(True)
+        for i in range(self.right_list.count()):
+            it = self.right_list.item(i)
+            it.setCheckState(Qt.Checked if self.spec.style(it.data(Qt.UserRole)).axis == "right" else Qt.Unchecked)
+        self.right_list.blockSignals(False)
+
+    def _axis_controls(self, ax, r, key: str) -> tuple[QWidget, dict]:
+        """Range, ticks, number format, grid lines, extra ticks and a break for one Y axis."""
         page, pl = tab_page()
-        y = self.spec.y
-        r = self.auto_range
+        w: dict = {}
+        self.axis_ctl[key] = w
         pl.addWidget(Section("Range"))
         g = FormGrid()
-        self.y_scale = combo([("Linear", "linear"), ("Logarithmic (base 10)", "log10")], y.scale)
-        g.add(("Scale:", self.y_scale))
+        w["scale"] = combo([("Linear", "linear"), ("Logarithmic (base 10)", "log10")], ax.scale)
+        g.add(("Scale:", w["scale"]))
         pl.addLayout(g)
-        self.y_auto = QCheckBox("Choose the range and tick interval automatically")
-        self.y_auto.setChecked(y.auto)
-        self.y_auto.setContentsMargins(18, 0, 0, 0)
-        pl.addWidget(self.y_auto)
+        w["auto"] = QCheckBox("Choose the range and tick interval automatically")
+        w["auto"].setChecked(ax.auto)
+        w["auto"].setContentsMargins(18, 0, 0, 0)
+        pl.addWidget(w["auto"])
         g = FormGrid()
-        vmin = r.vmin if (y.auto and r) else y.vmin
-        vmax = r.vmax if (y.auto and r) else y.vmax
-        step = r.interval if (y.auto and r) else y.interval
-        self.y_min, self.y_max = num_edit(vmin), num_edit(vmax)
-        self.y_step = num_edit(step)
-        g.add(("From:", self.y_min), ("To:", self.y_max))
-        g.add(("Tick every:", self.y_step))
+        vmin = r.vmin if (ax.auto and r) else ax.vmin
+        vmax = r.vmax if (ax.auto and r) else ax.vmax
+        step = r.interval if (ax.auto and r) else ax.interval
+        w["min"], w["max"], w["step"] = num_edit(vmin), num_edit(vmax), num_edit(step)
+        g.add(("From:", w["min"]), ("To:", w["max"]))
+        g.add(("Tick every:", w["step"]))
         pl.addLayout(g)
 
         pl.addWidget(Section("Ticks"))
         g = FormGrid()
-        self.y_ticks = combo([("Outside", "out"), ("Inside", "in"), ("Crossing", "cross"),
-                              ("None", "none")], y.ticks_dir)
-        self.y_len = combo(TICK_LEN, y.ticks_len)
-        self.y_minor = combo([("None", 0), ("1", 1), ("2", 2), ("4", 4), ("9", 9)], y.minor)
-        self.y_num = combo([("Show", True), ("Hide", False)], y.numbering)
-        g.add(("Ticks:", self.y_ticks), ("Length:", self.y_len))
-        g.add(("Minor ticks between:", self.y_minor), ("Numbers:", self.y_num))
+        w["ticks"] = combo([("Outside", "out"), ("Inside", "in"), ("Crossing", "cross"), ("None", "none")],
+                           ax.ticks_dir)
+        w["len"] = combo(TICK_LEN, ax.ticks_len)
+        w["minor"] = combo([("None", 0), ("1", 1), ("2", 2), ("4", 4), ("9", 9)], ax.minor)
+        w["num"] = combo([("Show", True), ("Hide", False)], ax.numbering)
+        g.add(("Ticks:", w["ticks"]), ("Length:", w["len"]))
+        g.add(("Minor ticks between:", w["minor"]), ("Numbers:", w["num"]))
         pl.addLayout(g)
 
         pl.addWidget(Section("Number format"))
         g = FormGrid()
-        self.y_fmt = combo([("Decimal", "decimal"), ("Scientific", "scientific")], y.fmt)
-        self.y_dec = combo([("Automatic", -1)] + [(str(i), i) for i in range(0, 6)], y.decimals)
-        self.y_prefix = QLineEdit(y.prefix)
-        self.y_prefix.setFixedWidth(80)
-        self.y_suffix = QLineEdit(y.suffix)
-        self.y_suffix.setFixedWidth(80)
-        g.add(("Style:", self.y_fmt), ("Decimals:", self.y_dec))
-        g.add(("Before numbers:", self.y_prefix), ("After numbers:", self.y_suffix))
+        w["fmt"] = combo([("Decimal", "decimal"), ("Scientific", "scientific")], ax.fmt)
+        w["dec"] = combo([("Automatic", -1)] + [(str(i), i) for i in range(0, 6)], ax.decimals)
+        w["prefix"], w["suffix"] = QLineEdit(ax.prefix), QLineEdit(ax.suffix)
+        w["prefix"].setFixedWidth(80)
+        w["suffix"].setFixedWidth(80)
+        g.add(("Style:", w["fmt"]), ("Decimals:", w["dec"]))
+        g.add(("Before numbers:", w["prefix"]), ("After numbers:", w["suffix"]))
         pl.addLayout(g)
 
-        pl.addWidget(Section("Extra ticks and grid lines"))
-        extra = QTableWidget(3, 4)
-        extra.setHorizontalHeaderLabels(["Y value", "Tick", "Line", "Label"])
-        extra.verticalHeader().hide()
-        extra.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        extra.setFixedHeight(104)
-        extra.setEnabled(False)
-        extra.setToolTip("Arrives with graph polish (M9)")
+        self._guide_controls(pl, ax, w, "Y value")
+
+        pl.addWidget(Section("Break"))
+        b = dict(ax.brk or {})
+        w["brk_on"] = QCheckBox("Break the axis into two segments")
+        w["brk_on"].setChecked(bool(b.get("on")))
+        w["brk_on"].setContentsMargins(18, 0, 0, 0)
+        pl.addWidget(w["brk_on"])
+        g = FormGrid()
+        lo_d = b.get("low_to", (vmin + (vmax - vmin) * 0.3))
+        hi_d = b.get("high_from", (vmin + (vmax - vmin) * 0.6))
+        w["brk_lo"], w["brk_hi"] = num_edit(lo_d), num_edit(hi_d)
+        w["brk_ls"], w["brk_hs"] = num_edit(b.get("low_step", 0) or 0), num_edit(b.get("high_step", 0) or 0)
+        w["brk_split"] = QSpinBox()
+        w["brk_split"].setRange(10, 90)
+        w["brk_split"].setSuffix(" %")
+        w["brk_split"].setValue(int(round(float(b.get("split", 0.5)) * 100)))
+        w["brk_gap"] = QDoubleSpinBox()
+        w["brk_gap"].setRange(1, 40)
+        w["brk_gap"].setSuffix(" pt")
+        w["brk_gap"].setValue(float(b.get("gap", 14.0)))
+        g.add(("Bottom segment ends at:", w["brk_lo"]), ("Top segment starts at:", w["brk_hi"]))
+        g.add(("Bottom ticks every:", w["brk_ls"]), ("Top ticks every:", w["brk_hs"]))
+        g.add(("Bottom segment length:", w["brk_split"]), ("Gap:", w["brk_gap"]))
+        pl.addLayout(g)
+        note = QLabel("Tick spacing 0 = automatic. A break needs a linear scale.")
+        note.setEnabled(False)
+        pl.addWidget(note)
+        pl.addStretch(1)
+
+        def sync(*_):
+            manual = not w["auto"].isChecked()
+            for k in ("min", "max", "step"):
+                w[k].setEnabled(manual)
+            on = w["brk_on"].isChecked() and w["scale"].currentData() == "linear"
+            w["brk_on"].setEnabled(w["scale"].currentData() == "linear")
+            for k in ("brk_lo", "brk_hi", "brk_ls", "brk_hs", "brk_split", "brk_gap"):
+                w[k].setEnabled(on)
+        w["auto"].toggled.connect(sync)
+        w["brk_on"].toggled.connect(sync)
+        w["scale"].currentIndexChanged.connect(sync)
+        sync()
+        return page, w
+
+    def _guide_controls(self, pl, ax, w: dict, value_label: str) -> None:
+        pl.addWidget(Section("Grid lines and extra ticks"))
         row = QHBoxLayout()
         row.setContentsMargins(18, 0, 0, 0)
-        row.addWidget(extra)
+        w["grid"] = QCheckBox("Grid lines at the major ticks")
+        w["grid"].setChecked(ax.grid)
+        w["grid_color"] = ColorButton(ax.grid_color)
+        row.addWidget(w["grid"])
+        row.addWidget(w["grid_color"])
+        row.addStretch(1)
         pl.addLayout(row)
-        pl.addStretch(1)
-        self.y_auto.toggled.connect(self._auto_toggled)
-        self._auto_toggled(y.auto)
-        return page
+        t = QTableWidget(4, 6)
+        t.setHorizontalHeaderLabels([value_label, "To (band)", "Line", "Tick", "Style", "Label"])
+        t.setToolTip("A value draws a line or tick there; fill in “To” as well for a shaded band.")
+        t.verticalHeader().hide()
+        t.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        t.setFixedHeight(126)
+        extra = list(ax.extra or [])
+        for i in range(4):
+            e = extra[i] if i < len(extra) else {}
+            t.setItem(i, 0, QTableWidgetItem("" if e.get("value") is None else f"{e['value']:g}"))
+            t.setItem(i, 1, QTableWidgetItem("" if e.get("to") in (None, "") else f"{float(e['to']):g}"))
+            for j, k, default in ((2, "line", True), (3, "tick", False)):
+                it = QTableWidgetItem()
+                it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                it.setCheckState(Qt.Checked if e.get(k, default) else Qt.Unchecked)
+                t.setItem(i, j, it)
+            dash = combo([("Dashed", "dash"), ("Dotted", "dot"), ("Solid", "solid")], e.get("dash", "dash"))
+            t.setCellWidget(i, 4, dash)
+            t.setItem(i, 5, QTableWidgetItem(e.get("label", "")))
+        w["extra"] = t
+        row = QHBoxLayout()
+        row.setContentsMargins(18, 0, 0, 0)
+        row.addWidget(t)
+        pl.addLayout(row)
 
-    def _auto_toggled(self, on: bool) -> None:
-        for w in (self.y_min, self.y_max, self.y_step):
-            w.setEnabled(not on)
+    @staticmethod
+    def _collect_guides(ax, w: dict) -> None:
+        ax.grid = w["grid"].isChecked()
+        ax.grid_color = w["grid_color"].color()
+        t, extra = w["extra"], []
+        for i in range(t.rowCount()):
+            txt = (t.item(i, 0).text() if t.item(i, 0) else "").strip().replace(",", ".")
+            try:
+                v = float(txt)
+            except ValueError:
+                continue
+            e = {"value": v, "line": t.item(i, 2).checkState() == Qt.Checked,
+                 "tick": t.item(i, 3).checkState() == Qt.Checked,
+                 "dash": t.cellWidget(i, 4).currentData(), "label": t.item(i, 5).text().strip()}
+            to = (t.item(i, 1).text() if t.item(i, 1) else "").strip().replace(",", ".")
+            try:
+                e["to"] = float(to)
+            except ValueError:
+                pass
+            extra.append(e)
+        ax.extra = extra
 
-    def _right_page(self) -> QWidget:
-        page, pl = tab_page()
-        msg = QLabel("No data sets are plotted against a right Y axis. Choose “Plot against: "
-                     "Right Y axis” for a data set under Data sets → Style (arrives in M9).")
-        msg.setWordWrap(True)
-        msg.setEnabled(False)
-        pl.addWidget(msg)
-        pl.addStretch(1)
-        return page
+    def _collect_axis(self, ax, w: dict) -> None:
+        def f(e: QLineEdit, default: float) -> float:
+            try:
+                return float(e.text().replace(",", "."))
+            except ValueError:
+                return default
+        ax.scale = w["scale"].currentData()
+        ax.auto = w["auto"].isChecked()
+        if not ax.auto:
+            ax.vmin = f(w["min"], ax.vmin)
+            ax.vmax = f(w["max"], ax.vmax)
+            ax.interval = abs(f(w["step"], ax.interval)) or 1.0
+        ax.ticks_dir = w["ticks"].currentData()
+        ax.ticks_len = w["len"].currentData()
+        ax.minor = w["minor"].currentData()
+        ax.numbering = w["num"].currentData()
+        ax.fmt = w["fmt"].currentData()
+        ax.decimals = w["dec"].currentData()
+        ax.prefix, ax.suffix = w["prefix"].text(), w["suffix"].text()
+        self._collect_guides(ax, w)
+        lo, hi = f(w["brk_lo"], 0.0), f(w["brk_hi"], 0.0)
+        ax.brk = {"on": w["brk_on"].isChecked() and hi > lo, "low_to": lo, "high_from": hi,
+                  "low_step": abs(f(w["brk_ls"], 0.0)), "high_step": abs(f(w["brk_hs"], 0.0)),
+                  "split": w["brk_split"].value() / 100, "gap": w["brk_gap"].value()}
 
     # --- commit ---------------------------------------------------------------------
 
     def _collect(self) -> None:
         s = self.spec
+        self._collect_sig()
         s.col_width_mm = self.col_w.value()
+        s.horizontal = bool(self.orient.currentData())
         s.x_len_mm = self.x_axis_len.value()
         s.y_len_mm = self.height_mm.value()
         s.frame = self.frame.currentData()
@@ -755,10 +1164,18 @@ class FormatGraphDialog(SectionDialog):
             s.heat_low, s.heat_high = self.heat_low.color(), self.heat_high.color()
         elif tt == "nested":
             s.nested_layout = self.arrangement.currentData()
+        elif tt == "multivar":
+            ys = [self.mv_y.item(i).data(Qt.UserRole) for i in range(self.mv_y.count())
+                  if self.mv_y.item(i).checkState() == Qt.Checked]
+            s.mv = {**s.mv, "x": self.mv_x.currentData(), "y": ys, "size": self.mv_size.currentData(),
+                    "color": self.mv_color.currentData(), "labels": self.mv_labels.isChecked(),
+                    "size_min": self.mv_smin.value(), "size_max": self.mv_smax.value()}
+            s.show_legend = self.legend.isChecked()
+            s.heat_low, s.heat_high = self.heat_low.color(), self.heat_high.color()
         s.x.ticks_dir = self.x_ticks.currentData()
         s.x.ticks_len = self.x_len.currentData()
         s.x.label_rotation = self.x_rot.currentData()
-        if self.xy:
+        if self.numx:
             s.x.scale = self.x_scale.currentData()
             s.x.auto = self.x_auto.isChecked()
             s.x.title = self.x_title.text().strip()
@@ -771,26 +1188,12 @@ class FormatGraphDialog(SectionDialog):
             if not s.x.auto:
                 s.x.vmin, s.x.vmax = fx(self.x_min, s.x.vmin), fx(self.x_max, s.x.vmax)
                 s.x.interval = abs(fx(self.x_step, s.x.interval)) or 1.0
+        self._collect_axis(s.y, self.axis_ctl["y"])
+        self._collect_axis(s.y2, self.axis_ctl["y2"])
+        s.y2.title = self.y2_title.text().strip()
+        if self.numx and "x" in self.axis_ctl:
+            self._collect_guides(s.x, self.axis_ctl["x"])
         y = s.y
-        y.scale = self.y_scale.currentData()
-        y.auto = self.y_auto.isChecked()
-
-        def f(e: QLineEdit, default: float) -> float:
-            try:
-                return float(e.text().replace(",", "."))
-            except ValueError:
-                return default
-        if not y.auto:
-            y.vmin = f(self.y_min, y.vmin)
-            y.vmax = f(self.y_max, y.vmax)
-            y.interval = abs(f(self.y_step, y.interval)) or 1.0
-        y.ticks_dir = self.y_ticks.currentData()
-        y.ticks_len = self.y_len.currentData()
-        y.minor = self.y_minor.currentData()
-        y.numbering = self.y_num.currentData()
-        y.fmt = self.y_fmt.currentData()
-        y.decimals = self.y_dec.currentData()
-        y.prefix, y.suffix = self.y_prefix.text(), self.y_suffix.text()
         title = self.t_title.text().strip()
         s.title = "" if title == self.graph.table.name else title
         y.title = self.t_ytitle.text().strip()
