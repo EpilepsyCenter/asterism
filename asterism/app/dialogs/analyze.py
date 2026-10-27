@@ -125,11 +125,18 @@ class AnalyzeDialog(SectionDialog):
             pl.addWidget(lst, 1)
             self.lists[key] = lst
             self.add_section(key, title, page, ico)
+        from ..sketches import Sketch
+        self.sketch = Sketch("", 200, 118)
         self.description = QLabel()
         self.description.setWordWrap(True)
-        self.description.setEnabled(False)
+        self.description.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.description.setMinimumHeight(36)
-        self.footer.addWidget(self.description)
+        drow = QHBoxLayout()
+        drow.setContentsMargins(0, 4, 0, 0)
+        drow.addWidget(self.sketch, 0, Qt.AlignTop)
+        drow.addSpacing(10)
+        drow.addWidget(self.description, 1)
+        self.footer.addLayout(drow)
 
         self.footer.addWidget(Section("Data to analyze"))
         trow = QHBoxLayout()
@@ -162,13 +169,14 @@ class AnalyzeDialog(SectionDialog):
                  "survival": "survival", "nested": "nested", "parts": "parts"}.get(table.table_type, "column")
         self.show_section(start)
         self.lists[start].setCurrentRow(0)
-        self.resize(820, 620)
+        self.resize(860, 680)
 
     def _current_list(self) -> QListWidget:
         return self.lists[self.current_section() or "column"]
 
     def _describe(self, it, _prev=None) -> None:
         self.description.setText(it.data(Qt.UserRole + 1) if it else "")
+        self.sketch.set_key(it.data(Qt.UserRole) if it else None)
 
     def _fill_sets(self) -> None:
         self.sets.clear()

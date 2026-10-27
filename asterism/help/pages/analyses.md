@@ -20,7 +20,7 @@ There is no quick command for the t test: use the Analyze dialog and tick the tw
 The dialog has three parts.
 
 - **Categories** in the sidebar on the left: **Column data**, **Grouped data**, **Nested data**, **XY data**, **Counts**, **Survival**, **Parts of whole** and **Transform and normalize**. The dialog opens on the category that matches the current table.
-- **The analyses** of that category, with a short description below the list. Type in **Find an analysis** at the top to search names and descriptions across all categories. Analyses marked *(coming later)* are listed so you can see what is planned; they can't be run yet.
+- **The analyses** of that category, with a picture of the data and question each one is for and a short description below the list. Type in **Find an analysis** at the top to search names and descriptions across all categories. Analyses marked *(coming later)* are listed so you can see what is planned; they can't be run yet.
 - **Data to analyze** at the bottom. **Table:** picks the table (the current one is chosen for you). Result tables made by other analyses, such as a transform or a frequency distribution, are listed too, as "Results: …". Below it, tick the data sets to include; **All** and **None** tick or clear them all.
 
 Click **Analyze** (or double-click the analysis) to go on to its settings. When you click **OK** in the settings, the results sheet opens.

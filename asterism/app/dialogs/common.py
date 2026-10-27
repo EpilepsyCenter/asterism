@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import (QCheckBox, QColorDialog, QComboBox, QDialog, QFrame,
-                               QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+from PySide6.QtWidgets import (QAbstractSpinBox, QCheckBox, QColorDialog, QComboBox, QDialog,
+                               QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QMessageBox, QPushButton, QScrollArea, QSizePolicy,
                                QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
@@ -186,12 +186,92 @@ def tab_page() -> tuple[QWidget, QVBoxLayout]:
     return w, lay
 
 
+def _find_layout(lay, w):
+    """The layout (nested anywhere under `lay`) that holds widget `w` directly."""
+    if lay is None:
+        return None
+    if lay.indexOf(w) >= 0:
+        return lay
+    for i in range(lay.count()):
+        sub = lay.itemAt(i).layout()
+        found = _find_layout(sub, w) if sub is not None else None
+        if found is not None:
+            return found
+    return None
+
+
+def units_outside(root: QWidget) -> None:
+    """Move each spin box's unit (Qt's suffix, e.g. " pt") out of the editable box into a
+    label beside it, so the box holds only the number."""
+    for spin in root.findChildren(QAbstractSpinBox):
+        suffix = spin.suffix().strip() if hasattr(spin, "suffix") else ""
+        if not suffix or spin.property("unitOutside"):
+            continue
+        parent = spin.parentWidget()
+        lay = _find_layout(parent.layout() if parent is not None else None, spin)
+        if lay is None:
+            continue
+        box = QWidget()
+        h = QHBoxLayout(box)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(5)
+        unit = QLabel(suffix)
+        if isinstance(lay, QGridLayout):
+            r, c, rs, cs = lay.getItemPosition(lay.indexOf(spin))
+            align = lay.itemAt(lay.indexOf(spin)).alignment()
+            lay.removeWidget(spin)
+            lay.addWidget(box, r, c, rs, cs, align)
+        elif isinstance(lay, QFormLayout):
+            row, role = lay.getWidgetPosition(spin)
+            lay.removeWidget(spin)
+            lay.setWidget(row, role, box)
+        else:
+            i = lay.indexOf(spin)
+            stretch = lay.stretch(i)
+            lay.removeWidget(spin)
+            lay.insertWidget(i, box, stretch)
+        spin.setSuffix("")
+        spin.setProperty("unitOutside", True)
+        if spin.maximumWidth() >= 10000:          # a number needs no more than this
+            spin.setMaximumWidth(120)
+        h.addWidget(spin)
+        h.addWidget(unit)
+        h.addStretch(1)
+        unit.setEnabled(spin.isEnabled())
+        if spin.specialValueText():              # "None" at the minimum reads without a unit
+            sync = lambda *_a, s_=spin, u=unit: u.setVisible(s_.value() != s_.minimum())
+            spin.valueChanged.connect(sync)
+            sync()
+        spin.installEventFilter(_UnitSync(unit, spin))
+
+
+class _UnitSync(QWidget):
+    """Keeps a unit label greyed out with its spin box."""
+
+    def __init__(self, unit: QLabel, spin):
+        super().__init__(spin)
+        self.unit = unit
+        self.hide()
+
+    def eventFilter(self, obj, ev):
+        from PySide6.QtCore import QEvent
+        if ev.type() == QEvent.EnabledChange:
+            self.unit.setEnabled(obj.isEnabled())
+        return False
+
+
 class SectionDialog(QDialog):
     """ASTERISM's dialog frame: a section sidebar on the left (rounded rows under small
     group labels), the selected section on the right, Help / extras / Apply / Cancel / OK
     along the bottom. Dialogs never use a tab bar across the top."""
 
     sectionChanged = Signal(str)
+
+    def showEvent(self, ev) -> None:
+        if not getattr(self, "_units_done", False):
+            self._units_done = True
+            units_outside(self)
+        super().showEvent(ev)
 
     def __init__(self, title: str, help_topic: str, parent=None, apply: bool = False,
                  extra_left: list[QWidget] = (), sidebar_width: int = 196):

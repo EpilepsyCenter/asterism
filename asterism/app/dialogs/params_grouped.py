@@ -3,7 +3,7 @@ our wording): two-way ANOVA, multiple t tests, nested t test / one-way ANOVA."""
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QLabel, QLineEdit
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit
 
 from ...analysis.anova2 import COMPARE, METHODS
 from ...analysis.multiple_t import CORRECTIONS
@@ -28,6 +28,21 @@ class TwoWayParamsDialog(SectionDialog):
             ("rm_rows", "Each sub-column is one subject, measured in every row"),
             ("rm_cols", "Each sub-column position is one subject, measured in every data set"),
             ("rm_both", "Each sub-column position is one subject, measured in every cell")], p["design"])
+        from ..sketches import Sketch
+        self.design_sketch = Sketch("", 230, 130)
+        sync = lambda *_: self.design_sketch.set_key(f"design:{_key(self.g_design)}")
+        self.g_design.buttonToggled.connect(sync)
+        sync()
+        srow = QHBoxLayout()
+        srow.setContentsMargins(18, 4, 0, 4)
+        srow.addWidget(self.design_sketch)
+        hint = QLabel("Lines join the values of one subject. Circles and squares are the two data sets; "
+                      "Day 1 and Day 7 are rows.")
+        hint.setWordWrap(True)
+        hint.setEnabled(False)
+        srow.addSpacing(10)
+        srow.addWidget(hint, 1)
+        pl.addLayout(srow)
         g0 = FormGrid()
         self.rm_method = _rm_method_combo(p["rm_method"])
         g0.add(("Missing values:", self.rm_method))
@@ -190,6 +205,17 @@ class NestedParamsDialog(SectionDialog):
         page, pl = tab_page()
         pl.addWidget(QLabel("Each data set is a group; each sub-column is one subject, and\n"
                             "the values in it are replicate measurements of that subject."))
+        from ..sketches import Sketch
+        srow = QHBoxLayout()
+        srow.setContentsMargins(18, 4, 0, 4)
+        srow.addWidget(Sketch("table:nested", 230, 130))
+        hint = QLabel("Small dots are the measurements, big dots each subject's mean, one colour per "
+                      "subject. The subjects, not the measurements, are the independent units.")
+        hint.setWordWrap(True)
+        hint.setEnabled(False)
+        srow.addSpacing(10)
+        srow.addWidget(hint, 1)
+        pl.addLayout(srow)
         pl.addWidget(_note("Subjects are a random factor. With the same number of replicates per "
                            "subject, the group test equals an ordinary test on the subject means."))
         pl.addStretch(1)

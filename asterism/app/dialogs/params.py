@@ -56,6 +56,17 @@ class AnovaParamsDialog(SectionDialog):
         self.g_design = _radio_group(self, pl, [
             ("ordinary", "No: independent groups"),
             ("rm", "Yes: each row is one subject measured under every condition")], p["design"])
+        from ..sketches import Sketch
+        self.design_sketch = Sketch("", 230, 130)
+        sync = lambda *_: self.design_sketch.set_key(
+            "design:matched" if _key(self.g_design) == "rm" else "design:independent")
+        self.g_design.buttonToggled.connect(sync)
+        sync()
+        srow = QHBoxLayout()
+        srow.setContentsMargins(18, 4, 0, 4)
+        srow.addWidget(self.design_sketch)
+        srow.addStretch(1)
+        pl.addLayout(srow)
         g0 = FormGrid()
         self.rm_method = _rm_method_combo(p["rm_method"])
         g0.add(("Missing values:", self.rm_method))

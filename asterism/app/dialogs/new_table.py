@@ -40,6 +40,27 @@ TYPE_HELP = {
 }
 
 
+# A concrete example for each type, shown beside its picture
+TYPE_EXAMPLE = {
+    "column": ("Body weight of control and treated mice.",
+               "Choose it when each group is one list of values and you compare the groups."),
+    "xy": ("Response at each drug concentration; or a measurement over time.",
+           "Choose it when every value belongs to a number on the X axis."),
+    "grouped": ("Weight in wild-type and mutant mice, each given vehicle or drug.",
+                "Choose it when two factors define the groups."),
+    "contingency": ("Number of animals that responded or not, in each group.",
+                    "Choose it when you have counts of subjects, not measurements."),
+    "survival": ("Days until each animal reached the end point, or left the study.",
+                 "Choose it for time-to-event data, including subjects lost to follow-up."),
+    "parts": ("Share of neurons, astrocytes, microglia and oligodendrocytes in a sample.",
+              "Choose it when the values are parts of one total."),
+    "multivar": ("Each cell's size, firing rate and genotype, one row per cell.",
+                 "Choose it to plot several variables of the same observations against each other."),
+    "nested": ("Synapse counts from several neurons in each of several mice per group.",
+               "Choose it when you measured each subject several times (avoids pseudoreplication)."),
+}
+
+
 class TablePreview(QWidget):
     """A sketch of the empty table's columns for the chosen type and format."""
 
@@ -246,6 +267,21 @@ class FormatOptions(QWidget):
             self.reps.setValue(replicates)
 
 
+def _example_row(tt: str) -> QHBoxLayout:
+    """The type's picture beside a concrete example."""
+    from ..sketches import Sketch
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.addWidget(Sketch(f"table:{tt}", 230, 132), 0, Qt.AlignTop)
+    ex, when = TYPE_EXAMPLE[tt]
+    text = QLabel(f"<b>For example:</b> {ex}<br><br>{when}")
+    text.setWordWrap(True)
+    text.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+    row.addSpacing(12)
+    row.addWidget(text, 1)
+    return row
+
+
 class NewTableDialog(SectionDialog):
     def __init__(self, parent=None, start: bool = False, table_type: str = "column"):
         super().__init__("New Data Table", "New table", parent)
@@ -259,6 +295,8 @@ class NewTableDialog(SectionDialog):
             help_ = QLabel(TYPE_HELP[tt])
             help_.setWordWrap(True)
             pl.addWidget(help_)
+            pl.addSpacing(8)
+            pl.addLayout(_example_row(tt))
             pl.addSpacing(6)
             opts = FormatOptions(tt)
             opts.changed.connect(self._refresh_preview)

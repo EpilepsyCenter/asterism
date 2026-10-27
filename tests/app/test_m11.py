@@ -154,3 +154,40 @@ def test_settings_dialog_and_import_defaults(app, clean_prefs, tmp_path):
     assert (s["dilution"], s["volume_ul"], s["per"]) == (100.0, 1.0, "ml") and imp.volume.isEnabled()
     SettingsDialog()._reset()
     assert prefs.get("autosave.minutes") == 2
+
+
+def test_units_sit_outside_the_number_boxes(app):
+    """Spin boxes hold only the number; the unit is a label beside the box."""
+    from PySide6.QtWidgets import QAbstractSpinBox, QLabel
+    from asterism.analysis import engine
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.doc.model import Project
+    p = Project(engine)
+    p.add_table(table_type="nested", example=True)
+    d = FormatGraphDialog(p.graphs[-1], p)
+    d.show()
+    spins = d.findChildren(QAbstractSpinBox)
+    assert spins and all(not getattr(s, "suffix", lambda: "")().strip() for s in spins)
+    assert d.n_mean.value() == 2.2
+    labels = {lab.text() for lab in d.findChildren(QLabel)}
+    assert "× the points" in labels and "mm" in labels
+    d.close()
+
+
+def test_every_table_type_and_analysis_has_a_picture(app):
+    """Illustrations: each table type (New Table) and each available analysis (Analyze) has
+    one, and they draw without errors in light and dark mode."""
+    from asterism.app import theme
+    from asterism.app.dialogs.analyze import CATALOGUE
+    from asterism.app.sketches import DRAW, Sketch
+    from asterism.doc.table import TABLE_TYPES
+    keys = [f"table:{t}" for t in TABLE_TYPES]
+    keys += sorted({akey for _k, _t, _i, items in CATALOGUE for _n, akey, _d in items if akey})
+    missing = [k for k in keys if k not in DRAW]
+    assert not missing, missing
+    for dark in (False, True):
+        theme._state["dark"] = dark
+        for k in DRAW:
+            img = Sketch(k).grab()
+            assert not img.isNull()
+    theme._state["dark"] = False

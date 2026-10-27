@@ -8,7 +8,7 @@ On a Mac, shortcuts use ⌘. On Windows, use Ctrl wherever this page says ⌘.
 
 Choose **Sheet › New Data Table…**, click the **+** next to **Data** in the project sidebar, or click **New project…** in the Start window.
 
-The **New Data Table** dialog lists the table types on the left. Each page explains the type in a sentence and offers its entry formats. At the bottom:
+The **New Data Table** dialog lists the table types on the left. Each page explains the type in a sentence, shows a picture of the kind of data it holds with a concrete example and when to choose it, and offers its entry formats. At the bottom:
 
 - **Preview** sketches the empty table's columns for the choices you've made.
 - **Fill the table with example data** puts in a small, realistic data set, handy for trying out analyses and graphs.
