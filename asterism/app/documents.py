@@ -61,3 +61,34 @@ def value(key: str, default=None):
 
 def set_value(key: str, v) -> None:
     _settings().setValue(key, v)
+
+
+# --- per-file window memory: size, position and the sheet in front ------------------------
+
+MAX_FILE_STATES = 100
+
+
+def _file_states() -> dict:
+    import json
+    raw = _settings().value("fileStates", "")
+    try:
+        d = json.loads(raw) if isinstance(raw, str) and raw else {}
+    except ValueError:
+        d = {}
+    return d if isinstance(d, dict) else {}
+
+
+def file_state(path: str) -> dict:
+    """{"geometry": base64 str, "sheet": sheet id} remembered for a project file, or {}."""
+    return dict(_file_states().get(os.path.abspath(path), {}))
+
+
+def set_file_state(path: str, **values) -> None:
+    import json
+    states = _file_states()
+    key = os.path.abspath(path)
+    entry = {**states.pop(key, {}), **{k: v for k, v in values.items() if v is not None}}
+    states[key] = entry                          # most recent last
+    while len(states) > MAX_FILE_STATES:
+        states.pop(next(iter(states)))
+    _settings().setValue("fileStates", json.dumps(states))

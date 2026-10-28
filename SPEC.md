@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M10, M11a and M11b (help) done; packaging and Windows last.** The Qt spike (M0) passed on
+Status: **M1–M11 done; 0.1.0 is the first release (macOS, Windows, Linux).** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -88,8 +88,12 @@ multiple-variable methods) arrives after the core is solid, in the order users a
 - **Statistics:** numpy, scipy, pandas, pingouin, statsmodels. The pure-Python core in
   `asterism/core/stats.py` holds the golden-tested executors.
 - **Export:** QPdfWriter (PDF), our own `SvgCanvas` (SVG with named groups), QImage (PNG/TIFF).
-- **Packaging (M11):** PyInstaller-built app bundles. macOS signed and notarized
-  (`.dmg`); Windows installer. File associations for `.asterism`, `.pzfx`, `.prism`.
+- **Packaging (M11):** PyInstaller (`packaging/asterism.spec`): macOS `.app` in a `.dmg`
+  (Apple Silicon), Windows Inno Setup installer (per user, no admin), Linux AppImage. Not
+  signed (user's decision 2026-10-28; the README explains the first open). File
+  associations for `.asterism` (owner) and `.prism`/`.pzfx` (alternate). Built and
+  self-tested (`--selftest`) by GitHub Actions on a `v*` tag, attached to a draft release;
+  Help › Check for Updates reads the GitHub releases.
 
 **Why Qt, not Electron or the old Dash app:** the spike showed Qt Widgets gives a
 genuinely native window, fast table editing, direct manipulation on the graph canvas,
@@ -349,9 +353,9 @@ needing only touch-up, never rebuilding. Enforced by the automated export QA
 - every element is a named group (`data-A`, `y-axis`, `bracket`, `graph-title`, …), so it
   arrives as a selectable named object.
 
-**Clipboard:** Copy on a graph puts **vector PDF only** on the macOS pasteboard (no
-bitmap flavour a receiving app might silently prefer). On Windows, users export files
-(no clipboard path for now; see §14).
+**Clipboard:** Copy (and Copy Graph to Clipboard) on a graph or figure puts **vector only**
+on the clipboard, no bitmap flavour a receiving app might silently prefer: PDF and SVG on
+the macOS pasteboard, EMF and SVG on Windows (our own EMF writer), SVG plus PNG on Linux.
 
 ---
 
@@ -428,8 +432,8 @@ bitmap flavour a receiving app might silently prefer). On Windows, users export 
   like the project sidebar) and the selected section's controls on the right, with
   Help, Cancel and OK (and Apply where useful) along the bottom. No tab bars across the
   top of dialogs. Long dialogs scroll within the section, never the whole dialog.
-- **Icons:** SF Symbols via the theme-icon engine on macOS, tinted with theme colours.
-  Windows needs a bundled fallback icon set (M11).
+- **Icons:** Lucide (ISC), bundled and used on every platform so all versions look the
+  same (user's choice 2026-10-28), tinted with theme colours (`asterism/app/icons.py`).
 - **Graphs and figures stay print colours** (white page) in both light and dark mode.
 - **One window per project**, like Prism. Opening a file reuses an untouched empty window.
 
@@ -480,14 +484,15 @@ inherit the risk. Copying its code or text would also undermine principle 3 (§2
   sets and axes; our own groupings and wording.
 - NED-Net skin instead of Prism's look (§12).
 - Graph selection handles in the accent colour.
-- Windows: no clipboard path; export files instead (revisit if users ask).
+- Copy as vector on every system: PDF (macOS), EMF from our own writer (Windows), SVG
+  (Linux), each with a PNG (`asterism/app/clipboard.py`, `graph/emf.py`).
 
 **Open questions:**
-- Packaging specifics (PyInstaller vs. Briefcase), code-signing identity, update channel.
+- (Settled 2026-10-28: PyInstaller, unsigned, GitHub Releases as the update channel, MIT.)
 - How deep `.prism` import goes beyond data tables (the format is undocumented and
   changes between Prism versions).
-- Licence for distributing ASTERISM free to other labs (e.g. an open-source licence
-  compatible with PySide6's LGPL). Not sold, so no commercial licensing.
+- Licence: MIT (2026-10-28); Qt under the LGPL as unmodified shared libraries
+  (THIRD_PARTY_NOTICES.md).
 - Whether ASTERISM files should embed fonts used in graphs (portability vs. size).
 
 ---

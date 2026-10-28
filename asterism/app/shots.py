@@ -416,8 +416,10 @@ def take_shots(app, out: str) -> int:
         shot(d, "10_dark_table")
         d.show_sheet(d.project.graphs[0])
         shot(d, "11_dark_graph")
+        d.project.mark_saved()
         d.close()
     except Exception as e:  # colour-scheme override needs Qt 6.8+
         print("dark mode shot skipped:", e)
+    w.project.mark_saved()         # no "save changes?" prompt at the end of the tour
     w.close()
     return 0

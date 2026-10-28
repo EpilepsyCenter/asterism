@@ -1,92 +1,113 @@
 # ASTERISM
 
-Scientific graphing and statistics that does what GraphPad Prism does (live-linked data
-tables, analyses, graphs and layouts, with Prism's options and numbers) in ASTERISM's own
-interface. A native desktop app (Qt / PySide6) that shares its look with NED-Net. Free for
-labs; not affiliated with GraphPad.
+Free scientific graphing and statistics for labs. ASTERISM does what GraphPad Prism does —
+live-linked data tables, analyses, graphs and figures, with Prism's options and numbers —
+in its own interface. It opens Prism files, and its statistics are checked against Prism's
+own results. A native desktop app for macOS, Windows and Linux (Qt / PySide6). Not
+affiliated with GraphPad.
 
-The design, principles and build order are in [`SPEC.md`](SPEC.md). Start there.
+## Download
 
-## Status
+Get the latest version from the [Releases page](https://github.com/EpilepsyCenter/asterism/releases).
 
-- **M0 — Qt spike:** done. Native window, Navigator, Column table, scatter graph with
-  Format Graph / Format Axes dialogs, t tests, PDF/SVG export that passes the fidelity QA.
-- **M1 — Foundation:** done. Real package layout, UI-free document model with its own undo
-  stack, `.asterism` project files (save, save as, open, revert, recent files), edited
-  state in the title bar, save prompts on close, files opened from the command line and
-  Finder.
-- **M1b — Own interface:** done. NED-Net window structure (resizable project sidebar with
-  linked sheets nested under their table, top bar with project-wide tools, resizable tool
-  panel on the right), dialogs with a section sidebar, one Format Graph dialog, our own
-  wording throughout (including results sheets).
-- **M2 — Data tables:** done. All eight table types with every entry format (replicates,
-  mean/SD/N and friends), row titles, excluded values, insert/delete rows and data sets,
-  New Table dialog and start screen, Table Format dialog; file format v2.
-- **M3 — Column analyses and graphs:** done. Normality tests and frequency distributions
-  match Prism exactly on real lab data; one-way ANOVA family with ten multiple-comparison
-  methods; one-sample tests, outliers; violin, before-after, floating bars and more, with
-  a Graph Type gallery and stacked significance brackets.
-- **M4 — Grouped and nested:** done. Two-way ANOVA (ordinary and matched) and multiple
-  t / Mann-Whitney tests match Prism exactly on real lab data; nested t test and nested
-  one-way ANOVA; grouped bars (side by side, separated, stacked), connected means, heat
-  maps, legends, nested scatter and SuperPlots.
-- **M5 — XY:** done. Linear regression and Spearman correlation match Prism exactly on real
-  lab data; nonlinear regression with 30 models, global fits, model comparison,
-  profile-likelihood intervals and ROUT (checked against R); area under the curve; XY graphs
-  with fitted curves and bands; frequency-distribution histograms.
-- **M6 — Contingency, survival, parts of whole:** done. Fisher's exact test matches Prism on
-  real lab data; chi-square and trend tests, relative risk, odds ratio and diagnostic measures
-  with Prism's recommended intervals (checked against R); Kaplan-Meier, log-rank,
-  Gehan-Breslow-Wilcoxon and hazard ratios (checked against R and SAS); fraction of total;
-  contingency bars, survival curves, pie and donut charts.
-- **M7 — Transforms and result tables:** done. Transform, normalize, remove baseline, prune,
-  transpose, smooth/differentiate/integrate, residual plots; result tables are live and can be
-  graphed and analysed further in chains. Also observed vs. expected and McNemar's test.
-- **M8 — Figures:** done. Pages of live panels (graphs, tables, results, text) with automatic
-  panel letters, snapping, alignment and grid arrangement; export at exact page size to SVG,
-  PDF, PNG and TIFF with every panel as its own group.
-- **M9 — Graph polish:** done. Significance-bracket formatting, right Y axis, axis breaks,
-  grid lines and reference bands, colour schemes, copying formatting between graphs,
-  drawing tools, text formatting, horizontal and back-to-back bars, bubble plots of
-  multiple-variable tables, plotted functions, QQ plots, waffles, and figure overlays and
-  drag and drop.
-- **M9b — Finding your way:** done. All graphs at a glance (live thumbnails grouped by table,
-  search, filters, sort, multi-select actions) and Finder-style colour labels on sheets
-  (sidebar dots, a filter strip, nameable labels, shortcuts).
-- **M10 — Import:** done. CSV/TSV/Excel into any table type (wide or long, live preview), lab
-  exports (NED-Net, TRACER, QuantStudio with ΔΔCt), Prism `.prism` and `.pzfx` files with
-  their analyses re-created, and date X columns.
-- **Next — M11:** product (autosave and recovery, preferences, help, packaging).
+| System | File |
+|---|---|
+| macOS 12 or later, Apple Silicon (M1 and newer) | `ASTERISM-<version>-mac.dmg` |
+| Windows 10 or 11, 64-bit | `ASTERISM-<version>-windows-setup.exe` |
+| Linux, x86-64 | `ASTERISM-<version>-linux-x86_64.AppImage` |
 
-## Run
+ASTERISM checks for new versions when it starts (you can turn this off in **Settings**) and
+from **Help › Check for Updates**.
+
+### The apps are not signed
+
+ASTERISM is free and isn't signed with paid developer certificates, so each system asks
+once before opening it. This is expected.
+
+**macOS**
+
+1. Open the `.dmg` and drag **ASTERISM** onto **Applications**.
+2. Open ASTERISM from Applications. macOS says it can't check the app; click **Done**.
+3. Open **System Settings › Privacy & Security**, scroll down to *"ASTERISM was blocked…"*,
+   click **Open Anyway** and confirm with your password.
+
+After that it opens normally, and double-clicking `.asterism` files opens them in ASTERISM.
+
+**Windows**
+
+1. Run `ASTERISM-<version>-windows-setup.exe`. If Windows shows *"Windows protected your
+   PC"*, click **More info**, then **Run anyway**.
+2. The installer doesn't need administrator rights. It adds ASTERISM to the Start menu,
+   opens `.asterism` files with it, and offers it under **Open with** for Prism files.
+   Uninstall from **Settings › Apps**.
+
+**Linux**
+
+1. Make the file executable: `chmod +x ASTERISM-*.AppImage` (or Properties › Permissions).
+2. Run it. On some distributions Qt needs `libxcb-cursor0`
+   (`sudo apt install libxcb-cursor0` on Debian and Ubuntu).
+
+## What it does
+
+- **Data tables** of eight types (column, XY, grouped, contingency, survival, parts of
+  whole, multiple variables, nested), with replicates or entered means and errors.
+- **Analyses**: t tests and nonparametric tests, one- and two-way ANOVA with multiple
+  comparisons, nested analyses, normality and outlier tests, linear and nonlinear
+  regression, correlation, contingency tables, survival, transforms and more. Results
+  stay live as data change.
+- **Graphs** with Prism's range of styles and formatting, significance brackets, and
+  **figures** (pages of live panels). Export PDF, SVG, PNG and TIFF, or copy as a vector
+  picture to Word, PowerPoint, Keynote or Illustrator.
+- **Import** from spreadsheets, lab instruments (QuantStudio qPCR) and **Prism files**
+  (`.prism`, `.pzfx`), with their analyses and graph formatting.
+- Built-in **help** (Help › ASTERISM Help) and an explanation of how every result is
+  calculated.
+
+## Run from source
+
+Needs Python 3.12 or later.
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # first time
-./start-asterism.sh                     # or: .venv/bin/python -m asterism [file.asterism]
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt     # requirements.txt alone runs the app
+.venv/bin/python -m asterism [file.asterism]      # or ./start-asterism.sh
 ```
 
-On macOS you can also double-click `Start ASTERISM.command`.
+On Windows: `py -m venv .venv`, `.venv\Scripts\pip install -r requirements-dev.txt`,
+`.venv\Scripts\python -m asterism`.
 
 ## Test
 
 ```bash
 .venv/bin/python -m pytest -q
-.venv/bin/python -m asterism --shots /tmp/asterism-shots    # screenshot tour for visual review
+.venv/bin/python -m asterism --selftest                      # what the packaged apps check
+.venv/bin/python -m asterism --shots /tmp/asterism-shots     # screenshot tour for visual review
 ```
 
-- `tests/doc/`: document model, undo, project files (no Qt).
-- `tests/app/`: the desktop app, offscreen.
-- `tests/test_golden.py`: statistics checked against real Prism output. The Prism projects
-  they were extracted from stay local in `sample_data/` (gitignored).
+`tests/test_golden.py` and the `test_*prism*` tests compare statistics with real Prism
+output. The Prism projects they come from stay local in `sample_data/` (not in the
+repository), so those tests skip elsewhere.
 
-## Layout
+## Build and release
 
-| Path | What |
-|---|---|
-| `asterism/core/` | statistics executors, lab importers, validation, export QA (no Qt) |
-| `asterism/doc/` | document model, graph specs, undo stack, `.asterism` file format (no Qt) |
-| `asterism/analysis/` | analysis registry: analyses → Prism-style result pages (no Qt) |
-| `asterism/app/` | the PySide6 app: window, project sidebar, top bar and tool panel, sheets, dialogs, graph canvas, export, theme |
+The apps are built with PyInstaller (`packaging/asterism.spec`):
 
-Graph text uses Arial by default and stays live text in exported PDF/SVG, so the font must
-be installed on the machine that opens the file.
+```bash
+.venv/bin/pyinstaller packaging/asterism.spec --noconfirm    # dist/ASTERISM.app or dist/ASTERISM/
+packaging/make_dmg.sh                                        # macOS disk image
+```
+
+The Windows installer (`packaging/windows/asterism.iss`, Inno Setup) and the Linux AppImage
+(`packaging/linux/make_appimage.sh`) are built by GitHub Actions. To release: set the
+version in `asterism/__init__.py`, push a tag like `v0.1.0`, and the **Release** workflow
+builds all three apps, runs `--selftest` on each, and attaches them to a draft release to
+publish from the Releases page.
+
+## Design
+
+The design, principles and build history are in [`SPEC.md`](SPEC.md).
+
+## Licence
+
+MIT (see [`LICENSE`](LICENSE)). The apps include Qt (LGPL v3), Lucide icons (ISC) and other
+open-source libraries listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

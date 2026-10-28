@@ -16,3 +16,7 @@ venv/
 # Raw lab Prism projects — full projects with experimenter/date metadata; kept
 # local only. Golden VALUES are extracted into tests/golden/prism_golden.json.
 sample_data/
+
+# Packaging output
+build/
+dist/

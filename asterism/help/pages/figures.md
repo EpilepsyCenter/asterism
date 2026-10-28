@@ -115,6 +115,14 @@ To get a graph at a particular size, set its plot height and column width (or X-
 
 ## Copying and printing
 
-**Copy Graph to Clipboard** and **Print…** are shown in the menus but are not available yet (they are greyed out). Export a PDF instead: you can place it in Word, PowerPoint or Keynote, or print it from any PDF viewer.
+With a graph or figure in front, **Edit › Copy** (⌘C; Ctrl+C on Windows and Linux) or **File › Copy Graph to Clipboard** (⌘⇧C) copies it as a vector picture. Paste it into Word, PowerPoint, Keynote, Illustrator or Affinity and it stays sharp at any size, with real text you can still edit.
 
-Copying to the clipboard is planned for macOS only. On Windows, export a file and insert that.
+| System | What goes on the clipboard |
+|---|---|
+| macOS | PDF and SVG |
+| Windows | EMF (the vector format Office uses) and SVG |
+| Linux | SVG and PNG |
+
+Only vector formats are offered on macOS and Windows, so an app can't quietly paste a blurry picture instead. To paste into an app that takes only pictures (some chat apps, for example), export a PNG and insert that.
+
+**Print…** is shown in the menus but isn't available yet (it is greyed out). Export a PDF and print it from any PDF viewer.

@@ -156,7 +156,7 @@ class StartDialog(QDialog):
             exists = os.path.exists(path)
             name = os.path.splitext(os.path.basename(path))[0]
             folder = os.path.dirname(path).replace(os.path.expanduser("~"), "~")
-            it = QListWidgetItem(icon("doc.richtext", "accent" if exists else None, selected=True),
+            it = QListWidgetItem(icon("doc.text", "accent" if exists else None, selected=True),
                                  f"{name}\n{folder} · {_when(path)}")
             it.setData(Qt.UserRole, path)
             it.setToolTip(path)

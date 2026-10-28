@@ -182,7 +182,7 @@ Fitting starts from a guess for each parameter and improves it step by step. Lea
 
 ### The curve on the graph
 
-When **Draw the curve on the graph of the data** (or, for linear regression, **Draw the line on the graph of the data**) is on, each data set's fitted curve appears on the graphs of that XY table, in the data set's colour and line style, so you can format it with the data set (see [Formatting graphs](formatting.md)). Confidence or prediction bands are drawn as thinner dashed lines either side. On a log X axis the curve is drawn evenly along the log scale. The curve follows any change to the data or the settings. To draw an equation with parameters you choose yourself instead of fitted ones, use [Plot a function](formatting.md#plot-a-function).
+When **Draw the curve on the graph of the data** (or, for linear regression, **Draw the line on the graph of the data**) is on, each data set's fitted curve appears on the graphs of that XY table, at first in the data set's colour and line style. Confidence or prediction bands are drawn as thinner dashed lines either side. To hide the curve on one graph, or give it its own colour, thickness, style and shaded bands, use **Format Graph › Style › Fitted curve** (double-click the curve to go there) or **Show and order › Fitted curves on this graph**; see [Formatting graphs](formatting.md#fitted-curve). Unticking **Draw the curve on the graph of the data** here hides it on every graph of the table. On a log X axis the curve is drawn evenly along the log scale. The curve follows any change to the data or the settings. To draw an equation with parameters you choose yourself instead of fitted ones, use [Plot a function](formatting.md#plot-a-function).
 
 ### Reading the results
 

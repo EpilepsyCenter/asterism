@@ -99,7 +99,7 @@ class FormatGraphDialog(SectionDialog):
         self.auto_range = auto_range
         self.xy = graph.table.table_type == "xy"
         self.numx = graph.table.table_type in ("xy", "multivar", "survival")      # numeric X axis
-        self.cols = graph.table.used_columns()
+        self.cols = self.spec.ordered(graph.table.used_columns())     # in the graph's order
         for c in self.cols:
             self.spec.style(c)
         self._loading = False
@@ -183,6 +183,13 @@ class FormatGraphDialog(SectionDialog):
 
     def _section_changed(self, key: str) -> None:
         self.picker.setVisible(key in self.DATASET_SECTIONS)
+        fl = getattr(self, "fit_list", None)
+        if key == "datasets" and fl is not None:      # pick up changes made on the Style page
+            fl.blockSignals(True)
+            for i in range(fl.count()):
+                it = fl.item(i)
+                it.setCheckState(Qt.Checked if self.spec.style(it.data(Qt.UserRole)).curve_show else Qt.Unchecked)
+            fl.blockSignals(False)
 
     # --- Graph: size and frame ------------------------------------------------------
 
@@ -932,6 +939,52 @@ class FormatGraphDialog(SectionDialog):
             for label, key in (("Points (and lines)", "scatter"), ("Bars at each X", "bar")):
                 self.appearance.addItem(label, key)
 
+        # fitted curve / regression line from a linked analysis (XY graphs that have one)
+        from ..graph.xy_layout import fit_columns
+        self.fits = fit_columns(self.graph)
+        self.fit_sec = Section("Fitted curve")
+        pl.addWidget(self.fit_sec)
+        self.fit_box = QWidget()
+        g = FormGrid()
+        g.setContentsMargins(0, 0, 0, 0)
+        self.fit_box.setLayout(g)
+        self.curve_show = QCheckBox("Show the fitted curve on this graph")
+        self.curve_same = QCheckBox("The data set's colour")
+        self.curve_color = ColorButton()
+        crow = QHBoxLayout()
+        crow.addWidget(self.curve_same)
+        crow.addWidget(self.curve_color)
+        crow.addStretch(1)
+        self.curve_w = combo([("Same as the line", 0.0)] + THICK[1:])
+        self.curve_dash = combo([("Same as the line", ""), ("Solid", "solid"), ("Dashed", "dash"), ("Dotted", "dot")])
+        self.band_style = combo([("Dashed lines", "dashed"), ("Shaded area", "shaded"), ("Hidden", "none")])
+        self.band_op = QDoubleSpinBox()
+        self.band_op.setRange(3, 100)
+        self.band_op.setDecimals(0)
+        self.band_op.setSuffix(" % opaque")
+        g.add((None, self.curve_show))
+        g.add(("Colour:", crow))
+        g.add(("Thickness:", self.curve_w), ("Style:", self.curve_dash))
+        g.add(("Bands:", self.band_style), ("Shading:", self.band_op))
+        pl.addWidget(self.fit_box)
+        self.fit_note = QLabel("Bands appear when the analysis draws confidence or prediction bands "
+                               "(Analysis Settings › Confidence). Hiding the curve here leaves it on other graphs.")
+        self.fit_note.setWordWrap(True)
+        self.fit_note.setEnabled(False)
+        self.fit_note.setContentsMargins(18, 0, 0, 0)
+        pl.addWidget(self.fit_note)
+        for w in (self.fit_sec, self.fit_box, self.fit_note):
+            w.setVisible(bool(self.fits))
+        self.curve_show.toggled.connect(self._store)
+        self.curve_same.toggled.connect(self._store)
+        self.curve_same.toggled.connect(lambda on: self.curve_color.setEnabled(not on))
+        self.curve_color.colorChanged.connect(self._store)
+        for w in (self.curve_w, self.curve_dash, self.band_style):
+            w.currentIndexChanged.connect(self._store)
+        self.band_style.currentIndexChanged.connect(
+            lambda *_: self.band_op.setEnabled(self.band_style.currentData() == "shaded"))
+        self.band_op.valueChanged.connect(self._store)
+
         self.sec_bars = Section("Bars", checkable=True)
         pl.addWidget(self.sec_bars)
         g = FormGrid()
@@ -1040,22 +1093,79 @@ class FormatGraphDialog(SectionDialog):
         g.add(("Beside the points:", self.ba_summary))
         pl.addLayout(g)
         pl.addSpacing(8)
-        pl.addWidget(QLabel("Data sets drawn on this graph:"))
+        pl.addWidget(Section("Data sets and their order"))
+        hint = QLabel("Tick the data sets to draw. Drag them, or use the buttons, to change their order on "
+                      "the graph (left to right, bottom to top in a stack) and in the legend.")
+        hint.setWordWrap(True)
+        hint.setEnabled(False)
+        pl.addWidget(hint)
+        row = QHBoxLayout()
         self.ds_list = QListWidget()
+        self.ds_list.setDragDropMode(QListWidget.InternalMove)
+        self.ds_list.setDefaultDropAction(Qt.MoveAction)
+        self.ds_list.setMinimumHeight(min(320, 28 * max(4, len(self.cols)) + 8))
         for c in self.cols:
             it = QListWidgetItem(self.graph.table.short_label(c))
-            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
             it.setCheckState(Qt.Unchecked if c in self.spec.hidden else Qt.Checked)
             it.setData(Qt.UserRole, c)
             self.ds_list.addItem(it)
         self.ds_list.itemChanged.connect(self._store_hidden)
-        pl.addWidget(self.ds_list, 1)
+        self.ds_list.model().rowsMoved.connect(lambda *_: self._store_hidden())
+        row.addWidget(self.ds_list, 1)
+        btns = QVBoxLayout()
+        self.ds_up, self.ds_down = QPushButton("Move Up"), QPushButton("Move Down")
+        self.ds_reset = QPushButton("Table Order")
+        self.ds_reset.setToolTip("Put the data sets back in the order of the table's columns")
+        self.ds_up.clicked.connect(lambda: self._move_ds(-1))
+        self.ds_down.clicked.connect(lambda: self._move_ds(1))
+        self.ds_reset.clicked.connect(self._table_order)
+        for b in (self.ds_up, self.ds_down, self.ds_reset):
+            btns.addWidget(b)
+        btns.addStretch(1)
+        row.addLayout(btns)
+        pl.addLayout(row, 1)
+        from ..graph.xy_layout import fit_columns
+        fits = fit_columns(self.graph)
+        self.fit_list = None
+        if fits:
+            pl.addWidget(Section("Fitted curves on this graph"))
+            self.fit_list = QListWidget()
+            self.fit_list.setMaximumHeight(28 * min(len(fits), 6) + 8)
+            for c in self.spec.ordered(fits):
+                it = QListWidgetItem(f"{self.graph.table.short_label(c)}  —  {', '.join(fits[c])}")
+                it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                it.setCheckState(Qt.Checked if self.spec.style(c).curve_show else Qt.Unchecked)
+                it.setData(Qt.UserRole, c)
+                self.fit_list.addItem(it)
+            self.fit_list.itemChanged.connect(self._store_fit_list)
+            pl.addWidget(self.fit_list)
         return page
 
+    def _store_fit_list(self, it) -> None:
+        self.spec.style(it.data(Qt.UserRole)).curve_show = it.checkState() == Qt.Checked
+        self._load()                                 # the Style page shows the same switch
+
+    def _move_ds(self, step: int) -> None:
+        i = self.ds_list.currentRow()
+        j = i + step
+        if i < 0 or not 0 <= j < self.ds_list.count():
+            return
+        it = self.ds_list.takeItem(i)
+        self.ds_list.insertItem(j, it)
+        self.ds_list.setCurrentRow(j)
+        self._store_hidden()
+
+    def _table_order(self) -> None:
+        items = [self.ds_list.takeItem(0) for _ in range(self.ds_list.count())]
+        for it in sorted(items, key=lambda it: it.data(Qt.UserRole)):
+            self.ds_list.addItem(it)
+        self._store_hidden()
+
     def _store_hidden(self, *_) -> None:
-        self.spec.hidden = {self.ds_list.item(i).data(Qt.UserRole)
-                            for i in range(self.ds_list.count())
-                            if self.ds_list.item(i).checkState() != Qt.Checked}
+        cols = [self.ds_list.item(i).data(Qt.UserRole) for i in range(self.ds_list.count())]
+        self.spec.hidden = {c for i, c in enumerate(cols) if self.ds_list.item(i).checkState() != Qt.Checked}
+        self.spec.order = [] if cols == sorted(cols) else cols
 
     def _targets(self) -> list[DataSetStyle]:
         c = self.ds_combo.currentData()
@@ -1100,6 +1210,15 @@ class FormatGraphDialog(SectionDialog):
         self.nudge_y.setValue(st.nudge_y)
         self.fill_area.setChecked(st.fill)
         self.fill_alpha.setValue(st.fill_alpha * 100)
+        self.curve_show.setChecked(st.curve_show)
+        self.curve_same.setChecked(not st.curve_color)
+        self.curve_color.set_color(st.curve_color or st.symbol_color)
+        self.curve_color.setEnabled(bool(st.curve_color))
+        set_combo(self.curve_w, st.curve_width)
+        set_combo(self.curve_dash, st.curve_dash)
+        set_combo(self.band_style, st.band_style)
+        self.band_op.setValue(st.band_opacity * 100)
+        self.band_op.setEnabled(st.band_style == "shaded")
         self._loading = False
         self._sync_box_mode()
 
@@ -1156,7 +1275,10 @@ class FormatGraphDialog(SectionDialog):
             fill_alpha=self.fill_alpha.value() / 100, axis=self.plot_axis.currentData(),
             legend=self.in_legend.isChecked(), gaps=self.gaps.isChecked(), nudge=self.nudge.value(),
             row_labels=self.row_labels.isChecked(), by_row=self.by_row.isChecked(),
-            nudge_y=self.nudge_y.value())
+            nudge_y=self.nudge_y.value(), curve_show=self.curve_show.isChecked(),
+            curve_color="" if self.curve_same.isChecked() else self.curve_color.color(),
+            curve_width=self.curve_w.currentData(), curve_dash=self.curve_dash.currentData(),
+            band_style=self.band_style.currentData(), band_opacity=self.band_op.value() / 100)
         sender = self.sender()
         # With "All data sets", only the field that was touched is pushed, so per-data-set
         # differences (e.g. one red group) survive a change elsewhere.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import uuid
 from dataclasses import dataclass
@@ -68,8 +69,26 @@ def clear(key: str) -> None:
 
 
 def _alive(pid: int) -> bool:
+    """Whether process `pid` is still running (without disturbing it)."""
     if pid == os.getpid():
         return True
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        # os.kill(pid, 0) would send Ctrl+C on Windows; ask the system about the process instead
+        import ctypes
+        from ctypes import wintypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = wintypes.HANDLE
+        h = k32.OpenProcess(0x1000, False, pid)            # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return ctypes.get_last_error() == 5             # access denied: it exists
+        try:
+            code = wintypes.DWORD()
+            ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+            return bool(ok) and code.value == 259           # STILL_ACTIVE
+        finally:
+            k32.CloseHandle(h)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

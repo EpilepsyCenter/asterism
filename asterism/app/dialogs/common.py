@@ -271,7 +271,50 @@ class SectionDialog(QDialog):
         if not getattr(self, "_units_done", False):
             self._units_done = True
             units_outside(self)
+            self.fit_to_content()
         super().showEvent(ev)
+
+    # Sections up to this tall (content, in pixels) fit without scrolling; taller ones scroll
+    # rather than leave every other section with a big empty space below it.
+    FIT_MAX_CONTENT = 700
+
+    def fit_to_content(self) -> None:
+        """Grow (never shrink) so sections show without scrolling, up to FIT_MAX_CONTENT tall
+        and within 92% of the screen; then centre on the parent window (or the screen)."""
+        from PySide6.QtGui import QGuiApplication
+        lay = self.layout()
+        if lay is not None:
+            lay.activate()
+        need_w = need_h = 0
+        cur = self.stack.currentWidget()
+        if not isinstance(cur, QScrollArea):
+            return
+        vp = cur.viewport().size()                 # every section gets this area (hidden ones aren't laid out)
+        for i in range(self.stack.count()):
+            sa = self.stack.widget(i)
+            content = sa.widget() if isinstance(sa, QScrollArea) else None
+            if content is None:
+                continue
+            hint = content.sizeHint()
+            need_h = max(need_h, min(hint.height(), self.FIT_MAX_CONTENT) - vp.height())
+            need_w = max(need_w, content.minimumSizeHint().width() - vp.width())
+        if need_w <= 0 and need_h <= 0:
+            return
+        anchor = self.parentWidget().window() if self.parentWidget() is not None else None
+        scr = (anchor.screen() if anchor is not None else None) or self.screen() or QGuiApplication.primaryScreen()
+        avail = scr.availableGeometry() if scr is not None else None
+        w = self.width() + max(0, need_w) + (4 if need_w > 0 else 0)
+        h = self.height() + max(0, need_h) + (6 if need_h > 0 else 0)
+        if avail is not None:
+            w, h = min(w, int(avail.width() * 0.92)), min(h, int(avail.height() * 0.92))
+        self.resize(max(w, self.width()), max(h, self.height()))
+        if avail is not None:
+            centre = anchor.geometry().center() if anchor is not None else avail.center()
+            g = self.frameGeometry()
+            g.moveCenter(centre)
+            g.moveLeft(max(avail.left(), min(g.left(), avail.right() - g.width())))
+            g.moveTop(max(avail.top(), min(g.top(), avail.bottom() - g.height())))
+            self.move(g.topLeft())
 
     def __init__(self, title: str, help_topic: str, parent=None, apply: bool = False,
                  extra_left: list[QWidget] = (), sidebar_width: int = 196):

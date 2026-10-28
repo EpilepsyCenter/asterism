@@ -10,6 +10,7 @@ DEFAULTS: dict[str, object] = {
     "autosave.enabled": True,
     "autosave.minutes": 2,
     "export.dpi": 300,                 # PNG and TIFF export
+    "updates.auto": True,              # check GitHub for a newer release at startup (daily at most)
     # new graphs
     "graph.font": "Arial",
     "graph.font_size": 12.0,

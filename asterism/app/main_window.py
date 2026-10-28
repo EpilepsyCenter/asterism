@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
                                    tip="Change how this table was imported (its tables update in place)")
         self.a_close = A("Close", "xmark", self.close, QKeySequence.Close)
         self.a_save = A("Save", "square.and.arrow.down", self.save, QKeySequence.Save)
-        self.a_save_as = A("Save As…", "square.and.arrow.down.on.square", self.save_as,
+        self.a_save_as = A("Save As…", "save.as", self.save_as,
                            QKeySequence.SaveAs)
         self.a_revert = A("Revert to Saved", "arrow.counterclockwise", self.revert)
         self.a_sample = A("Open Sample Project", "doc.text", open_sample)
@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         self.a_next = A("Next Sheet", "chevron.down", lambda: self._step_sheet(1), "Ctrl+]")
         # Edit
         self.a_cut = A("Cut", "scissors", lambda: self._table_op("cut"), QKeySequence.Cut, kinds=T)
-        self.a_copy = A("Copy", "doc.on.doc", lambda: self._table_op("copy"), QKeySequence.Copy, kinds=T)
+        self.a_copy = A("Copy", "doc.on.doc", self._copy, QKeySequence.Copy, kinds=(*T, "graph", "figure"))
         self.a_paste = A("Paste", "doc.on.clipboard", lambda: self._table_op("paste"), QKeySequence.Paste, kinds=T)
         self.a_insert_row = A("Insert Rows", "text.insert", lambda: self._table_op("insert_rows"), kinds=T)
         self.a_delete_row = A("Delete Rows", "text.badge.minus", lambda: self._table_op("delete_rows"), kinds=T)
@@ -172,7 +172,9 @@ class MainWindow(QMainWindow):
         self.a_fig_back = A("Send to Back", "square.3.layers.3d.bottom.filled", lambda: self._figure_op("restack", False), kinds=F)
         self.a_fig_format = A("Format Figure…", "doc.badge.gearshape", self.figure_format, kinds=F)
         self.a_add_to_figure = A("Add to Figure…", "rectangle.split.2x2", self.add_graph_to_figure, kinds=G)
-        self.a_copy_graph = L("Copy Graph to Clipboard", "doc.on.clipboard.fill", "M8")
+        self.a_copy_graph = A("Copy Graph to Clipboard", "doc.on.clipboard.fill", self.copy_graphic,
+                              "Ctrl+Shift+C", kinds=("graph", "figure"),
+                              tip="Copy as a vector picture: paste into Word, PowerPoint, Keynote or Illustrator")
         self.a_export_table = L("Export Table (CSV / Excel)…", "tablecells", "M10")
         # Analyze
         self.a_analyze = A("Analyze…", "function", self.analyze, "Ctrl+Shift+A", "accent", "Analyze data")
@@ -274,14 +276,17 @@ class MainWindow(QMainWindow):
             self.a_tags.append(a)
         self.a_label_names = A("Label Names…", "tag", self.edit_label_names)
         self.a_toggle_sidebar = A("Show Project Sidebar", "sidebar.left", self._toggle_sidebar,
-                                  "Ctrl+Meta+S" if sys.platform == "darwin" else "Ctrl+Alt+S", "muted")
-        self.a_toggle_tools = A("Show Tools", "sidebar.right", self._toggle_tools, "Ctrl+Alt+0", "muted")
+                                  "Ctrl+Meta+S" if sys.platform == "darwin" else "Ctrl+Shift+L", "muted")
+        # Ctrl+Alt is AltGr on many Windows keyboards (AltGr+0 types "}"), so not there
+        self.a_toggle_tools = A("Show Tools", "sidebar.right", self._toggle_tools,
+                                "Ctrl+Alt+0" if sys.platform == "darwin" else "Ctrl+Shift+T", "muted")
         for a in (self.a_toggle_sidebar, self.a_toggle_tools):
             a.setCheckable(True)
             a.setChecked(True)
         self.a_help = A("ASTERISM Help", "questionmark.circle", self.open_help, "Ctrl+?")
         self.a_help_methods = A("How Results Are Calculated", "function", lambda: self.open_help_page("methods"))
         self.a_help_shortcuts = A("Keyboard Shortcuts", "keyboard", lambda: self.open_help_page("shortcuts"))
+        self.a_updates = A("Check for Updates…", "arrow.counterclockwise", self.check_updates)
         self.a_about = A("About ASTERISM", "info.circle", self._about)
         self.a_about.setMenuRole(QAction.AboutRole)
         self.a_settings = A("Settings…", "gearshape", self.open_settings, "Ctrl+,")
@@ -357,7 +362,8 @@ class MainWindow(QMainWindow):
                         self.a_fig_format])
         menu("View", [self.a_overview, None, self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
-        menu("Help", [self.a_help, None, self.a_help_methods, self.a_help_shortcuts, None, self.a_about])
+        menu("Help", [self.a_help, None, self.a_help_methods, self.a_help_shortcuts, None, self.a_updates,
+                      self.a_about])
 
     def _fill_recent(self) -> None:
         self.recent_menu.clear()
@@ -462,7 +468,27 @@ class MainWindow(QMainWindow):
 
     def _save_geometry(self) -> None:
         if self.isVisible() and not (self.isMinimized() or self.isFullScreen()):
-            documents.set_value("window/geometry", self.saveGeometry())
+            geom = self.saveGeometry()
+            documents.set_value("window/geometry", geom)
+            if self.path:                            # this file opens where it was left
+                documents.set_file_state(self.path, geometry=bytes(geom.toBase64()).decode("ascii"),
+                                         sheet=getattr(self.current, "id", None))
+
+    def restore_file_state(self) -> bool:
+        """Size, position and front sheet this file had last time; False if none."""
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtGui import QGuiApplication
+        if not self.path:
+            return False
+        st = documents.file_state(self.path)
+        sheet = next((s for s in self._all_sheets() if s.id == st.get("sheet")), None)
+        if sheet is not None:
+            self.show_sheet(sheet)
+        geom = st.get("geometry")
+        if not geom or not self.restoreGeometry(QByteArray.fromBase64(geom.encode("ascii"))):
+            return False
+        g = self.geometry()
+        return any(sc.availableGeometry().intersects(g) for sc in QGuiApplication.screens())
 
     def _restore_layout(self) -> None:
         def width(key, default, lo, hi):
@@ -757,6 +783,7 @@ class MainWindow(QMainWindow):
         from . import recovery
         recovery.clear(self._autosave_key)          # saved: the autosaved copy isn't needed
         documents.add_recent(path)
+        self._save_geometry()                        # remember this window for the file
         documents.set_last_dir(path)
         self.flash(f"Saved {os.path.basename(path)}")
         self._edited()
@@ -853,7 +880,7 @@ class MainWindow(QMainWindow):
             from ..doc.table import TYPE_NAMES
             return f"Graph · {TYPE_NAMES[s.table.table_type]} graphs are not available yet"
         if isinstance(s, Graph):
-            cols = [c for c in s.table.used_columns() if c not in s.spec.hidden]
+            cols = s.spec.shown(s.table.used_columns())
             kinds = {s.spec.style(c).appearance for c in cols} or {"scatter"}
             names = dict((v, k) for k, v in APPEARANCES)
             kind = names[kinds.pop()].lower() if len(kinds) == 1 else "mixed styles"
@@ -1102,6 +1129,32 @@ class MainWindow(QMainWindow):
             return s.source.output_table()
         return getattr(s, "table", None) or (self.project.tables[0] if self.project.tables else None)
 
+    def _copy(self) -> None:
+        """Edit › Copy: cells on tables and results, the picture on graphs and figures."""
+        if isinstance(self.current, (Graph, FigureSheet)):
+            self.copy_graphic()
+        else:
+            self._table_op("copy")
+
+    def copy_graphic(self) -> None:
+        """The graph or figure in front, as a vector picture on the clipboard (PDF on macOS,
+        EMF on Windows, SVG on Linux, each with a PNG)."""
+        from . import clipboard
+        try:
+            if isinstance(self.current, FigureSheet):
+                clipboard.copy_figure(self.current, self.project)
+                what = self.current.name
+            else:
+                g, _ = self._family_graph()
+                if g is None:
+                    return
+                clipboard.copy_graph(g)
+                what = g.name
+        except Exception as e:                       # the clipboard can be locked by another app
+            QMessageBox.warning(self, "Copy", f"The picture couldn't be copied: {e}")
+            return
+        self.flash(f"Copied “{what}”: paste it into Word, PowerPoint, Keynote or Illustrator")
+
     def _family_graph(self) -> tuple[Graph | None, GraphSheet | None]:
         s = self.current
         if not isinstance(s, Graph):
@@ -1234,7 +1287,7 @@ class MainWindow(QMainWindow):
         if g is None:
             return
         from .graph.formatting import SCHEMES, apply_scheme
-        cols = [c for c in g.table.used_columns() if c not in g.spec.hidden]
+        cols = g.spec.shown(g.table.used_columns())
         self.project.undo.push(SpecCommand(g, apply_scheme(g.spec, key, cols), f"Colours: {SCHEMES[key][0]}"))
 
     def copy_formatting(self) -> None:
@@ -1637,6 +1690,10 @@ class MainWindow(QMainWindow):
         self.status.zoom.blockSignals(False)
         self.status.zoom_label.setText(f"{z * 100:.0f}%")
 
+    def check_updates(self) -> None:
+        from . import updates
+        updates.check(self)
+
     def open_help(self) -> None:
         """Help opens where you are: the page for the kind of sheet in front."""
         from .help_window import show_page
@@ -1703,7 +1760,9 @@ def _place(w: MainWindow) -> None:
 
 def _show(w: MainWindow, origin: MainWindow | None = None, replace: bool = False) -> MainWindow:
     reuse = origin is not None and (replace or (origin.path is None and origin.project.is_pristine()))
-    if reuse:
+    if w.restore_file_state():
+        pass                                         # a file reopens at its own size and place
+    elif reuse:
         w.setGeometry(origin.geometry())
     else:
         _place(w)

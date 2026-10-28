@@ -111,13 +111,13 @@ class Recipe:
     def save(self, path: Path | str) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             yaml.safe_dump(self.to_dict(), fh, sort_keys=False)
         return path
 
     @classmethod
     def load(cls, path: Path | str) -> "Recipe":
-        with open(path, "r") as fh:
+        with open(path, "r", encoding="utf-8") as fh:
             return cls.from_dict(yaml.safe_load(fh))
 
 

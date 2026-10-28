@@ -110,6 +110,21 @@ def series(t, c: int, st) -> list[dict]:
     return out
 
 
+def fit_columns(graph) -> dict[int, list[str]]:
+    """Data sets of this XY graph that have a fitted line or curve: {column: [analysis names]}."""
+    out: dict[int, list[str]] = {}
+    if graph.table.table_type != "xy":
+        return out
+    for a in graph.analyses():
+        r = a.result
+        fit = getattr(r, "fit", None) if r is not None and not r.error else None
+        if not isinstance(fit, dict) or fit.get("kind") not in ("line", "curve"):
+            continue
+        for c in (fit.get("fits") or fit.get("curves") or {}):
+            out.setdefault(c, []).append(a.name)
+    return out
+
+
 def _curves(graph, cols: list[int], data: dict) -> list[dict]:
     """Fitted lines and curves from linked regressions: [{column, kind, fn, band, xs}]."""
     out = []
@@ -152,13 +167,20 @@ def _curves(graph, cols: list[int], data: dict) -> list[dict]:
 
 def build_xy(graph) -> tuple[list[Element], AxisRange]:
     spec, t = graph.spec, graph.table
-    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    cols = spec.shown(t.used_columns())
     pw, ph = spec.x_len_mm * MM, spec.y_len_mm * MM
     aw, ac = spec.axis_width, spec.axis_color
     off = 6.0 if spec.frame == "offset" else 0.0
     yx, xy = -off, ph + off
     data = {c: series(t, c, spec.style(c)) for c in cols}
-    curves = _curves(graph, cols, data)
+    curves = []
+    for cv_ in _curves(graph, cols, data):         # this graph's choices: hide the fit, or its bands
+        st_ = spec.style(cv_["column"])
+        if not st_.curve_show:
+            continue
+        if st_.band_style == "none":
+            cv_ = {**cv_, "band": None}
+        curves.append(cv_)
     xlog = spec.x.scale == "log10"
 
     def grid(lo, hi, n=240):
@@ -346,13 +368,19 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
                         [(xm(a) + nx, ym(b) - ny) for a, b in zip(g, hi_b) if math.isfinite(b)])
 
         def draw_curve(cv, pts=pts, band_pts=band_pts, st=st):
+            col = st.curve_color or st.symbol_color
+            width = st.curve_width or st.line_width
+            dash = st.curve_dash or st.line_dash
             if band_pts:
-                for line in band_pts:
-                    if len(line) > 1:
-                        cv.polyline(line, st.symbol_color, max(st.line_width * 0.75, 0.5), "butt", "dash")
+                lo_l, hi_l = band_pts
+                if st.band_style == "shaded" and len(lo_l) > 1 and len(hi_l) > 1:
+                    cv.polygon(lo_l + hi_l[::-1], fill=col, stroke=None, opacity=max(0.03, min(st.band_opacity, 1.0)))
+                else:
+                    for line in band_pts:
+                        if len(line) > 1:
+                            cv.polyline(line, col, max(width * 0.75, 0.5), "butt", "dash")
             if len(pts) > 1:
-                cv.polyline(pts, st.symbol_color, st.line_width, "round",
-                            None if st.line_dash == "solid" else st.line_dash)
+                cv.polyline(pts, col, width, "round", None if dash == "solid" else dash)
         box = QRectF()
         for x_, y_ in pts:
             box = box.united(QRectF(x_ - 1.5, y_ - 1.5, 3, 3))

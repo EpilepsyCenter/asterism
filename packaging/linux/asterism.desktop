@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ASTERISM
+Comment=Scientific graphing and statistics
+Exec=ASTERISM %F
+Icon=asterism
+Terminal=false
+Categories=Science;Education;Math;
+MimeType=application/x-asterism;
+StartupWMClass=ASTERISM

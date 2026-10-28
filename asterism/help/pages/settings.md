@@ -96,7 +96,7 @@ Copies left by an ASTERISM that is still running (for example, a second copy of 
 
 Each project opens in its own window. If you open a file that is already open, ASTERISM brings its window to the front instead of opening it twice. If the front window is an untitled project you haven't touched yet, the file you open takes its place.
 
-ASTERISM remembers the size and position of its window; each new window opens slightly offset from the one in front.
+Each project file remembers its window: when you open it again, it comes back at the same size and position (on the same screen, if that screen is still connected) with the sheet you were last looking at in front. New projects open where the last window was, slightly offset from any window already open.
 
 ### Opening files
 
@@ -139,9 +139,9 @@ ASTERISM works the same way on both systems, with these differences:
 |---|---|---|
 | Shortcuts | ⌘ | Ctrl (for example Ctrl+S to save) |
 | Settings… | **ASTERISM** menu | **File** menu |
-| Opening from the Finder or Dock | Yes | Use **File › Open…** or drag files onto a window |
-| Copying a graph to the clipboard | Planned (macOS only) | Not planned: export a file |
+| Double-clicking .asterism files | Yes (Finder, Dock) | Yes (Explorer, once installed); files go to the ASTERISM already open |
+| Copying a graph to the clipboard | As PDF and SVG | As EMF and SVG |
 
-**Copy Graph to Clipboard** is in the **File** menu but greyed out: it is not available yet, and when it arrives it will work on macOS only. On both systems, use **Export PDF…**, **Export SVG…**, **Export PNG…** or **Export TIFF…** to put a graph or figure into another program (see [Figures and export](figures.md)). Copying and pasting cells in data tables works on both systems.
+Copying a graph or figure works on every system, each in its own vector format (see [Figures and export](figures.md#copying-and-printing)). On Linux, ASTERISM works as on Windows, with SVG and PNG on the clipboard. Copying and pasting cells in data tables works everywhere.
 
 For every shortcut, see [Keyboard shortcuts](shortcuts.md).

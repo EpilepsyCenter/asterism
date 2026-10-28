@@ -34,7 +34,7 @@ Each project opens in its own window. From left to right:
 - **Top bar** and the current sheet in the middle.
 - **Tool panel** on the right: the commands for the sheet in front.
 
-You can drag the edges between them to make the sidebars wider or narrower. Hide or show them with **View › Show Project Sidebar** (⌃⌘S on a Mac, Ctrl+Alt+S on Windows) and **View › Show Tools**. ASTERISM remembers the widths and the window's size and position.
+You can drag the edges between them to make the sidebars wider or narrower. Hide or show them with **View › Show Project Sidebar** (⌃⌘S on a Mac, Ctrl+Shift+L on Windows and Linux) and **View › Show Tools** (⌥⌘0 on a Mac, Ctrl+Shift+T on Windows and Linux). ASTERISM remembers the widths, and each project file reopens at its own window size and position, showing the sheet you left it on.
 
 ### Project sidebar
 

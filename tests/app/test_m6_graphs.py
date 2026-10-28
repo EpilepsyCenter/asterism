@@ -163,3 +163,29 @@ def test_nested_subject_colours(app):
     plan = plan_nested(g, cols, 40.0)
     assert set(plan.slots[0].point_colors) == {"#00aa00"}
     assert spec_from_dict(spec_to_dict(g.spec)).nested["mean_size"] == 3.0
+
+
+def test_data_set_order(app):
+    """Format Graph › Show and order: drag or move data sets to change their order on the
+    graph (left to right) and in the legend; saved with the project."""
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.app.graph.layout import build
+    from asterism.doc.spec import spec_from_dict, spec_to_dict
+    p, t, g = _project("grouped")
+    cols = t.used_columns()
+    assert len(cols) >= 2
+    d = FormatGraphDialog(g, p, "datasets")
+    d.ds_list.setCurrentRow(len(cols) - 1)
+    for _ in range(len(cols) - 1):
+        d._move_ds(-1)                                   # last data set to the front
+    d.apply()
+    assert g.spec.order[0] == cols[-1]
+    assert g.spec.shown(cols)[0] == cols[-1]
+    els, _ = build(g)
+    xs = {e.meta["column"]: e.bounds.center().x() for e in els if e.kind == "dataset"}
+    assert xs[cols[-1]] < xs[cols[0]]                    # drawn first, on the left
+    assert spec_from_dict(spec_to_dict(g.spec)).order == g.spec.order
+    d2 = FormatGraphDialog(g, p, "datasets")
+    d2._table_order()
+    d2.apply()
+    assert g.spec.order == []                            # back to the table's order

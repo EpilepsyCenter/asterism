@@ -191,3 +191,99 @@ def test_every_table_type_and_analysis_has_a_picture(app):
             img = Sketch(k).grab()
             assert not img.isNull()
     theme._state["dark"] = False
+
+
+def test_every_icon_is_bundled(app):
+    """Icons come from the bundled Lucide set on every platform: each name used in the code
+    maps to a file that exists, and the licence ships with them."""
+    import os
+    import re
+    from asterism.app import icons
+    root = os.path.dirname(icons.__file__)
+    used = set()
+    for dirpath, _d, files in os.walk(root):
+        for f in files:
+            if f.endswith(".py"):
+                src = open(os.path.join(dirpath, f), encoding="utf-8").read()
+                used |= {n for n in re.findall(r'"([a-z0-9]+(?:\.[a-z0-9]+)*)"', src) if n in icons.LUCIDE}
+    for name, file in icons.LUCIDE.items():
+        assert os.path.exists(os.path.join(icons.ASSETS, f"{file}.svg")), name
+    assert os.path.exists(os.path.join(icons.ASSETS, "LICENSE"))
+    for name in used:
+        assert not icons.icon(name).isNull(), name
+    assert len(used) > 80
+    # every place the code names an icon (dialog sections, actions, icon() calls) is covered
+    named = set()
+    pats = [r'add_section\([^)]*?,\s*"([a-z0-9.]+)"\s*\)', r'\bicon\(\s*"([a-z0-9.]+)"',
+            r'\b(?:A|L|_act)\(\s*"[^"]*",\s*"([a-z0-9.]+)"']
+    for dirpath, _d, files in os.walk(root):
+        for f in files:
+            if f.endswith(".py"):
+                src = open(os.path.join(dirpath, f), encoding="utf-8").read()
+                for pat in pats:
+                    named |= set(re.findall(pat, src))
+    assert not sorted(n for n in named if n not in icons.LUCIDE)
+
+
+def test_second_launch_hands_files_to_the_running_app(app, tmp_path, monkeypatch):
+    """A later launch gives its files to the running ASTERISM instead of starting another
+    copy (what Windows and Linux do on every double-click)."""
+    import time
+    from asterism.analysis import engine
+    from asterism.app import main as M
+    from asterism.app.main_window import windows
+    from asterism.doc import fileformat
+    from asterism.doc.sample import sample_project
+    monkeypatch.setattr(M, "_server_name", lambda: f"asterism-test-{os.getpid()}")
+    path = tmp_path / "handed.asterism"
+    fileformat.save(sample_project(engine), str(path))
+    assert not M.hand_over([str(path)])              # nobody listening yet
+    M.listen(app)
+    assert M.hand_over([str(path)])
+    end = time.time() + 5
+    while time.time() < end and not any(w.path == str(path) for w in windows()):
+        app.processEvents()
+    opened = [w for w in windows() if w.path == str(path)]
+    assert opened
+    for w in opened:
+        w.project.mark_saved()
+        w.close()
+    app._server.close()
+
+
+def test_update_version_comparison():
+    from asterism.app.updates import newer, parse_version
+    assert parse_version("v0.2.1") == (0, 2, 1) and parse_version("x") == ()
+    assert newer("v0.2.0", "0.1.0") and newer("0.1.1", "0.1") and newer("v1.0", "0.9.9")
+    assert not newer("v0.1.0", "0.1.0") and not newer("0.1", "0.1.0") and not newer("", "0.1.0")
+
+
+def test_selftest_passes(app, capsys):
+    """The packaged apps run `--selftest`; it must pass from source too."""
+    from asterism.app.selftest import run
+    assert run(app) == 0, capsys.readouterr().out
+
+
+def test_a_file_reopens_at_its_own_size_place_and_sheet(app, tmp_path):
+    from asterism.analysis import engine
+    from asterism.app.main_window import open_path, windows
+    from asterism.doc import fileformat
+    from asterism.doc.sample import sample_project
+    path = str(tmp_path / "remember.asterism")
+    fileformat.save(sample_project(engine), path)
+    w = open_path(path)
+    w.setGeometry(10, 20, 770, 520)          # fits the offscreen test screen (800 × 600)
+    size = (w.width(), w.height())
+    g = w.project.graphs[0]
+    w.show_sheet(g)
+    app.processEvents()
+    w._save_geometry()
+    w.close()
+    other = open_path(path)
+    assert (other.width(), other.height()) == size and size != (1480, 920)
+    assert other.current is not None and other.current.id == g.id
+    other.project.mark_saved()
+    other.close()
+    for x in windows():
+        x.project.mark_saved()
+        x.close()

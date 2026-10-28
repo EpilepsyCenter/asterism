@@ -56,7 +56,7 @@ def waffle_counts(vals) -> list[int]:
 def parts_rows(graph) -> list[int]:
     """Rows drawn as slices, in drawing order (reversed when asked)."""
     spec, t = graph.spec, graph.table
-    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    cols = spec.shown(t.used_columns())
     rows = sorted({r for c in cols for r in _parts_values(t, c)[0]})
     return rows[::-1] if spec.parts.get("reverse") else rows
 
@@ -64,7 +64,7 @@ def parts_rows(graph) -> list[int]:
 def parts_colors(graph) -> dict[int, str]:
     """Each slice row's fill: the colour set for it, else the automatic one (by row order)."""
     spec, t = graph.spec, graph.table
-    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    cols = spec.shown(t.used_columns())
     rows = sorted({r for c in cols for r in _parts_values(t, c)[0]})
     chosen = spec.parts.get("colors") or {}
     return {r: (chosen.get(str(r)) or slice_color(i)) for i, r in enumerate(rows)}
@@ -78,7 +78,7 @@ def _total_text(P: dict, vals) -> str:
 def build_parts(graph) -> tuple[list[Element], AxisRange]:
     spec, t = graph.spec, graph.table
     P = spec.parts
-    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    cols = spec.shown(t.used_columns())
     elements: list[Element] = []
     lay = spec.parts_layout
     fs = spec.fonts["x_labels"]
@@ -269,7 +269,7 @@ def build_parts(graph) -> tuple[list[Element], AxisRange]:
 def build_survival(graph) -> tuple[list[Element], AxisRange]:
     from ...analysis.survival import km, subjects
     spec, t = graph.spec, graph.table
-    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    cols = spec.shown(t.used_columns())
     pw, ph = spec.x_len_mm * MM, spec.y_len_mm * MM
     scale = 100.0 if spec.surv_percent else 1.0
     death = spec.surv_death

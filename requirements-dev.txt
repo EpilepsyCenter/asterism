@@ -1,0 +1,6 @@
+# Development: the app's requirements plus tests and packaging.
+-r requirements.txt
+pytest
+pypdf==6.21.2        # export QA reads PDFs
+pingouin==0.6.1      # cross-checks in the tests (not used by the app)
+pyinstaller==6.22.2  # packaging

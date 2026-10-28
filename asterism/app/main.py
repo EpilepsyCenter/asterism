@@ -1,4 +1,4 @@
-"""App entry point:  python -m asterism [FILE.asterism …] [--shots DIR]"""
+"""App entry point:  python -m asterism [FILE.asterism …] [--shots DIR] [--selftest]"""
 
 from __future__ import annotations
 
@@ -32,6 +32,71 @@ class App(QApplication):
         return super().event(e)
 
 
+def _server_name() -> str:
+    import getpass
+    try:
+        user = getpass.getuser()
+    except Exception:
+        user = "user"
+    return f"asterism-{''.join(ch for ch in user if ch.isalnum()) or 'user'}"
+
+
+def hand_over(files: list[str]) -> bool:
+    """If ASTERISM is already running, give it these files (or ask it to come forward) and
+    return True; this process then quits. Windows and Linux start a new process for every
+    double-clicked file; this keeps one app with one window per project."""
+    import json
+    from PySide6.QtNetwork import QLocalSocket
+    sock = QLocalSocket()
+    sock.connectToServer(_server_name())
+    if not sock.waitForConnected(400):
+        return False
+    sock.write(json.dumps([os.path.abspath(f) for f in files]).encode("utf-8") + b"\n")
+    sock.flush()
+    sock.waitForBytesWritten(1000)
+    sock.disconnectFromServer()
+    return True
+
+
+def listen(app) -> None:
+    """Accept files handed over by later launches."""
+    import json
+    from PySide6.QtNetwork import QLocalServer
+    QLocalServer.removeServer(_server_name())          # a stale socket from a crash
+    server = QLocalServer(app)
+    if not server.listen(_server_name()):
+        return
+    app._server = server
+
+    def accept():
+        conn = server.nextPendingConnection()
+        if conn is None:
+            return
+        buf = bytearray()
+
+        def read():
+            buf.extend(bytes(conn.readAll()))
+            if not buf.endswith(b"\n"):
+                return
+            try:
+                files = json.loads(buf.decode("utf-8"))
+            except ValueError:
+                files = []
+            from .main_window import new_window, open_path, windows
+            ws = windows()
+            for f in files:
+                if os.path.exists(f) and not os.path.isdir(f):
+                    open_path(f, ws[-1] if ws else None)
+            ws = windows() or [new_window()]
+            w = ws[-1]
+            w.show()
+            w.raise_()
+            w.activateWindow()
+            conn.disconnectFromServer()
+        conn.readyRead.connect(read)
+    server.newConnection.connect(accept)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     # Qt's macOS accessibility bridge logs a harmless warning when table rows grow.
@@ -46,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
     from .logo import ASSETS
     app.setWindowIcon(QIcon(os.path.join(ASSETS, "icon.svg")))     # Dock and window icon
 
+    if "--selftest" in argv:
+        from .selftest import run
+        return run(app)
+
     if "--shots" in argv:
         from .shots import take_shots
         return take_shots(app, argv[argv.index("--shots") + 1])
@@ -53,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
     from .dialogs.start import show_at_startup
     from .main_window import new_window, offer_recovery, open_path, run_start, windows
     files = [a for a in argv[1:] if not a.startswith("-")]
+    if not os.environ.get("ASTERISM_MULTI"):          # one running ASTERISM per user
+        if hand_over(files):
+            return 0
+        listen(app)
     restored = offer_recovery()                  # unsaved work from a session that didn't end normally
     if restored and not files:
         return app.exec()
@@ -68,4 +141,9 @@ def main(argv: list[str] | None = None) -> int:
         new_window()               # an empty project (one Column table)
     if not windows():
         new_window()
+    from . import prefs
+    if prefs.get("updates.auto") and not os.environ.get("ASTERISM_NO_UPDATE_CHECK"):
+        from PySide6.QtCore import QTimer
+        from . import updates
+        QTimer.singleShot(4000, lambda: updates.check(windows()[-1] if windows() else None, silent=True))
     return app.exec()

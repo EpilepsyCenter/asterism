@@ -49,6 +49,13 @@ class DataSetStyle:
     connect: bool = False            # line joining the points (or means) in X order
     line_width: float = 1.0          # connecting line and fitted curve
     line_dash: str = "solid"         # solid | dash | dot
+    # fitted curve or regression line from a linked analysis (this graph only)
+    curve_show: bool = True
+    curve_color: str = ""            # "" = the data set's colour
+    curve_width: float = 0.0         # 0 = the data set's line thickness
+    curve_dash: str = ""             # "" = the data set's line style
+    band_style: str = "dashed"       # dashed | shaded | none (the analysis decides if there are bands)
+    band_opacity: float = 0.2        # shaded bands
     fill: bool = False               # shade the area under the line
     fill_alpha: float = 0.25
     axis: str = "left"               # plot against the left or the right Y axis
@@ -179,6 +186,7 @@ class GraphSpec:
     default_style: DataSetStyle = field(default_factory=DataSetStyle)
     datasets: dict[int, DataSetStyle] = field(default_factory=dict)
     hidden: set[int] = field(default_factory=set)
+    order: list = field(default_factory=list)        # data sets in drawing order ([] = table order)
     x: AxisSpec = field(default_factory=lambda: AxisSpec(ticks_dir="none"))
     y: AxisSpec = field(default_factory=AxisSpec)
     y2: AxisSpec = field(default_factory=AxisSpec)       # right Y axis (when a data set uses it)
@@ -227,6 +235,15 @@ class GraphSpec:
     nested: dict = field(default_factory=default_nested)
     heat_low: str = "#f7fbff"
     heat_high: str = "#08306b"
+
+    def ordered(self, cols) -> list[int]:
+        """Columns in the graph's chosen order (new ones at the end), hidden ones included."""
+        cols = list(cols)
+        return [c for c in self.order if c in cols] + [c for c in cols if c not in self.order]
+
+    def shown(self, cols) -> list[int]:
+        """The data sets this graph draws, in its order."""
+        return [c for c in self.ordered(cols) if c not in self.hidden]
 
     def style(self, c: int) -> DataSetStyle:
         if c not in self.datasets:
@@ -296,7 +313,7 @@ def spec_to_dict(s: GraphSpec) -> dict:
     }
 
 
-_EXTRA = ("horizontal", "ba_summary", "lines_points", "palette", "grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "x_len_mm",
+_EXTRA = ("order", "horizontal", "ba_summary", "lines_points", "palette", "grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "x_len_mm",
           "parts_layout", "parts_labels", "donut_hole", "surv_percent", "surv_death", "surv_ci", "surv_ticks")
 
 

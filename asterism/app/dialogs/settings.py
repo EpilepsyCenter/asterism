@@ -68,6 +68,12 @@ class SettingsDialog(SectionDialog):
         g.add(("PNG and TIFF resolution:", self.w["export.dpi"]))
         pl.addLayout(g)
         pl.addWidget(_note("PDF and SVG are vector files and print sharp at any size."))
+        pl.addWidget(Section("Updates"))
+        self.w["updates.auto"] = QCheckBox("Check for updates when ASTERISM starts (at most once a day)")
+        self.w["updates.auto"].setChecked(prefs.get("updates.auto"))
+        pl.addWidget(self.w["updates.auto"])
+        pl.addWidget(_note("Only asks GitHub for the latest version number; nothing is sent about you or "
+                           "your work, and nothing is installed without you."))
         pl.addStretch(1)
         return page
 

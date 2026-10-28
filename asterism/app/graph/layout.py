@@ -826,7 +826,7 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
     if table.table_type == "survival":
         from .parts_survival_layout import build_survival
         return build_survival(graph)
-    cols = [c for c in table.used_columns() if c not in spec.hidden]
+    cols = spec.shown(table.used_columns())
     colw = spec.col_width_mm * MM
     if table.table_type in ("grouped", "contingency"):     # counts: rows × outcomes, as grouped bars
         plan = plan_grouped(graph, cols, colw)
@@ -1287,8 +1287,12 @@ def _legend(spec, table, plan: Plan, x0: float, y0: float) -> Element:
                 cv.rect(x0, yc - 4.5, sw, 9.0, fill=st.bar_fill,
                         stroke=st.bar_border_color if st.bar_border > 0 else None, width=max(st.bar_border, 0.25))
             elif kind == "line":
-                cv.line(x0, yc, x0 + sw, yc, st.symbol_color, max(st.error_width, 1.0), "butt",
-                        None if st.line_dash == "solid" else st.line_dash)
+                # the line stands for the fitted curve unless the points are connected
+                curve = not st.connect and st.curve_show
+                lc = (st.curve_color or st.symbol_color) if curve else st.symbol_color
+                lw = (st.curve_width or st.line_width) if curve else st.line_width
+                ld = (st.curve_dash or st.line_dash) if curve else st.line_dash
+                cv.line(x0, yc, x0 + sw, yc, lc, max(lw, 1.0), "butt", None if ld == "solid" else ld)
                 if st.show_points:
                     draw_symbol(cv, st.symbol_shape, x0 + sw / 2, yc, max(1.0, st.symbol_size * 2.0), st.symbol_color)
             else:
@@ -1446,7 +1450,7 @@ def _mix_hex(a: str, b: str, t: float) -> str:
 
 def build_heatmap(graph) -> tuple[list[Element], AxisRange]:
     spec, t = graph.spec, graph.table
-    cols = [c for c in t.used_columns() if c not in spec.hidden]
+    cols = spec.shown(t.used_columns())
     rows = grouped_rows(t, cols)
     cw = spec.col_width_mm * MM * 1.6
     rh = min(cw, spec.y_len_mm * MM / max(len(rows), 1))

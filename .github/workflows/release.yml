@@ -1,0 +1,102 @@
+name: Release
+
+# Push a tag like v0.1.0 to build the macOS, Windows and Linux apps, check each with
+# --selftest, and attach them to a draft release (publish it from the Releases page).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  QT_QPA_PLATFORM: offscreen
+  ASTERISM_NO_UPDATE_CHECK: "1"
+
+jobs:
+  mac:
+    runs-on: macos-14            # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13", cache: pip, cache-dependency-path: requirements-dev.txt}
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m PyInstaller packaging/asterism.spec --noconfirm
+      - name: Self-test the app
+        run: dist/ASTERISM.app/Contents/MacOS/ASTERISM --selftest
+      - run: packaging/make_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with: {name: mac, path: "dist/*.dmg"}
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13", cache: pip, cache-dependency-path: requirements-dev.txt}
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m PyInstaller packaging/asterism.spec --noconfirm
+      - name: Self-test the app
+        shell: pwsh
+        run: |
+          $env:ASTERISM_SELFTEST_LOG = "$PWD\selftest.txt"
+          $p = Start-Process -FilePath dist\ASTERISM\ASTERISM.exe -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content selftest.txt
+          if ($p.ExitCode -ne 0) { exit 1 }
+      - name: Installer
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path asterism\__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DVersion=$v" packaging\windows\asterism.iss
+      - uses: actions/upload-artifact@v4
+        with: {name: windows, path: "dist/*-windows-setup.exe"}
+
+  linux:
+    runs-on: ubuntu-22.04        # older glibc: the AppImage runs on most current distributions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13", cache: pip, cache-dependency-path: requirements-dev.txt}
+      - name: Qt system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libfontconfig1 \
+            libdbus-1-3 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 fonts-liberation file
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m PyInstaller packaging/asterism.spec --noconfirm
+      - name: Self-test the app
+        run: dist/ASTERISM/ASTERISM --selftest
+      - name: AppImage
+        run: |
+          wget -q -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          sudo mv appimagetool /usr/local/bin/appimagetool
+          APPIMAGE_EXTRACT_AND_RUN=1 packaging/linux/make_appimage.sh
+      - uses: actions/upload-artifact@v4
+        with: {name: linux, path: "dist/*.AppImage"}
+
+  release:
+    needs: [mac, windows, linux]
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {path: out, merge-multiple: true}
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: out/*
+          body: |
+            ASTERISM ${{ github.ref_name }}
+
+            | System | Download |
+            |---|---|
+            | macOS (Apple Silicon) | `ASTERISM-…-mac.dmg` |
+            | Windows 10/11 (64-bit) | `ASTERISM-…-windows-setup.exe` |
+            | Linux (x86-64) | `ASTERISM-…-linux-x86_64.AppImage` |
+
+            The apps are not signed. See the README for how to open them the first time.

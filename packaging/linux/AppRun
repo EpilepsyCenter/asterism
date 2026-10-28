@@ -1,0 +1,4 @@
+#!/bin/sh
+# AppImage entry: run the bundled ASTERISM.
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/lib/asterism/ASTERISM" "$@"

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from PySide6.QtCore import Qt
 
 from asterism.core.qa import check_svg
 
@@ -160,3 +161,47 @@ def test_ticks_stop_at_axis_end(app):
     from asterism.doc.spec import AxisSpec
     ym = YMap(AxisSpec(auto=False, vmin=0, vmax=5.5, interval=1), AxisRange(0, 5.5, 1), 100.0)
     assert ym.majors() == [0, 1, 2, 3, 4, 5]
+
+
+def test_fitted_curve_style_and_hiding(app):
+    """Format Graph › Style › Fitted curve: hide a fit on this graph only, give it its own
+    colour, thickness and style, and draw bands shaded or not at all."""
+    from asterism.analysis import engine
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.app.graph.layout import build
+    from asterism.app.graph.xy_layout import fit_columns
+    from asterism.doc.model import Analysis, Project
+    p = Project(engine)
+    t = p.add_table(table_type="xy", example=True)
+    g = p.graphs[-1]
+    p.add_analysis(Analysis("linreg", t, t.used_columns(), {"bands": "confidence"}))
+    fits = fit_columns(g)
+    assert fits and set(fits) == set(t.used_columns())
+    c = next(iter(fits))
+    ids = lambda: {e.id for e in build(g)[0]}
+    assert any(i.startswith("fit-") for i in ids())
+    d = FormatGraphDialog(g, p, "style", c)
+    assert d.fit_box.isVisibleTo(d)
+    d.curve_same.setChecked(False)
+    d.curve_color.set_color("#d62728")
+    d.curve_color.colorChanged.emit("#d62728")
+    d.band_style.setCurrentIndex(d.band_style.findData("shaded"))
+    d.apply()
+    st = g.spec.style(c)
+    assert st.curve_color == "#d62728" and st.band_style == "shaded"
+    calls = []
+
+    class Rec:
+        def __getattr__(self, name):
+            return lambda *a, **k: calls.append((name, a, k))
+    fit_el = next(e for e in build(g)[0] if e.id.startswith(f"fit-{chr(65 + c)}"))
+    fit_el.draw(Rec())
+    assert any(n == "polygon" and k.get("opacity", 1) < 1 for n, a, k in calls)      # shaded band
+    assert any(n == "polyline" and a[1] == "#d62728" for n, a, k in calls)           # red curve
+    d2 = FormatGraphDialog(g, p, "datasets")
+    it = d2.fit_list.item(0)
+    it.setCheckState(Qt.Unchecked)
+    d2.apply()
+    hidden = it.data(Qt.UserRole)
+    assert not g.spec.style(hidden).curve_show
+    assert f"fit-{chr(65 + hidden)}" not in ids()

@@ -56,6 +56,17 @@ For box and whiskers, the box spans the 25th to 75th percentile with a line at t
 - **A different colour for each row**.
 - **Shade the area under the line**, with **Shading** as a percentage of opacity.
 
+### Fitted curve {#fitted-curve}
+
+Shown on XY graphs whose data sets have a fitted curve or regression line (from [Nonlinear regression](analyses-xy.md#nonlinear-regression) or [Linear regression](analyses-xy.md#linear-regression)). The settings belong to this graph only; other graphs of the same table keep their own.
+
+- **Show the fitted curve on this graph:** untick to hide the curve here. The analysis and its results are unchanged.
+- **Colour:** **The data set's colour**, or untick and choose another (for example black points with a red curve).
+- **Thickness** and **Style:** **Same as the line** follows the data set's connecting line; or choose a thickness and solid, dashed or dotted.
+- **Bands:** **Dashed lines**, **Shaded area** (with **Shading** opacity) or **Hidden**. Bands only exist if the analysis draws confidence or prediction bands (Analysis Settings › Confidence).
+
+The legend's line follows the curve's colour and style when the points aren't connected. Double-clicking a curve on the graph opens this section.
+
 ### Bars
 
 Tick the section title to draw bars. On box plots it reads **Fill the box**, on violins **Fill the violin**.
@@ -81,7 +92,8 @@ Error bars do not apply to violins and floating bars.
 ## Data sets: Show and order
 
 - **Join each row's values across data sets with a line (before-after)** draws paired data: each row's values joined across the groups. Set the **Line thickness** and **Line colour**. **Beside the points** adds a summary next to the dots: **Mean ± SD**, **Mean ± SEM**, **Mean with 95% CI** or **Median with interquartile range** (or **Nothing**).
-- **Data sets drawn on this graph:** untick a data set to leave it out of this graph. The data stay in the table and in analyses.
+- **Data sets and their order:** untick a data set to leave it out of this graph (the data stay in the table and in analyses). Drag data sets in the list, or select one and click **Move Up** or **Move Down**, to change their order on the graph: left to right, bottom to top in a stack, the drawing order on XY graphs, and the order in the legend. **Table Order** puts them back in the order of the table's columns. The order belongs to this graph only; the table and other graphs are unchanged.
+- **Fitted curves on this graph** (XY graphs with fits): untick a data set's fit to hide its curve on this graph; the same switch as in Style › Fitted curve.
 
 ## Arrangement
 
