@@ -1,10 +1,6 @@
 # ASTERISM
 
-Free scientific graphing and statistics for labs. ASTERISM does what GraphPad Prism does —
-live-linked data tables, analyses, graphs and figures, with Prism's options and numbers —
-in its own interface. It opens Prism files, and its statistics are checked against Prism's
-own results. A native desktop app for macOS, Windows and Linux (Qt / PySide6). Not
-affiliated with GraphPad.
+Free scientific graphing and statistics for labs. Native desktop app for macOS, Windows and Linux (Qt / PySide6).
 
 ## Download
 
