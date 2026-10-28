@@ -95,6 +95,9 @@ def test_svg_export_passes_fidelity_qa(win, tmp_path):
     export_pdf(g, str(pdf))
     pypdf = pytest.importorskip("pypdf")
     page = pypdf.PdfReader(str(pdf)).pages[0]
+    from PySide6.QtGui import QFontDatabase
+    if not QFontDatabase.families():                # headless Qt on Windows CI has no fonts
+        pytest.skip("no fonts in this Qt platform")
     fonts = [f.get_object() for f in page["/Resources"]["/Font"].values()]
     assert fonts and all(f["/Subtype"] != "/Type3" for f in fonts)   # TrueType, not Type 3
     assert "EGFP" in page.extract_text()                                # live text

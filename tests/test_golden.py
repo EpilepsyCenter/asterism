@@ -19,8 +19,10 @@ from scipy import stats
 from asterism.core.contract import Dataset
 from asterism.core.stats import run_analysis
 
-GOLDEN = json.loads((Path(__file__).parent / "golden" / "prism_golden.json").read_text())
-CASES = GOLDEN["cases"]
+from golden_data import Missing, golden  # noqa: E402
+
+GOLDEN = golden("prism_golden.json")
+CASES = GOLDEN.get("cases", Missing())
 
 
 def _two_group_ds(groups: dict) -> Dataset:

@@ -98,7 +98,7 @@ def test_no_prism_coined_terms_in_interface_text():
     root = pathlib.Path(__file__).resolve().parents[2] / "asterism"
     hits = []
     for p in root.rglob("*.py"):
-        for n, line in enumerate(p.read_text().splitlines(), 1):
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
             if COINED.search(line) and not line.lstrip().startswith("#"):
                 hits.append(f"{p.relative_to(root)}:{n}: {line.strip()}")
     assert not hits, "\n".join(hits)

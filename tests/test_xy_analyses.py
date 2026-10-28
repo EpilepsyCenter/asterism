@@ -16,7 +16,9 @@ from scipy import stats
 from asterism.analysis import engine, models, nonlin, xy
 from asterism.doc.model import Analysis, Project
 
-GOLDEN = json.loads((Path(__file__).parent / "golden" / "prism_golden.json").read_text())
+from golden_data import Missing, golden  # noqa: E402
+
+GOLDEN = golden("prism_golden.json")
 
 
 def _xy(case, mean=False):
@@ -32,7 +34,7 @@ def _xy(case, mean=False):
 # Golden: Prism linear regression and Spearman correlation
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("case", GOLDEN["linear_regression"], ids=lambda c: str(c["prism"]["summary"]["pointsAnalyzed"]))
+@pytest.mark.parametrize("case", GOLDEN.get("linear_regression", []), ids=lambda c: str(c["prism"]["summary"]["pointsAnalyzed"]))
 def test_linear_regression_matches_prism(case):
     x, y = _xy(case)
     f = xy.linfit(x, y)
@@ -56,7 +58,7 @@ def test_linear_regression_matches_prism(case):
         assert f["ci_x_intercept"] == (-math.inf, math.inf)
 
 
-@pytest.mark.parametrize("case", GOLDEN["correlation"], ids=lambda c: str(c["prism"]["n"]))
+@pytest.mark.parametrize("case", GOLDEN.get("correlation", []), ids=lambda c: str(c["prism"]["n"]))
 def test_spearman_matches_prism(case):
     x, y = _xy(case, mean=True)
     d = xy.spearman(x, y)

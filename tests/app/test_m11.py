@@ -241,9 +241,10 @@ def test_second_launch_hands_files_to_the_running_app(app, tmp_path, monkeypatch
     M.listen(app)
     assert M.hand_over([str(path)])
     end = time.time() + 5
-    while time.time() < end and not any(w.path == str(path) for w in windows()):
+    same = lambda w: bool(w.path) and os.path.exists(w.path) and os.path.samefile(w.path, str(path))
+    while time.time() < end and not any(same(w) for w in windows()):
         app.processEvents()
-    opened = [w for w in windows() if w.path == str(path)]
+    opened = [w for w in windows() if same(w)]
     assert opened
     for w in opened:
         w.project.mark_saved()

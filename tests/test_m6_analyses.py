@@ -22,7 +22,9 @@ from asterism.analysis import engine
 from asterism.analysis import survival as sv
 from asterism.doc.model import Analysis, Project
 
-GOLDEN = json.loads((Path(__file__).parent / "golden" / "prism_golden.json").read_text())
+from golden_data import Missing, golden  # noqa: E402
+
+GOLDEN = golden("prism_golden.json")
 
 
 # ---------------------------------------------------------------------------

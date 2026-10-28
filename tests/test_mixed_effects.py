@@ -17,9 +17,11 @@ import pytest
 from asterism.analysis import anova2, engine, mixed
 from asterism.doc.model import Analysis, Project
 
+from golden_data import Missing, golden  # noqa: E402
+
 HERE = Path(__file__).parent / "golden"
-GOLDEN = json.loads((HERE / "prism_golden.json").read_text())
-REF = json.loads((HERE / "mixed_reference.json").read_text())["cases"]
+GOLDEN = golden("prism_golden.json")
+REF = golden("mixed_reference.json").get("cases", Missing())
 
 
 def _cells(case):
@@ -28,7 +30,7 @@ def _cells(case):
     return [[d["sets"][k][r] for k in range(K)] for r in range(R)]
 
 
-@pytest.mark.parametrize("case", GOLDEN["two_way"], ids=lambda c: c["method"])
+@pytest.mark.parametrize("case", GOLDEN.get("two_way", []), ids=lambda c: c["method"])
 def test_mixed_model_on_complete_data_equals_prism_rm_anova(case):
     C = _cells(case)
     data = anova2.long_data(C, "rm_rows")

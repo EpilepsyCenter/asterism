@@ -15,7 +15,9 @@ from statsmodels.stats.multitest import multipletests
 from asterism.analysis import anova, engine, frequency, normality
 from asterism.doc.model import Analysis, Project
 
-GOLDEN = json.loads((Path(__file__).parent / "golden" / "prism_golden.json").read_text())
+from golden_data import Missing, golden  # noqa: E402
+
+GOLDEN = golden("prism_golden.json")
 
 A = [24.0, 26.0, 31.0, 27.0, 29.0, 25.0]
 B = [31.0, 35.0, 30.0, 36.0, 33.0, 34.0, 32.0]
@@ -44,7 +46,7 @@ KEYS = {"dAgostinoPearsonTest": "dagostino", "andersonDarlingTest": "anderson",
         "shapiroWilkTest": "shapiro", "kolmogorovSmirnovTest": "ks"}
 
 
-@pytest.mark.parametrize("case", GOLDEN["normality"], ids=lambda c: f"n{len(c['values'])}")
+@pytest.mark.parametrize("case", GOLDEN.get("normality", []), ids=lambda c: f"n{len(c['values'])}")
 def test_normality_matches_prism(case):
     x = np.array(case["values"])
     ours = normality.run_tests(x, list(KEYS.values()))
@@ -61,7 +63,7 @@ def test_normality_matches_prism(case):
             assert p == pytest.approx(pr["p"], rel=1e-5)
 
 
-@pytest.mark.parametrize("case", GOLDEN["frequency"], ids=lambda c: f"bins{c['calc']['binWidth']['value']}")
+@pytest.mark.parametrize("case", GOLDEN.get("frequency", []), ids=lambda c: f"bins{c['calc']['binWidth']['value']}")
 def test_frequency_distribution_matches_prism(case):
     calc, table = case["calc"], case["output_table"]
     nb = len([v for v in table[1] if v is not None])

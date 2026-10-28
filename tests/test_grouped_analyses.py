@@ -18,7 +18,9 @@ from scipy import stats
 from asterism.analysis import anova2, engine, multiple_t
 from asterism.doc.model import Analysis, Project
 
-GOLDEN = json.loads((Path(__file__).parent / "golden" / "prism_golden.json").read_text())
+from golden_data import Missing, golden  # noqa: E402
+
+GOLDEN = golden("prism_golden.json")
 
 
 def _cells(case):
