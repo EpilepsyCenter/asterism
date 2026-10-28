@@ -16,8 +16,11 @@ Get the latest version from the [Releases page](https://github.com/EpilepsyCente
 | Windows 10 or 11, 64-bit | `ASTERISM-<version>-windows-setup.exe` |
 | Linux, x86-64 | `ASTERISM-<version>-linux-x86_64.AppImage` |
 
-ASTERISM checks for new versions when it starts (you can turn this off in **Settings**) and
-from **Help › Check for Updates**.
+**Updates install from inside the app.** ASTERISM checks for new versions when it starts (at
+most once a day; you can turn this off in **Settings**) and from **Help › Check for Updates**.
+When there's a new version, **Install Update** downloads it, checks it against the release's
+checksums, asks you to save your work, and restarts into the new version. You only download
+from the Releases page once.
 
 ### The apps are not signed
 

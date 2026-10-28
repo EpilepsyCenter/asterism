@@ -26,8 +26,12 @@ jobs:
       - name: Self-test the app
         run: dist/ASTERISM.app/Contents/MacOS/ASTERISM --selftest
       - run: packaging/make_dmg.sh
+      - name: Zip for in-app updates
+        run: |
+          V=$(python -c "import asterism; print(asterism.__version__)")
+          ditto -c -k --keepParent dist/ASTERISM.app "dist/ASTERISM-$V-mac.zip"
       - uses: actions/upload-artifact@v4
-        with: {name: mac, path: "dist/*.dmg"}
+        with: {name: mac, path: "dist/ASTERISM-*-mac.*"}
 
   windows:
     runs-on: windows-2022
@@ -86,6 +90,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: {path: out, merge-multiple: true}
+      - name: Checksums (the app checks downloaded updates against these)
+        run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -95,7 +101,7 @@ jobs:
 
             | System | Download |
             |---|---|
-            | macOS (Apple Silicon) | `ASTERISM-…-mac.dmg` |
+            | macOS (Apple Silicon) | `ASTERISM-…-mac.dmg` (the `.zip` is used by in-app updates) |
             | Windows 10/11 (64-bit) | `ASTERISM-…-windows-setup.exe` |
             | Linux (x86-64) | `ASTERISM-…-linux-x86_64.AppImage` |
 

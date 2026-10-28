@@ -57,3 +57,5 @@ Root: HKA; Subkey: "Software\Classes\Applications\ASTERISM.exe\SupportedTypes"; 
 
 [Run]
 Filename: "{app}\ASTERISM.exe"; Description: "Start ASTERISM"; Flags: nowait postinstall skipifsilent
+; in-app updates run this installer silently: start ASTERISM again afterwards
+Filename: "{app}\ASTERISM.exe"; Flags: nowait skipifnotsilent

@@ -16,6 +16,7 @@ The window has four sections: **General**, **New graphs**, **New analyses** and 
 |---|---|---|
 | Show the Start window when ASTERISM opens | On | Off opens an empty project instead. The same choice is on the Start window itself. |
 | Save a recovery copy of unsaved changes every … min | On, 2 min | Autosave (see [Autosave and recovery](#autosave)). Any interval from 1 to 60 minutes. |
+| Check for updates when ASTERISM starts | On | At most once a day, ASTERISM asks GitHub for the latest version number and tells you only if there's a newer one. Nothing about you or your work is sent. |
 | PNG and TIFF resolution | 300 dpi | 150, 300, 600 or 1200 dpi, for graphs and figures exported as PNG or TIFF. PDF and SVG are vector files and print sharp at any size. |
 
 ### New graphs
@@ -65,6 +66,16 @@ The titre is calculated as quantity per reaction × dilution [× 2] ÷ template 
 ### Restore Defaults
 
 **Restore Defaults** (bottom left of the window) puts every option above back to its default, including **Show the Start window when ASTERISM opens**, and closes the window. As with any change here, existing graphs and analyses are not affected.
+
+## Updates {#updates}
+
+**Help › Check for Updates…** looks for a newer version now. When one exists, ASTERISM shows its version number and offers:
+
+- **Install Update:** downloads the new version for your system, checks it against the checksums published with the release, asks you to save any unsaved work, then quits and opens the new version. On a Mac the app in your Applications folder is replaced; on Windows the installer runs by itself in the background; on Linux the AppImage file is replaced.
+- **What's New:** the release notes on GitHub.
+- **Later.**
+
+Updates installed this way don't bring back the "unidentified developer" warnings. If ASTERISM can't replace itself (for example, the Applications folder needs an administrator, or you run it from source), it opens the download page instead.
 
 ## Autosave and recovery {#autosave}
 

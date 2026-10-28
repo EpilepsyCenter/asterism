@@ -2,8 +2,8 @@
 
 Help › Check for Updates asks now and always answers. With Settings › General › "Check for
 updates when ASTERISM starts" on, a silent check runs at most once a day and speaks only
-when a newer version exists. Nothing is downloaded or installed automatically: the
-release page opens in the browser.
+when a newer version exists. Nothing is downloaded or installed without asking: an update
+can be installed from inside the app (selfupdate.py) or downloaded from the release page.
 """
 
 from __future__ import annotations
@@ -75,12 +75,36 @@ def check(parent=None, silent: bool = False) -> None:
         latest = info.get("tag_name", "")
         url = info.get("html_url") or RELEASES
         if latest and newer(latest, __version__):
-            _say(parent, "An update is available",
-                 f"ASTERISM {latest.lstrip('v')} is available (you have {__version__}).\n\n"
-                 "Open the download page?", link=True, url=url)
+            offer(parent, info, latest.lstrip("v"), __version__, url)
         elif not silent:
             _say(parent, "ASTERISM is up to date", f"You have the latest version, {__version__}.", link=False)
     reply.finished.connect(done)
+
+
+def offer(parent, release: dict, latest: str, current: str, url: str) -> None:
+    """An update exists: install it now (packaged apps), see what's new, or later."""
+    from PySide6.QtWidgets import QMessageBox
+    from . import selfupdate
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Information)
+    box.setWindowTitle("An update is available")
+    box.setText(f"ASTERISM {latest} is available (you have {current}).")
+    can = selfupdate.can_install() and selfupdate.pick_asset(release)[0] is not None
+    box.setInformativeText("Install it now? ASTERISM asks to save your work, restarts and opens the new version."
+                           if can else "Open the download page?")
+    install = box.addButton("Install Update" if can else "Open Download Page", QMessageBox.AcceptRole)
+    notes = box.addButton("What's New", QMessageBox.HelpRole) if can else None
+    box.addButton("Later", QMessageBox.RejectRole)
+    box.setDefaultButton(install)
+    box.exec()
+    clicked = box.clickedButton()
+    if clicked is install:
+        if can:
+            selfupdate.install(release, parent)
+        else:
+            QDesktopServices.openUrl(QUrl(url))
+    elif notes is not None and clicked is notes:
+        QDesktopServices.openUrl(QUrl(url))
 
 
 def _say(parent, title: str, text: str, link: bool, url: str = RELEASES) -> None:

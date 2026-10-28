@@ -93,7 +93,10 @@ multiple-variable methods) arrives after the core is solid, in the order users a
   signed (user's decision 2026-10-28; the README explains the first open). File
   associations for `.asterism` (owner) and `.prism`/`.pzfx` (alternate). Built and
   self-tested (`--selftest`) by GitHub Actions on a `v*` tag, attached to a draft release;
-  Help › Check for Updates reads the GitHub releases.
+  Help › Check for Updates reads the GitHub releases; **Install Update** (selfupdate.py)
+  downloads this system's file, verifies it against the release's SHA256SUMS.txt, and swaps
+  the app (macOS zip + helper script), runs the installer silently (Windows) or replaces the
+  AppImage (Linux), then restarts.
 
 **Why Qt, not Electron or the old Dash app:** the spike showed Qt Widgets gives a
 genuinely native window, fast table editing, direct manipulation on the graph canvas,

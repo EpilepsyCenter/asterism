@@ -55,6 +55,8 @@ def hand_over(files: list[str]) -> bool:
     sock.flush()
     sock.waitForBytesWritten(1000)
     sock.disconnectFromServer()
+    if sock.state() != QLocalSocket.UnconnectedState:
+        sock.waitForDisconnected(1000)              # let the pipe drain before this process exits
     return True
 
 
@@ -73,11 +75,15 @@ def listen(app) -> None:
         if conn is None:
             return
         buf = bytearray()
+        handled = [False]
 
-        def read():
-            buf.extend(bytes(conn.readAll()))
-            if not buf.endswith(b"\n"):
+        def read(final: bool = False):
+            if handled[0]:
                 return
+            buf.extend(bytes(conn.readAll()))
+            if not buf.endswith(b"\n") and not (final and buf):
+                return
+            handled[0] = True
             try:
                 files = json.loads(buf.decode("utf-8"))
             except ValueError:
@@ -94,6 +100,9 @@ def listen(app) -> None:
             w.activateWindow()
             conn.disconnectFromServer()
         conn.readyRead.connect(read)
+        conn.disconnected.connect(lambda: read(final=True))
+        if conn.bytesAvailable():                    # Windows: the data can arrive before we listen
+            read()
     server.newConnection.connect(accept)
 
 
