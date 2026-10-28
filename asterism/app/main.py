@@ -33,12 +33,17 @@ class App(QApplication):
 
 
 def _server_name() -> str:
+    if os.environ.get("ASTERISM_SERVER_NAME"):          # tests
+        return os.environ["ASTERISM_SERVER_NAME"]
     import getpass
     try:
         user = getpass.getuser()
     except Exception:
         user = "user"
     return f"asterism-{''.join(ch for ch in user if ch.isalnum()) or 'user'}"
+
+
+import time
 
 
 def hand_over(files: list[str]) -> bool:
@@ -53,11 +58,19 @@ def hand_over(files: list[str]) -> bool:
         return False
     sock.write(json.dumps([os.path.abspath(f) for f in files]).encode("utf-8") + b"\n")
     sock.flush()
-    sock.waitForBytesWritten(1000)
+    sock.waitForBytesWritten(2000)
+    # wait for the running ASTERISM to confirm, so nothing is lost when this process exits
+    ok = False
+    end = time.time() + 5
+    reply = bytearray()
+    while time.time() < end and b"\n" not in reply:
+        if sock.bytesAvailable() or sock.waitForReadyRead(250):
+            reply.extend(bytes(sock.readAll()))
+        if sock.state() == QLocalSocket.UnconnectedState:
+            break
+    ok = reply.startswith(b"ok")
     sock.disconnectFromServer()
-    if sock.state() != QLocalSocket.UnconnectedState:
-        sock.waitForDisconnected(1000)              # let the pipe drain before this process exits
-    return True
+    return ok
 
 
 def listen(app) -> None:
@@ -88,6 +101,9 @@ def listen(app) -> None:
                 files = json.loads(buf.decode("utf-8"))
             except ValueError:
                 files = []
+            if conn.state() == conn.LocalSocketState.ConnectedState:
+                conn.write(b"ok\n")                      # received: the new launch can quit
+                conn.flush()
             from .main_window import new_window, open_path, windows
             ws = windows()
             for f in files:

@@ -226,24 +226,33 @@ def test_every_icon_is_bundled(app):
 
 
 def test_second_launch_hands_files_to_the_running_app(app, tmp_path, monkeypatch):
-    """A later launch gives its files to the running ASTERISM instead of starting another
-    copy (what Windows and Linux do on every double-click)."""
+    """A later launch (a separate process, as a double-click starts) gives its files to the
+    running ASTERISM, waits for it to confirm, and quits."""
+    import subprocess
+    import sys
     import time
     from asterism.analysis import engine
     from asterism.app import main as M
     from asterism.app.main_window import windows
     from asterism.doc import fileformat
     from asterism.doc.sample import sample_project
-    monkeypatch.setattr(M, "_server_name", lambda: f"asterism-test-{os.getpid()}")
+    name = f"asterism-test-{os.getpid()}"
+    monkeypatch.setenv("ASTERISM_SERVER_NAME", name)
     path = tmp_path / "handed.asterism"
     fileformat.save(sample_project(engine), str(path))
-    assert not M.hand_over([str(path)])              # nobody listening yet
+    code = ("import sys; from PySide6.QtCore import QCoreApplication; app = QCoreApplication([]); "
+            "from asterism.app.main import hand_over; sys.exit(0 if hand_over([sys.argv[1]]) else 3)")
+    env = {**os.environ, "ASTERISM_SERVER_NAME": name}
+    nobody = subprocess.run([sys.executable, "-c", code, str(path)], env=env, timeout=60)
+    assert nobody.returncode == 3                     # nothing listening yet
     M.listen(app)
-    assert M.hand_over([str(path)])
-    end = time.time() + 5
+    proc = subprocess.Popen([sys.executable, "-c", code, str(path)], env=env)
     same = lambda w: bool(w.path) and os.path.exists(w.path) and os.path.samefile(w.path, str(path))
-    while time.time() < end and not any(same(w) for w in windows()):
+    end = time.time() + 30
+    while time.time() < end and (proc.poll() is None or not any(same(w) for w in windows())):
         app.processEvents()
+        time.sleep(0.01)
+    assert proc.poll() == 0                           # the running app confirmed
     opened = [w for w in windows() if same(w)]
     assert opened
     for w in opened:
