@@ -1,0 +1,37 @@
+---
+// ASTERISM's own motif, in place of the sibling sites' recording traces: four
+// columns with error bars and the points plotted over them, under a
+// significance bracket — the figure this app exists to make. Decorative, so
+// aria-hidden.
+---
+
+<svg class="trace" viewBox="0 0 1000 52" preserveAspectRatio="none" aria-hidden="true">
+  <path class="base" d="M0 44 H1000" />
+  <g class="cols">
+    <path d="M360 44 V26 M340 26 H380 M360 26 V18 M352 18 H368" />
+    <path d="M440 44 V14 M420 14 H460 M440 14 V7 M432 7 H448" />
+    <path d="M540 44 V31 M520 31 H560 M540 31 V23 M532 23 H548" />
+    <path d="M620 44 V20 M600 20 H640 M620 20 V12 M612 12 H628" />
+  </g>
+  <g class="pts">
+    <circle cx="352" cy="29" r="1.6" /><circle cx="366" cy="23" r="1.6" /><circle cx="359" cy="33" r="1.6" />
+    <circle cx="433" cy="17" r="1.6" /><circle cx="447" cy="11" r="1.6" /><circle cx="440" cy="21" r="1.6" />
+    <circle cx="532" cy="34" r="1.6" /><circle cx="546" cy="28" r="1.6" /><circle cx="539" cy="37" r="1.6" />
+    <circle cx="612" cy="23" r="1.6" /><circle cx="626" cy="17" r="1.6" /><circle cx="619" cy="26" r="1.6" />
+  </g>
+  <path class="bracket" d="M400 5 V2 H580 V5" />
+</svg>
+
+<style>
+  .trace { display: block; width: 100%; height: 52px; margin: 44px 0 0; }
+  .trace path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.25;
+    opacity: 0.55;
+    vector-effect: non-scaling-stroke;
+  }
+  .trace .base { stroke: var(--rule); opacity: 1; }
+  .trace .pts circle { fill: var(--accent); opacity: 0.4; }
+  .trace .bracket { opacity: 0.4; }
+</style>

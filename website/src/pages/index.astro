@@ -1,0 +1,369 @@
+---
+import Base from '../layouts/Base.astro';
+import TraceDivider from '../components/TraceDivider.astro';
+import Lightbox from '../components/Lightbox.astro';
+import { Image, getImage } from 'astro:assets';
+import shot from '../assets/shots/asterism.png';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const link = (p: string) => `${base}${p}`;
+const repo = 'https://github.com/EpilepsyCenter/asterism';
+const releases = `${repo}/releases`;
+
+// The figure is shown at roughly 970px and opened full size, so it is served
+// resized and as WebP rather than as the original PNG.
+const shotCaption = 'A SuperPlot with a nested t test, drawn in ASTERISM';
+const shotFull = (await getImage({ src: shot, width: 1800, format: 'webp', quality: 82 })).src;
+---
+<Base title="ASTERISM — Scientific graphing and statistics for labs">
+<style>
+/* ═══════ HERO ═══════ */
+.hero { padding: 64px 0 0; }
+.hero h1 {
+  font-weight: 600;
+  font-size: 60px;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  margin: 18px 0 0;
+  max-width: 16ch;
+  text-wrap: pretty;
+}
+.hero h1 span { color: var(--accent); }
+.hero p.lead {
+  font-size: 18px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 60ch;
+  margin: 26px 0 0;
+}
+.hero p.lead .mono {
+  color: var(--ink);
+  font-size: 15px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.hero .cta { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin: 30px 0 0; }
+.hero .specs { display: flex; gap: 28px; margin: 34px 0 0; flex-wrap: wrap; }
+.hero .specs div {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hero .specs b { color: var(--ink); font-weight: 500; }
+
+/* ═══════ SHARED SECTION FURNITURE ═══════ */
+section { padding: 64px 0; }
+section h2 {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin: 14px 0 0;
+  max-width: 24ch;
+  line-height: 1.1;
+}
+section h2 span { color: var(--accent); }
+section p.sub { color: var(--ink-soft); font-size: 16px; line-height: 1.65; max-width: 62ch; margin: 16px 0 0; }
+
+/* ═══════ THE FIGURE ═══════ */
+/* One screenshot rather than a grid: this is a graphing app, so the figure is
+   worth showing at a size where the axes and brackets are legible. */
+.figure-row { margin: 26px 0 0; }
+.figure-row figure { margin: 0; }
+.figure-row img {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.figure-row figcaption { margin: 12px 0 0; }
+
+/* ═══════ WHAT'S INSIDE ═══════ */
+.inside { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 26px 0 0; }
+.inside div {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--asterism);
+  border-radius: 9px;
+  padding: 14px 16px;
+}
+.inside b { display: block; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.inside span {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* ═══════ FEATURES ═══════ */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 32px 0 0; }
+.feature {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s;
+}
+.feature:hover { border-color: var(--rule-strong); }
+.feature .f-head { display: flex; align-items: center; justify-content: space-between; }
+.feature .num { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.07em; }
+.feature .icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--asterism) 7%, #fff);
+  color: var(--asterism);
+}
+.feature h3 { margin: 16px 0 0; font-weight: 600; font-size: 18px; letter-spacing: -0.02em; }
+.feature p { margin: 10px 0 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); }
+.feature p .mono {
+  color: var(--ink);
+  font-size: 13px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.feature .meta-row { margin-top: auto; padding-top: 18px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ═══════ WORKFLOW ═══════ */
+.steps { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin: 32px 0 0; }
+.step {
+  padding: 22px 0;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.step .n { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.07em; padding-top: 4px; }
+.step h4 { margin: 0 0 5px; font-weight: 600; font-size: 16px; letter-spacing: -0.015em; }
+.step p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); }
+.step p .mono {
+  color: var(--ink);
+  font-size: 13px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* ═══════ THE PRISM QUESTION ═══════ */
+.why p.body { color: var(--ink-soft); font-size: 17px; line-height: 1.7; max-width: 66ch; margin: 18px 0 0; }
+.why .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 22px 0 0; }
+
+/* responsive */
+@media (max-width: 900px) {
+  .hero h1 { font-size: 42px; }
+  section h2 { font-size: 27px; }
+  .features, .inside { grid-template-columns: 1fr 1fr; }
+  .steps { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .hero h1 { font-size: 34px; }
+  .features, .inside { grid-template-columns: 1fr; }
+}
+</style>
+
+<!-- ══════ HERO ══════ -->
+<div class="scope-zone">
+  <header class="hero"><div class="wrap">
+    <div class="eyebrow">v0.1.1 · macOS · Windows · Linux</div>
+    <h1>Scientific graphing and <span>statistics for labs.</span></h1>
+    <p class="lead">Data tables in eight shapes, analyses that recompute whenever the data change, graphs with the range of styles you expect, and pages of live panels that export essentially final. It opens your existing Prism files, and it runs on your own machine.</p>
+    <div class="cta">
+      <a class="btn-lg primary" href={releases}>Download v0.1.1</a>
+      <a class="btn-lg" href={link('/features')}>See what's inside</a>
+    </div>
+    <div class="specs">
+      <div>Tables <b>Eight types</b></div>
+      <div>Licence <b>Free for noncommercial use</b></div>
+      <div>Opens <b>.asterism · .prism · .pzfx</b></div>
+    </div>
+
+    <TraceDivider />
+  </div></header>
+</div>
+
+<!-- ══════ THE FIGURE ══════ -->
+<section id="figure">
+  <div class="wrap">
+    <div class="eyebrow">The application</div>
+    <h2>The figure is the point.</h2>
+    <p class="sub">Graphs are drawn at their final size in millimetres, so what you see at 100% is what exports. Significance brackets, nested designs and per-subject points are part of the graph, not something added afterwards in another program.</p>
+    <div class="figure-row">
+      <figure>
+        <a class="shot" href={shotFull} data-caption={shotCaption}>
+          <Image src={shot} alt={shotCaption} widths={[970, 1940]} sizes="(max-width: 900px) 100vw, 970px" quality={82} />
+        </a>
+        <figcaption class="eyebrow plain">{shotCaption}</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ WHAT'S INSIDE ══════ -->
+<section id="inside">
+  <div class="wrap">
+    <div class="eyebrow">What's inside</div>
+    <div class="inside">
+      <div><b>Data tables</b><span>8 types · replicates or means</span></div>
+      <div><b>Analyses</b><span>t · ANOVA · nested · regression</span></div>
+      <div><b>Graphs</b><span>types · formatting · brackets</span></div>
+      <div><b>Figures</b><span>pages of live panels</span></div>
+      <div><b>Import</b><span>spreadsheets · qPCR · Prism</span></div>
+      <div><b>Help</b><span>built in · how results are found</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ FEATURES ══════ -->
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow">What it does</div>
+    <h2>Everything stays linked to <span>the data it came from.</span></h2>
+    <p class="sub">Change a value, exclude a point, or change an analysis setting, and the results and the graphs redraw. Nothing is a snapshot pasted somewhere else, which is what usually goes stale between the bench and the paper.</p>
+
+    <div class="features">
+      <div class="feature bracketed">
+        <div class="f-head">
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><rect x="8" y="12" width="48" height="40" rx="1.5" stroke="currentColor" stroke-width="2"></rect><path d="M8 24 H56 M24 24 V52 M40 24 V52" stroke="currentColor" stroke-width="1.8"></path></svg></div>
+          <div class="num">01</div>
+        </div>
+        <h3>Eight table types</h3>
+        <p>Column, XY, grouped, contingency, survival, parts of whole, multiple variables and nested — with replicates, or means entered with SD, SEM, %CV or N. The table type decides which analyses and graph types are offered.</p>
+        <div class="meta-row"><span class="chip">Nested</span><span class="chip">Grouped</span><span class="chip">Survival</span></div>
+      </div>
+      <div class="feature bracketed">
+        <div class="f-head">
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><path d="M10 52 V20 M10 20 H28 V52 M36 52 V12 M36 12 H54 V52" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"></path><path d="M19 14 V20 M45 6 V12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="M6 58 H58" stroke="currentColor" stroke-width="1.6" opacity=".5"></path></svg></div>
+          <div class="num">02</div>
+        </div>
+        <h3>Analyses that stay live</h3>
+        <p>t tests and their nonparametric equivalents, one- and two-way ANOVA with multiple comparisons, nested analyses, normality and outlier tests, correlation, contingency tables and survival. Results are recomputed, never stored.</p>
+        <div class="meta-row"><span class="chip">ANOVA</span><span class="chip">Repeated measures</span><span class="chip">Nested</span></div>
+      </div>
+      <div class="feature bracketed">
+        <div class="f-head">
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><path d="M8 50 C 20 50 26 18 34 18 C 42 18 46 34 56 34" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"></path><circle cx="20" cy="34" r="2" fill="currentColor"></circle><circle cx="34" cy="18" r="2" fill="currentColor"></circle><circle cx="46" cy="27" r="2" fill="currentColor"></circle><path d="M8 58 H58 M8 58 V8" stroke="currentColor" stroke-width="1.6" opacity=".5"></path></svg></div>
+          <div class="num">03</div>
+        </div>
+        <h3>Regression and curves</h3>
+        <p>Linear and nonlinear regression, correlation, and area under the curve. Fitted lines and curves are drawn on the graph of the data itself, and move with it, unless you ask for them separately.</p>
+        <div class="meta-row"><span class="chip">Linear</span><span class="chip">Nonlinear</span><span class="chip">AUC</span></div>
+      </div>
+      <div class="feature bracketed">
+        <div class="f-head">
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><rect x="8" y="10" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="2"></rect><rect x="36" y="10" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="2"></rect><rect x="8" y="38" width="20" height="16" rx="1.5" stroke="currentColor" stroke-width="2"></rect><rect x="36" y="38" width="20" height="16" rx="1.5" stroke="currentColor" stroke-width="2"></rect></svg></div>
+          <div class="num">04</div>
+        </div>
+        <h3>Figures of live panels</h3>
+        <p>Arrange graphs on a page as panels that stay linked to their data. Export the page as PDF, SVG, PNG or TIFF, or copy it as a vector picture into Word, PowerPoint, Keynote or Illustrator.</p>
+        <div class="meta-row"><span class="chip">PDF</span><span class="chip">SVG</span><span class="chip">TIFF</span></div>
+      </div>
+      <div class="feature bracketed">
+        <div class="f-head">
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><path d="M14 10 H38 L50 22 V54 H14 Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"></path><path d="M38 10 V22 H50" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"></path><path d="M22 44 L30 36 L38 40" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></svg></div>
+          <div class="num">05</div>
+        </div>
+        <h3>Opens Prism files</h3>
+        <p>Reads <span class="mono">.prism</span> and <span class="mono">.pzfx</span> — tables, info sheets, and the analyses that have a clean equivalent, re-created with their settings. The Prism file itself is never changed.</p>
+        <div class="meta-row"><span class="chip">.prism</span><span class="chip">.pzfx</span><span class="chip">QuantStudio</span></div>
+      </div>
+      <div class="feature bracketed">
+        <div class="f-head">
+          <div class="icon"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="22" stroke="currentColor" stroke-width="2"></circle><path d="M21 33 L28 40 L43 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+          <div class="num">06</div>
+        </div>
+        <h3>Shows its working</h3>
+        <p>The built-in help has a page on how every result is calculated — the rules, the conventions, and which percentile and rank definitions are used — so a methods section can be written from it, or a number checked by hand.</p>
+        <div class="meta-row"><span class="chip">Methods</span><span class="chip">Offline help</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ WORKFLOW ══════ -->
+<section id="workflow">
+  <div class="wrap">
+    <div class="eyebrow">The workflow</div>
+    <h2>Table, analysis, graph, <span>figure.</span></h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n">01</div>
+        <div><h4>Start a table</h4><p>Choose the table type that matches the design, or import a spreadsheet, a QuantStudio export or a Prism file. Every new table comes with its starter graph, listed underneath it in the sidebar.</p></div>
+      </div>
+      <div class="step">
+        <div class="n">02</div>
+        <div><h4>Analyse</h4><p>Pick the analysis from the table. Its results sheet sits under the table in the project sidebar and is named after what it did — <span class="mono">Welch's t test of Control vs drug</span> — recomputed whenever the data change.</p></div>
+      </div>
+      <div class="step">
+        <div class="n">03</div>
+        <div><h4>Draw the graph</h4><p>Choose a graph type from the gallery, previewed with your own data. Format axes, data sets, fonts and size in one dialog, edit directly on the graph, and add significance brackets from the analysis.</p></div>
+      </div>
+      <div class="step">
+        <div class="n">04</div>
+        <div><h4>Build the figure and export</h4><p>Place graphs as panels on a figure page. Export PDF, SVG, PNG or TIFF at the size you set, or copy as a vector picture straight into the document you are writing.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ THE PRISM QUESTION ══════ -->
+<section id="prism" class="why">
+  <div class="wrap">
+    <div class="eyebrow">Worth being clear about</div>
+    <h2>It opens Prism files. <span>It is not Prism.</span></h2>
+    <p class="body">When a Prism file comes across, its analyses are re-created and then calculated by ASTERISM — results are never copied out of the file, so the numbers on screen are this program's own and stay live if the data change. The test suite compares those numbers against ones Prism 11 produced on real lab data, and the help page on how results are calculated says which conventions are followed where more than one exists. How deep <span class="mono">.prism</span> import goes beyond data tables is still improving: the format is undocumented and changes between Prism versions, so check what came across before relying on it.</p>
+    <div class="row">
+      <span class="chip">Results recomputed, not copied</span>
+      <span class="chip">Checked against Prism 11</span>
+      <span class="chip">Conventions documented</span>
+    </div>
+    <div class="row">
+      <a class="btn" href={`${link('/docs')}#methods`}>How results are calculated</a>
+      <a class="btn" href={`${link('/docs')}#prism`}>What comes across</a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ CLOSING BAND ══════ -->
+<section class="band">
+  <div class="wrap">
+    <div class="eyebrow">v0.1.1 · Released</div>
+    <h2>Free for <span>noncommercial use.</span></h2>
+    <p>Personal research and study, and use by universities, hospitals, public research organisations, charities and government bodies, under the PolyForm Noncommercial License 1.0.0. Commercial use needs a commercial licence. Updates install from inside the app, so you download from Releases once.</p>
+    <div class="btns">
+      <a class="btn-lg primary" href={releases}>Download ASTERISM 0.1.1</a>
+      <a class="btn-lg" href={link('/docs')}>Read the help</a>
+    </div>
+    <p class="install-note">
+      <strong>The apps are not signed.</strong> ASTERISM is free and has no paid developer
+      certificates, so each system asks once before opening it. <strong>macOS:</strong> open it
+      from Applications, click <em>Done</em>, then <strong>System Settings → Privacy &amp; Security →
+      Open Anyway</strong>. <strong>Windows:</strong> if you see <em>"Windows protected your PC"</em>,
+      click <strong>More info → Run anyway</strong>; the installer needs no administrator rights.
+      <strong>Linux:</strong> <code>chmod +x ASTERISM-*.AppImage</code>, and on Debian or Ubuntu Qt may
+      want <code>libxcb-cursor0</code>.
+    </p>
+    <div class="foot-line">
+      <span>macOS 12+ Apple Silicon</span>
+      <span>Windows 10 · 11 (64-bit)</span>
+      <span>Linux AppImage · x86-64</span>
+      <span>Python 3.12+ from source</span>
+    </div>
+  </div>
+</section>
+
+<Lightbox />
+</Base>

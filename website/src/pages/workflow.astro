@@ -1,0 +1,224 @@
+---
+import Base from '../layouts/Base.astro';
+import TraceDivider from '../components/TraceDivider.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const link = (p: string) => `${base}${p}`;
+const docs = (anchor: string) => `${link('/docs')}#${anchor}`;
+
+// One experiment, start to finish: six stages, in the order the sidebar grows.
+const stages = [
+  {
+    n: '01',
+    kicker: 'Start',
+    title: 'A table of the right shape',
+    body: 'A project begins with a table type, because the type decides what can be done with the data later: a Column table offers t tests and ANOVA, an XY table offers regression, a Nested table counts subjects rather than replicates. Choosing it up front is the one decision worth a moment’s thought, and the help has a short page on which type matches which design. Making the table also makes its first graph, listed underneath it.',
+    rows: [
+      ['You do', 'New project, pick the table type, or import a spreadsheet or Prism file.'],
+      ['You get', 'An empty table of that type, its notes sheet, and a graph of it.'],
+    ],
+    doc: 'tables-new-table',
+  },
+  {
+    n: '02',
+    kicker: 'Enter',
+    title: 'The data, with the values you excluded still visible',
+    body: 'Type values in, or paste a block from a spreadsheet. Replicates can sit side by side in a subcolumn, or you can enter a mean with its SD, SEM, %CV or N if the arithmetic was done elsewhere. When a value has to come out of the analysis, exclude it rather than deleting it: it stays in the table, struck through, and hollow on the graph, so the exclusion is a visible decision rather than a gap nobody can account for six months later.',
+    rows: [
+      ['You do', 'Enter or paste values; title the columns and rows; exclude what should not count.'],
+      ['You get', 'A table whose history is legible, and a graph already drawing it.'],
+    ],
+    doc: 'tables-excluding-values',
+  },
+  {
+    n: '03',
+    kicker: 'Analyse',
+    title: 'A results sheet that recomputes',
+    body: 'Analyze from the tool panel lists only the analyses that make sense for this table type. The dialog separates the design from the test from the options, so what you chose is on the record rather than inferred. The results sheet appears under the table, named after what it did — Welch’s t test of Control vs drug — and the settings can be reopened and changed at any time. Results are never stored: they are recalculated from the data, so correcting a typo three weeks from now corrects the p value too.',
+    rows: [
+      ['You do', 'Analyze, pick the test, set the design and options.'],
+      ['You get', 'A named results sheet under the table, live against the data.'],
+    ],
+    doc: 'analyses-starting-an-analysis',
+  },
+  {
+    n: '04',
+    kicker: 'Graph',
+    title: 'The graph, at the size it will be printed',
+    body: 'The graph gallery previews each type with your own data, so the choice is made by looking rather than from a name. Formatting is one dialog for axes, data sets, fonts and size, plus direct editing on the graph for the things that are quicker by hand. Sizes are set in millimetres — plot height, column width, axis length — so a graph is built at its final size and never scaled afterwards. Significance brackets come from the analysis, so they know which comparison they mark and re-stack themselves when the graph changes.',
+    rows: [
+      ['You do', 'Pick a graph type; format axes and data sets; add brackets from the analysis.'],
+      ['You get', 'A graph at final size, redrawing whenever the data or the test changes.'],
+    ],
+    doc: 'graphs-graph-types',
+  },
+  {
+    n: '05',
+    kicker: 'Assemble',
+    title: 'A figure of panels that are still live',
+    body: 'A figure is a page holding the graphs themselves, not pictures of them, with panel letters applied automatically and a grid to align to. Two graphs can be overlaid for an inset. Because the panels are live, the reviewer’s request that moves one number moves through the table, the analysis, the graph and the panel without anything being re-pasted — which is the step where figures usually go quietly out of date.',
+    rows: [
+      ['You do', 'Place graphs, tables and results on a page; set page size and panel letters.'],
+      ['You get', 'A multi-panel figure that follows the data it came from.'],
+    ],
+    doc: 'figures',
+  },
+  {
+    n: '06',
+    kicker: 'Export',
+    title: 'Vector out, text still text',
+    body: 'PDF and SVG keep the text as text and every element as a named group, so a label can still be corrected in Illustrator, Affinity or Inkscape without redrawing anything. PNG and TIFF come out at 300 dpi, or up to 1200 for line art. A graph exports at the size it was drawn plus a narrow margin; a figure exports at exactly its page size. Or copy the whole thing as a vector picture straight into the document you are already writing.',
+    rows: [
+      ['You do', 'Export PDF, SVG, PNG or TIFF — or copy as a picture.'],
+      ['You get', 'A file at the size you set, with the text editable where the format allows it.'],
+    ],
+    doc: 'figures-exporting',
+  },
+];
+---
+<Base title="The workflow — ASTERISM">
+<style>
+.page-hd .wrap { max-width: 68ch; }
+.page-hd p.lead { color: var(--ink-soft); font-size: 17px; line-height: 1.7; margin: 18px 0 0; }
+
+.stages { padding: 0 0 56px; }
+.stage {
+  padding: 46px 0;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.stage:first-child { border-top: none; }
+
+.stage .rail { position: sticky; top: calc(var(--nav-h) + 28px); }
+.stage .rail .num {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+.stage .rail .kicker {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.stage .rail .tick {
+  margin: 12px 0 0;
+  height: 1px;
+  background: var(--rule-strong);
+  width: 34px;
+}
+
+.stage h2 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.14;
+  margin: 0;
+  max-width: 30ch;
+}
+.stage p.body {
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.72;
+  max-width: 66ch;
+  margin: 16px 0 0;
+}
+.stage .io {
+  margin: 22px 0 0;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--asterism);
+  border-radius: 9px;
+  overflow: hidden;
+  max-width: 66ch;
+}
+.stage .io .r {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 16px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--rule);
+}
+.stage .io .r:first-child { border-top: none; }
+.stage .io dt {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 2px;
+}
+.stage .io dd { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); }
+.stage dl { margin: 0; }
+.stage a.more {
+  display: inline-block;
+  margin: 16px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  text-decoration: none;
+  padding-bottom: 1px;
+}
+.stage a.more:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 760px) {
+  .stage { grid-template-columns: 1fr; gap: 16px; }
+  .stage .rail { position: static; display: flex; align-items: center; gap: 12px; }
+  .stage .rail .kicker { margin: 0; }
+  .stage .rail .tick { display: none; }
+  .stage h2 { font-size: 23px; }
+  .stage .io .r { grid-template-columns: 1fr; gap: 3px; }
+}
+</style>
+
+<div class="scope-zone">
+  <header class="page-hd"><div class="wrap">
+    <div class="eyebrow">The workflow</div>
+    <h1>One experiment, <span>table to figure.</span></h1>
+    <p class="lead">Six stages, in the order the project sidebar grows. The point of the shape is that nothing along the way is a snapshot: the figure at the end is still attached to the numbers at the start, so a correction travels forward on its own.</p>
+    <TraceDivider />
+  </div></header>
+</div>
+
+<div class="stages"><div class="wrap">
+  {stages.map((s) => (
+    <section class="stage" id={s.kicker.toLowerCase()}>
+      <div class="rail">
+        <div class="num">{s.n}</div>
+        <div class="kicker">{s.kicker}</div>
+        <div class="tick"></div>
+      </div>
+      <div>
+        <h2>{s.title}</h2>
+        <p class="body">{s.body}</p>
+        <div class="io"><dl>
+          {s.rows.map(([k, v]) => (
+            <div class="r"><dt>{k}</dt><dd>{v}</dd></div>
+          ))}
+        </dl></div>
+        <a class="more" href={docs(s.doc)}>In the help →</a>
+      </div>
+    </section>
+  ))}
+</div></div>
+
+<section class="band">
+  <div class="wrap">
+    <div class="eyebrow">Also worth knowing</div>
+    <h2>The project is <span>one file on your disk.</span></h2>
+    <p>Tables, analyses, graphs and figures live in a single <code>.asterism</code> file, with periodic autosave copies offered back after a crash. There is no account and no upload: the program runs on your machine and the help is built in, so it works on a bench computer with no network at all.</p>
+    <div class="btns">
+      <a class="btn-lg primary" href={link('/docs')}>Read the help</a>
+      <a class="btn-lg" href={link('/features')}>See what's inside</a>
+    </div>
+  </div>
+</section>
+</Base>
