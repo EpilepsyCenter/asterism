@@ -9,4 +9,5 @@ Installing ASTERISM on a Mac
      click Open Anyway, and confirm with your password.
    After that it opens normally.
 
-ASTERISM is MIT-licensed open-source software: https://github.com/EpilepsyCenter/asterism
+ASTERISM is free for noncommercial use (PolyForm Noncommercial License 1.0.0, see LICENSE):
+https://github.com/EpilepsyCenter/asterism

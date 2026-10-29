@@ -7,7 +7,7 @@ VSVersionInfo(
       StringStruct('FileDescription', 'ASTERISM'),
       StringStruct('FileVersion', '0.1.0'),
       StringStruct('InternalName', 'ASTERISM'),
-      StringStruct('LegalCopyright', 'MIT licence'),
+      StringStruct('LegalCopyright', 'Copyright (c) 2026 Marco Ledri. PolyForm Noncommercial 1.0.0'),
       StringStruct('OriginalFilename', 'ASTERISM.exe'),
       StringStruct('ProductName', 'ASTERISM'),
       StringStruct('ProductVersion', '0.1.0')])]),

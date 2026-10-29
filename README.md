@@ -108,5 +108,11 @@ The design, principles and build history are in [`SPEC.md`](SPEC.md).
 
 ## Licence
 
-MIT (see [`LICENSE`](LICENSE)). The apps include Qt (LGPL v3), Lucide icons (ISC) and other
+Free for noncommercial use under the PolyForm Noncommercial License 1.0.0 (see
+[`LICENSE`](LICENSE)): personal research and study, and use by universities, hospitals, public
+research organisations, charities and government bodies. Commercial use needs a commercial
+licence from the copyright holder. Contributions are accepted only if their author agrees
+that they may also be offered under other licences.
+
+The apps include Qt (LGPL v3), Lucide icons (ISC) and other
 open-source libraries listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

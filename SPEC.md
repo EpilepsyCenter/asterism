@@ -18,8 +18,9 @@ Status: **M1–M11 done; 0.1.0 is the first release (macOS, Windows, Linux).** T
 
 ## 1. Product
 
-**What it is:** a complete, polished app, not a lab script. It is **free**: shared with other
-labs, never sold. Prism users should find every capability they rely on (the same sheet
+**What it is:** a complete, polished app, not a lab script. It is **free for noncommercial use**
+(PolyForm Noncommercial 1.0.0): shared with other labs. Selling it later (e.g. a lab
+subscription, or commercial licences for companies) is being explored, not decided. Prism users should find every capability they rely on (the same sheet
 types, analyses, options and live linking between data, results and graphs) and learn
 ASTERISM's own interface in minutes.
 
@@ -59,8 +60,8 @@ multiple-variable methods) arrives after the core is solid, in the order users a
    window structure (full-height sidebar, toolbar above the content, status bar) mirror
    NED-Net's desktop UI so the two apps read as coming from one developer (§12).
 3. **Interoperate, don't copy.** Reading Prism files is for interoperability. Never use
-   Prism's trademarks. ASTERISM is not affiliated with GraphPad. If ASTERISM is shared
-   widely, check with Lund University's innovation office first (free).
+   Prism's trademarks. ASTERISM is not affiliated with GraphPad. ASTERISM is owned by
+   Marco Ledri; Lund University has no claim on it.
 4. **Numbers match Prism.** Same defaults (Student's t, not Welch; Prism's percentile
    rule; exact P values where Prism uses them; Prism's P formatting and asterisk cutoffs).
    Any intentional difference is documented in the results sheet and in §14.
@@ -491,11 +492,17 @@ inherit the risk. Copying its code or text would also undermine principle 3 (§2
   (Linux), each with a PNG (`asterism/app/clipboard.py`, `graph/emf.py`).
 
 **Open questions:**
-- (Settled 2026-10-28: PyInstaller, unsigned, GitHub Releases as the update channel, MIT.)
+- (Settled 2026-10-28: PyInstaller, unsigned, GitHub Releases as the update channel.)
 - How deep `.prism` import goes beyond data tables (the format is undocumented and
   changes between Prism versions).
-- Licence: MIT (2026-10-28); Qt under the LGPL as unmodified shared libraries
-  (THIRD_PARTY_NOTICES.md).
+- Licence: PolyForm Noncommercial 1.0.0 (2026-10-29, replacing MIT; 0.1.0 was never
+  downloaded). Free for personal research, universities, hospitals, public research,
+  charities and government; companies need a commercial licence. Not OSI open source, so
+  JOSS and most open-source software grants are out. Outside contributions need the
+  author's agreement that they may be relicensed. Qt under the LGPL as unmodified shared
+  libraries (THIRD_PARTY_NOTICES.md).
+- Possible paid version: test with other labs before building licensing; if sold, a merchant of record plus offline-signed licence
+  files, "keep the versions released while subscribed".
 - Whether ASTERISM files should embed fonts used in graphs (portability vs. size).
 
 ---

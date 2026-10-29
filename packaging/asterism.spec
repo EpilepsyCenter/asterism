@@ -73,7 +73,7 @@ if sys.platform == "darwin":
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,          # follow light and dark mode
             "LSMinimumSystemVersion": "12.0",
-            "NSHumanReadableCopyright": "MIT licence. Free for labs; not affiliated with GraphPad.",
+            "NSHumanReadableCopyright": "© 2026 Marco Ledri. Free for noncommercial use (PolyForm Noncommercial 1.0.0). Not affiliated with GraphPad.",
             "CFBundleDocumentTypes": [
                 {"CFBundleTypeName": "ASTERISM Project", "CFBundleTypeRole": "Editor",
                  "LSHandlerRank": "Owner", "CFBundleTypeIconFile": "asterism.icns",
