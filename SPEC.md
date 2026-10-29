@@ -5,7 +5,7 @@ does (projects of live-linked data tables, analyses, graphs and figures, with Pr
 table types, analyses, options and numbers) in **ASTERISM's own interface**, a sibling
 of NED-Net. Built with Qt (PySide6).
 
-Status: **M1–M11 done; 0.1.0 is the first release (macOS, Windows, Linux).** The Qt spike (M0) passed on
+Status: **M1–M11 done; 0.1.1 is the first release (macOS, Windows, Linux).** The Qt spike (M0) passed on
 2026-10-22.
 
 > **Starting a new session on this repo?** Read this file, then check §15 for the current
@@ -496,8 +496,9 @@ inherit the risk. Copying its code or text would also undermine principle 3 (§2
 - How deep `.prism` import goes beyond data tables (the format is undocumented and
   changes between Prism versions).
 - Licence: PolyForm Noncommercial 1.0.0 (2026-10-29, replacing MIT; 0.1.0 was never
-  downloaded). Free for personal research, universities, hospitals, public research,
-  charities and government; companies need a commercial licence. Not OSI open source, so
+  downloaded and its release was withdrawn; 0.1.1 is the first release under it). Free
+  for personal research, universities, hospitals, public research, charities and
+  government; companies need a commercial licence. Not OSI open source, so
   JOSS and most open-source software grants are out. Outside contributions need the
   author's agreement that they may be relicensed. Qt under the LGPL as unmodified shared
   libraries (THIRD_PARTY_NOTICES.md).
