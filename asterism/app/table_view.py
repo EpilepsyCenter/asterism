@@ -5,6 +5,11 @@ survival tables), then each data set's sub-columns. The header has a row with th
 set's name and its editable title, both spanning its sub-columns, plus a row of
 sub-column labels when a data set has more than one (replicates, Mean/SD/N, subjects).
 Excluded values stay visible, struck through in muted italics.
+
+Keyboard, as in a spreadsheet: the arrows move between cells; ↑ from the first row goes up
+into the data set titles (and editable sub-column titles), ↓ comes back down. While typing
+into a cell or title, the arrows save it and move on (←/→ only when the edit started by
+typing; after a double-click or F2 they move the text cursor).
 """
 
 from __future__ import annotations
@@ -24,6 +29,39 @@ from ..doc.table import Y_FORMATS
 
 ROW_H = 20
 SUB_H = 18
+
+_ARROWS = {Qt.Key_Up: (-1, 0), Qt.Key_Down: (1, 0), Qt.Key_Left: (0, -1), Qt.Key_Right: (0, 1)}
+_MODS = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
+
+
+def _plain_arrow(e) -> tuple[int, int] | None:
+    """(rows, cols) for an arrow key without modifiers (macOS adds the keypad flag; ignored)."""
+    if e.modifiers() & _MODS:
+        return None
+    return _ARROWS.get(e.key())
+
+
+class EntryEditor(QLineEdit):
+    """Editor for a cell or a title. `typing`: the edit started with a typed character, so
+    ←/→ also save and move (otherwise they move the text cursor). `on_arrow(dr, dc)` saves
+    and moves; `on_cancel()` closes without saving (title editors only)."""
+
+    def __init__(self, parent, typing: bool, on_arrow, on_cancel=None):
+        super().__init__(parent)
+        self.typing, self.on_arrow, self.on_cancel = typing, on_arrow, on_cancel
+
+    def keyPressEvent(self, e):
+        move = _plain_arrow(e)
+        if move and (self.typing or move[1] == 0):
+            self.on_arrow(*move)
+            return
+        if self.on_cancel and e.key() == Qt.Key_Escape:
+            self.on_cancel()
+            return
+        if self.on_cancel and e.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.on_arrow(1, 0)
+            return
+        super().keyPressEvent(e)
 
 
 def blend(a: QColor, b: QColor, t: float) -> QColor:
@@ -230,16 +268,21 @@ class TableHeader(QHeaderView):
         else:
             ds, _ = t.split(key)
             name, title = t.group_name(ds), t.titles[ds]
+        head = self.view.head
+        on_title = isinstance(key, int) and head == ("title", t.split(key)[0])
+        on_sub = isinstance(key, int) and head == ("sub", idx)
         p.setFont(small)
         p.setPen(text if sel else muted)
         p.drawText(r1, Qt.AlignCenter, name)
         p.setFont(self.font())
+        if on_title:
+            p.fillRect(r2, theme.mix("field", "accent", 0.12))
         if isinstance(key, int):
             p.setPen(text if title else theme.mix("field", "muted", 0.7))
             p.drawText(r2.adjusted(4, 0, -4, 0), Qt.AlignCenter, title or "Title")
         if sub_row:
             r3 = QRect(rect.x(), ROW_H * 2, rect.width(), SUB_H)
-            p.fillRect(r3, theme.mix("field", "sidebar", 0.5))
+            p.fillRect(r3, theme.mix("field", "accent", 0.12) if on_sub else theme.mix("field", "sidebar", 0.5))
             if isinstance(key, int):
                 ds, sub = t.split(key)
                 p.setFont(small)
@@ -255,55 +298,85 @@ class TableHeader(QHeaderView):
         if sub_row:
             p.drawLine(rect.left(), ROW_H * 2, rect.right(), ROW_H * 2)
         p.drawLine(rect.bottomLeft(), rect.bottomRight())
+        if on_title or on_sub:          # the same 2 px outline as the current cell
+            p.setPen(QPen(theme.color("accent"), 2))
+            p.drawRect((r2 if on_title else QRect(rect.x(), ROW_H * 2, rect.width(), SUB_H)).adjusted(1, 1, -1, -1))
         p.restore()
 
-    def mouseDoubleClickEvent(self, e):
-        idx = self.logicalIndexAt(e.position().toPoint())
-        y = e.position().y()
+    def head_at(self, pos):
+        """("title", data set) or ("sub", column) under a point in the header, or None."""
+        idx = self.logicalIndexAt(pos)
         key = self.view.model().key(idx) if idx >= 0 else None
-        if isinstance(key, int) and ROW_H <= y < ROW_H * 2:
-            self.edit_title(idx)
-        elif isinstance(key, int) and y >= ROW_H * 2 and self.has_sub_row() \
-                and Y_FORMATS[self.t.y_format] is None:
-            self.edit_sub_title(idx)
-        else:
+        if not isinstance(key, int):
+            return None
+        if ROW_H <= pos.y() < ROW_H * 2:
+            return ("title", self.t.split(key)[0])
+        if pos.y() >= ROW_H * 2 and self.view.subs_editable():
+            return ("sub", idx)
+        return None
+
+    def head_rect(self, head) -> QRect:
+        kind, n = head
+        if kind == "title":
+            return self._span_rect(self.view.col_of_set(n), ROW_H, ROW_H)
+        return QRect(self.sectionViewportPosition(n), ROW_H * 2, self.sectionSize(n), SUB_H)
+
+    def mousePressEvent(self, e):
+        head = self.head_at(e.position().toPoint())
+        if head is None:
+            self.view.leave_head()
+            super().mousePressEvent(e)
+            return
+        self.view.set_head(head, scroll=False)
+        self.view.setFocus()
+
+    def mouseDoubleClickEvent(self, e):
+        head = self.head_at(e.position().toPoint())
+        if head is None:
             super().mouseDoubleClickEvent(e)
+            return
+        self.view.set_head(head, scroll=False)
+        self.edit_head(head)
 
-    def _editor_at(self, rect: QRect, text: str, done) -> None:
-        ed = QLineEdit(text, self.viewport())
-        ed.setAlignment(Qt.AlignCenter)
-        ed.setFrame(False)
-        ed.setGeometry(rect.adjusted(1, 1, -1, -1))
-        ed.selectAll()
-        ed.show()
-        ed.setFocus()
-        self._editor = ed
+    def edit_head(self, head, typed: str | None = None) -> None:
+        """Edit a title in place; `typed` replaces it (the edit started by typing)."""
+        if self._editor is not None:
+            return
+        rect = self.head_rect(head)
+        old = self.view.head_text(head)
+        state = {"open": True}
 
-        def finish():
-            if self._editor is None:
+        def close(commit: bool, move=None):
+            if not state["open"]:
                 return
+            state["open"] = False
             self._editor = None
             new = ed.text().strip()
+            ed.hide()
             ed.deleteLater()
-            done(new)
-        ed.editingFinished.connect(finish)
+            if commit:
+                self.view.set_head_text(head, new)
+            self.view.setFocus()
+            if move:
+                self.view.head_move(*move)
+
+        ed = EntryEditor(self.viewport(), typed is not None, lambda dr, dc: close(True, (dr, dc)),
+                         lambda: close(False))
+        ed.setAlignment(Qt.AlignCenter)
+        ed.setFrame(False)
+        ed.setGeometry(rect.adjusted(2, 2, -2, -2))
+        if typed is None:
+            ed.setText(old)
+            ed.selectAll()
+        else:
+            ed.setText(typed)
+        ed.show()
+        ed.setFocus()
+        ed.editingFinished.connect(lambda: close(True))
+        self._editor = ed
 
     def edit_title(self, idx: int) -> None:
-        ds, _ = self.t.split(self.view.model().key(idx))
-
-        def done(new):
-            if new != self.t.titles[ds]:
-                self.view.project.undo.push(TitleCommand(self.t, ds, new))
-        self._editor_at(self._span_rect(idx, ROW_H, ROW_H), self.t.titles[ds], done)
-
-    def edit_sub_title(self, idx: int) -> None:
-        ds, sub = self.t.split(self.view.model().key(idx))
-        rect = QRect(self.sectionViewportPosition(idx), ROW_H * 2, self.sectionSize(idx), SUB_H)
-
-        def done(new):
-            if new != self.t.sub_titles[ds][sub]:
-                self.view.project.undo.push(SubTitleCommand(self.t, ds, sub, new))
-        self._editor_at(rect, self.t.sub_titles[ds][sub], done)
+        self.edit_head(("title", self.t.split(self.view.model().key(idx))[0]))
 
 
 class RowHeader(QHeaderView):
@@ -352,14 +425,15 @@ class CellDelegate(QStyledItemDelegate):
             p.fillRect(option.rect, theme.mix("field", "sidebar", 0.45))
         super().paint(p, option, index)
         view = self.parent()
-        if view is not None and index == view.currentIndex():
+        if view is not None and index == view.currentIndex() and view.head is None:
             p.save()
             p.setPen(QPen(theme.color("accent"), 2))
             p.drawRect(option.rect.adjusted(1, 1, -1, -1))
             p.restore()
 
     def createEditor(self, parent, option, index):
-        ed = QLineEdit(parent)
+        view = self.parent()
+        ed = EntryEditor(parent, getattr(view, "_typing", True), lambda dr, dc: view.editor_arrow(ed, dr, dc))
         ed.setFrame(False)
         key = index.model().key(index.column())
         ed.setAlignment((Qt.AlignLeft if key == "row" else Qt.AlignRight) | Qt.AlignVCenter)
@@ -368,6 +442,8 @@ class CellDelegate(QStyledItemDelegate):
 
 class DataTableSheet(QTableView):
     cellChanged = Signal(int, int)
+    head = None           # keyboard focus in the header: ("title", data set) or ("sub", column)
+    _typing = True        # the next cell edit starts from a typed character
 
     def __init__(self, table: Table, project: Project, parent=None):
         super().__init__(parent)
@@ -392,6 +468,7 @@ class DataTableSheet(QTableView):
         self.setCurrentIndex(self.model().index(0, self._first_data_col()))
 
     def _after_reset(self) -> None:
+        self.head = None
         self.horizontalHeader().updateGeometry()
         self.updateGeometries()
         self._size_columns()
@@ -426,6 +503,119 @@ class DataTableSheet(QTableView):
     def selected_sets(self) -> list[int]:
         return sorted({self.t.split(k)[0] for _, k in self.selected_cells() if isinstance(k, int)})
 
+    # --- keyboard focus in the header (data set titles, sub-column titles) ---------------
+
+    def subs_editable(self) -> bool:
+        return self.horizontalHeader().has_sub_row() and Y_FORMATS[self.t.y_format] is None
+
+    def col_of_set(self, ds: int) -> int:
+        return self.model().col_of(self.t.flat(ds, 0))
+
+    def set_head(self, head, scroll: bool = True) -> None:
+        self.head = head
+        col = self.currentIndex().column()
+        if head[0] == "sub":
+            col = head[1]
+        elif not (isinstance(self.key(col), int) and self.t.split(self.key(col))[0] == head[1]):
+            col = self.col_of_set(head[1])
+        # The current cell follows along in row 1, so ↓ lands there and the column stays lit.
+        auto = self.hasAutoScroll()
+        self.setAutoScroll(scroll)
+        self.setCurrentIndex(self.model().index(0, col))
+        self.setAutoScroll(auto)
+        if scroll:
+            self.scrollTo(self.model().index(0, col))
+        self.horizontalHeader().viewport().update()
+        self.viewport().update()
+
+    def leave_head(self) -> None:
+        if self.head is not None:
+            self.head = None
+            self.horizontalHeader().viewport().update()
+            self.viewport().update()
+
+    def _enter_head(self, col: int) -> None:
+        """↑ from row 1 of a data set column."""
+        self.set_head(("sub", col) if self.subs_editable() else ("title", self.t.split(self.key(col))[0]))
+
+    def head_text(self, head) -> str:
+        kind, n = head
+        if kind == "title":
+            return self.t.titles[n]
+        ds, sub = self.t.split(self.key(n))
+        return self.t.sub_titles[ds][sub]
+
+    def set_head_text(self, head, new: str) -> None:
+        if new == self.head_text(head):
+            return
+        kind, n = head
+        if kind == "title":
+            self.project.undo.push(TitleCommand(self.t, n, new))
+        else:
+            ds, sub = self.t.split(self.key(n))
+            self.project.undo.push(SubTitleCommand(self.t, ds, sub, new))
+
+    def head_move(self, dr: int, dc: int) -> None:
+        kind, n = self.head
+        keys = self.model().keys
+        if dc:
+            if kind == "title":
+                self.set_head(("title", min(max(n + dc, 0), self.t.ncols - 1)))
+            elif 0 <= n + dc < len(keys) and isinstance(keys[n + dc], int):
+                self.set_head(("sub", n + dc))
+        elif dr < 0:
+            if kind == "sub":
+                self.set_head(("title", self.t.split(keys[n])[0]))
+        elif kind == "title" and self.subs_editable():
+            self.set_head(("sub", self.currentIndex().column()))
+        else:
+            col = self.currentIndex().column()
+            self.leave_head()
+            self.setCurrentIndex(self.model().index(0, col))
+
+    def _head_key(self, e) -> bool:
+        move = _plain_arrow(e)
+        k = e.key()
+        if k == Qt.Key_Tab:
+            move = (0, 1)
+        elif k == Qt.Key_Backtab:
+            move = (0, -1)
+        elif k in (Qt.Key_Return, Qt.Key_Enter):
+            move = (1, 0)
+        if move:
+            self.head_move(*move)
+        elif k == Qt.Key_Escape:
+            self.head_move(1, 0) if self.head[0] == "sub" else self.leave_head()
+        elif k == Qt.Key_F2:
+            self.horizontalHeader().edit_head(self.head)
+        elif k in (Qt.Key_Delete, Qt.Key_Backspace):
+            self.set_head_text(self.head, "")
+        elif e.text() and e.text().isprintable() and not e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
+            self.horizontalHeader().edit_head(self.head, typed=e.text())
+        else:
+            return False
+        return True
+
+    def editor_arrow(self, editor, dr: int, dc: int) -> None:
+        """An arrow key in a cell editor: save the value and move."""
+        i = self.currentIndex()
+        self.commitData(editor)
+        self.closeEditor(editor, QAbstractItemDelegate.NoHint)
+        if dr < 0 and i.row() == 0 and isinstance(self.key(i.column()), int):
+            self._enter_head(i.column())
+            return
+        r = min(max(i.row() + dr, 0), self.model().rowCount() - 1)
+        c = min(max(i.column() + dc, 0), self.model().columnCount() - 1)
+        self.setCurrentIndex(self.model().index(r, c))
+
+    def mousePressEvent(self, e):
+        self.leave_head()
+        super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        self._typing = False
+        super().mouseDoubleClickEvent(e)
+
     # Enter commits and moves down, like a spreadsheet.
     def closeEditor(self, editor, hint):
         super().closeEditor(editor, hint)
@@ -434,7 +624,19 @@ class DataTableSheet(QTableView):
             self.setCurrentIndex(self.model().index(i.row() + 1, i.column()))
 
     def keyPressEvent(self, e):
-        if e.matches(QKeySequence.Copy):
+        editing = self.state() == QAbstractItemView.EditingState
+        if self.head is not None and not editing:
+            if self._head_key(e):
+                return
+            self.leave_head()
+        if not editing:
+            self._typing = e.key() != Qt.Key_F2
+        cur = self.currentIndex()
+        if not editing and _plain_arrow(e) == (-1, 0) and cur.row() == 0 and isinstance(self.key(cur.column()), int):
+            self._enter_head(cur.column())
+        elif not editing and e.key() == Qt.Key_F2:      # edit what's there (on macOS too)
+            self.edit(cur)
+        elif e.matches(QKeySequence.Copy):
             self.copy()
         elif e.matches(QKeySequence.Paste):
             self.paste()

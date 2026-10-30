@@ -162,3 +162,116 @@ def test_placeholder_graph_disables_graph_tools(app, close_later, no_multivar_gr
     w.show_sheet(w.project.graphs[0])
     assert not w.a_fmt_graph.isEnabled() and not w.a_export_pdf.isEnabled()
     assert "not available yet" in w.top.subtitle.text()
+
+
+def _type(view, text):
+    """Type as a user would: the first key opens the editor, the rest go into it."""
+    from PySide6.QtTest import QTest
+    QTest.keyClicks(view, text[0])
+    if text[1:]:
+        QTest.keyClicks(_editor(view), text[1:])
+
+
+def _editor(view):
+    from asterism.app.table_view import EntryEditor
+    eds = [e for e in view.findChildren(EntryEditor) if e.isVisible()]
+    assert len(eds) == 1
+    return eds[0]
+
+
+def test_arrows_save_and_move_while_typing(app, close_later):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    w = _window(app, "column", example=False)
+    close_later(w)
+    t = w.project.tables[0]
+    w.show_sheet(t)
+    w.show()
+    view = w._widget_for(t)
+    view.setFocus()
+    m = view.model()
+    view.setCurrentIndex(m.index(0, 0))
+    _type(view, "12")
+    QTest.keyClick(_editor(view), Qt.Key_Right)          # typed: → saves and moves right
+    assert t.get(0, 0) == 12 and view.currentIndex() == m.index(0, 1)
+    _type(view, "7")
+    QTest.keyClick(_editor(view), Qt.Key_Down)
+    assert t.get(0, 1) == 7 and view.currentIndex() == m.index(1, 1)
+    QTest.keyClick(view, Qt.Key_Left)                     # not editing: plain cell moves
+    assert view.currentIndex() == m.index(1, 0)
+    # After F2 (edit what's there), ←/→ move the text cursor and ↑ still saves and moves.
+    view.setCurrentIndex(m.index(0, 1))
+    QTest.keyClick(view, Qt.Key_F2)
+    ed = _editor(view)
+    ed.setCursorPosition(1)
+    QTest.keyClick(ed, Qt.Key_Left)
+    assert ed.isVisible() and ed.cursorPosition() == 0 and view.currentIndex() == m.index(0, 1)
+    QTest.keyClick(ed, Qt.Key_Down)
+    assert view.currentIndex() == m.index(1, 1)
+
+
+def test_arrows_reach_the_column_titles(app, close_later):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    w = _window(app, "column", example=False)
+    close_later(w)
+    t = w.project.tables[0]
+    w.show_sheet(t)
+    w.show()
+    view = w._widget_for(t)
+    view.setFocus()
+    m = view.model()
+    view.setCurrentIndex(m.index(0, 1))
+    QTest.keyClick(view, Qt.Key_Up)                       # row 1 → title of data set B
+    assert view.head == ("title", 1)
+    QTest.keyClick(view, Qt.Key_Up)                       # nothing above the titles
+    assert view.head == ("title", 1)
+    QTest.keyClick(view, Qt.Key_Left)
+    assert view.head == ("title", 0)
+    _type(view, "WT")                           # typing replaces the title
+    QTest.keyClick(_editor(view), Qt.Key_Right)           # → saves and moves to the next title
+    assert t.titles[0] == "WT" and view.head == ("title", 1)
+    _type(view, "KO")
+    QTest.keyClick(_editor(view), Qt.Key_Return)          # Return saves and goes down to row 1
+    assert t.titles[1] == "KO" and view.head is None and view.currentIndex() == m.index(0, 1)
+    QTest.keyClick(view, Qt.Key_Up)
+    QTest.keyClick(view, Qt.Key_F2)                       # F2 edits; Escape cancels
+    ed = _editor(view)
+    ed.setText("nope")
+    QTest.keyClick(ed, Qt.Key_Escape)
+    assert t.titles[1] == "KO" and view.head == ("title", 1)
+    QTest.keyClick(view, Qt.Key_Backspace)                # clears the title (undoable)
+    assert t.titles[1] == ""
+    w.project.undo.undo()
+    assert t.titles[1] == "KO"
+    QTest.keyClick(view, Qt.Key_Down)
+    assert view.head is None and view.currentIndex() == m.index(0, 1)
+    # ↑ while typing in row 1 saves the value and goes up into the title
+    _type(view, "3")
+    QTest.keyClick(_editor(view), Qt.Key_Up)
+    assert t.get(0, 1) == 3 and view.head == ("title", 1)
+
+
+def test_arrows_reach_sub_column_titles(app, close_later):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    w = _window(app, "nested", example=False, replicates=3)
+    close_later(w)
+    t = w.project.tables[0]
+    w.show_sheet(t)
+    w.show()
+    view = w._widget_for(t)
+    view.setFocus()
+    m = view.model()
+    assert view.subs_editable()
+    c = m.col_of(t.flat(0, 1))
+    view.setCurrentIndex(m.index(0, c))
+    QTest.keyClick(view, Qt.Key_Up)                       # row 1 → this sub-column's title
+    assert view.head == ("sub", c)
+    _type(view, "m2")
+    QTest.keyClick(_editor(view), Qt.Key_Up)              # saves, then up to the data set title
+    assert t.sub_titles[0][1] == "m2" and view.head == ("title", 0)
+    QTest.keyClick(view, Qt.Key_Down)                     # back down to the same sub-column
+    assert view.head == ("sub", c)
+    QTest.keyClick(view, Qt.Key_Down)
+    assert view.head is None and view.currentIndex() == m.index(0, c)
