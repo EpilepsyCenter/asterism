@@ -9,7 +9,7 @@ Shortcuts on this page use ⌘ for the Mac command key; on Windows use Ctrl inst
 There are two ways in.
 
 - **The Analyze dialog.** Choose **Analyze › Analyze…** (⌘⇧A), or click **Analyze** at the top of the tool panel on the right. You pick the analysis and exactly which data sets to include.
-- **The quick commands.** The **Analyze** menu, and the Analyze group in the tool panel, also list the common analyses by name (**One-way ANOVA…**, **Normality Tests…**, **Two-way ANOVA…**, **Nested t Test or ANOVA…** and so on). These skip the Analyze dialog and use *every* data set of the current table, going straight to the analysis's settings. Commands that don't fit the current table type are greyed out.
+- **The quick commands.** The **Analyze** menu, and the Analyze section of the tool panel, also list the common analyses by name (**t Test (and Nonparametric)…**, **One-way ANOVA…**, **Normality Tests…**, **Two-way ANOVA…**, **Nested t Test or ANOVA…** and so on). These skip the Analyze dialog and use *every* data set of the current table, going straight to the analysis's settings. A t test needs exactly two data sets; with more, the Analyze dialog opens so you can pick two. The tool panel lists only the analyses that fit the current table type; in the menu the others are greyed out.
 
 The quick commands have two exceptions. **Descriptive Statistics** has no settings, so its results appear at once. **Multiple t Tests…** compares exactly two data sets, so if the table has more than two it opens the Analyze dialog so you can choose two.
 

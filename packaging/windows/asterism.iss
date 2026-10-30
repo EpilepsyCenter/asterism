@@ -1,10 +1,10 @@
 ; Inno Setup script for the ASTERISM Windows installer.
-;   iscc /DVersion=0.1.2 packaging\windows\asterism.iss     (after pyinstaller)
+;   iscc /DVersion=0.2.0 packaging\windows\asterism.iss     (after pyinstaller)
 ; Installs for the current user (no administrator rights needed), adds a Start menu entry,
 ; opens .asterism files with ASTERISM and offers it for .prism / .pzfx, with an uninstaller.
 
 #ifndef Version
-  #define Version "0.1.2"
+  #define Version "0.2.0"
 #endif
 
 [Setup]

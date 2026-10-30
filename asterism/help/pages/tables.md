@@ -108,6 +108,7 @@ The table shows dates as 2026-10-26 (with the time when there is one). Behind th
 ## Entering and editing data
 
 - Click a cell and type. Press Enter to move down to the next row.
+- The arrow keys move between cells. While you are typing a value, an arrow key saves it and moves on, as in a spreadsheet. To change part of a value, press F2 or double-click the cell; then ← and → move within the text.
 - **Edit › Copy**, **Cut** and **Paste** (⌘C, ⌘X, ⌘V) work on a block of cells. Paste from Excel or another spreadsheet: the block is pasted starting at the current cell.
 - Delete or Backspace clears the selected cells.
 - A decimal comma is accepted (1,5 is read as 1.5).
@@ -123,6 +124,8 @@ Every edit can be undone with **Edit › Undo** (⌘Z). Analyses and graphs upda
 
 The header shows each data set's name ("Group A", "Data set B", "Outcome C" and so on) above its title. Double-click the title row under the name to type a title, such as "Control" or "EGFP". Graphs and results use the title, or the name if there is no title.
 
+From the keyboard: press ↑ in the first row to move up to the title, and ← → to go from title to title. Type to replace a title, or press F2 to edit it; ↓ or Enter goes back to the first row, Escape cancels, and Backspace clears the title.
+
 In tables with replicates or subjects, double-click a sub-column's label (Rep 1, Subject 1…) to rename it, for example with the animal's ID.
 
 ### Row titles
@@ -131,7 +134,7 @@ Grouped, Contingency and Parts of whole tables always have a **Row titles** colu
 
 ### Rows and data sets
 
-In the **Edit** menu, the top bar, or the table's right-click menu:
+In the **Edit** menu, the Data section of the tool panel, or the table's right-click menu:
 
 - **Insert Rows** inserts as many empty rows as you have selected, above the selection.
 - **Delete Rows** deletes the selected rows.

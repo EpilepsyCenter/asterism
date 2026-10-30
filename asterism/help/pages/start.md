@@ -60,21 +60,20 @@ You can drag graphs, tables and results from the sidebar onto a figure.
 
 On the left is the name of the current sheet, with a short description below it (for example "Column table · 2 groups" or "Graph · scatter dot plot · 2 data sets"). Click the name to rename the sheet.
 
-The icon buttons cover the whole project: new project, open, save, undo and redo; new data table, graph, figure and notes, and delete sheet; and the table editing commands (cut, copy, paste, insert and delete rows and data sets, exclude values). When the window is narrow, buttons that don't fit move into a **»** menu. **Export** at the right exports the current graph or figure. The last button shows or hides the tool panel.
+Next come small buttons for the whole project: new project, open and save; undo and redo; and print (greyed out: printing isn't available yet). Then labelled buttons: **Table**, **Graph**, **Figure** and **Notes** add a new sheet, **Analyze** opens the Analyze dialog, and **Export** exports the current graph or figure. When the window is narrow, buttons that don't fit move into a **»** menu. The last button shows or hides the tool panel.
 
-A few commands are shown greyed out because they aren't available yet.
+Cut, copy and paste, the row and column commands and **Delete Sheet** are in the menus (with their shortcuts). The row and column commands are also in the tool panel, and **Delete** is in the sidebar's right-click menu.
 
 ### Tool panel
 
-The tool panel groups the commands for what you are working on:
+The tool panel changes with the sheet in front and lists only the commands that apply to it, by name, with their shortcuts. Each section starts with its main command as a filled button.
 
-- **Analyze**: **Analyze…** and the common analyses.
-- **Graph**: **Format Graph…** and graph commands.
-- **Figure**: **Add Graphs and Tables…** and figure layout commands.
-- **Draw**: lines, arrows, boxes, ellipses, text and pictures on a graph.
-- **Text**: font, size and style of the selected text on a graph.
+- **Data table**: **Analyze…**, then the analyses that fit this kind of table, grouped as *Compare groups*, *Describe*, *Fit and relate* and *Transform data*; and **Data**: insert and delete rows and data sets, exclude values, table format.
+- **Graph**: **Format Graph…** and the graph commands; **Draw**: lines, arrows, boxes, ellipses, text and pictures; **Text**: font, size and style of the selected text.
+- **Results**: **Analysis Settings…**, **Analyze Further…** and how the results are calculated.
+- **Figure**: **Add Graphs and Tables…**, text, grid and format commands, and buttons to line panels up.
 
-Buttons that don't apply to the current sheet are greyed out. Every button is also in the menus.
+Every command in the panel is also in the menus.
 
 ### Status bar
 

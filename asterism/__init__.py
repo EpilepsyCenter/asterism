@@ -5,4 +5,4 @@ model and file format), `analysis` (analysis registry) never import Qt; `app` is
 PySide6 desktop application.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"

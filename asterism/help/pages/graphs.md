@@ -155,6 +155,8 @@ You can change most things by working on the graph itself.
 
 - **Click** an element to select it: a data set, an axis, a title, a bracket, the legend or a drawing. Selection handles appear around it. Drag across empty space to select several elements.
 - **Drag** titles, significance brackets, the legend and drawings to move them. The graph itself stays centred.
+- Hold **Shift** while dragging to move straight across or straight up and down.
+- While you drag, edges and centres snap to the edges and centres of the other elements (axes, titles, the plot, other brackets) when they come close, and a dashed guide line shows what lined up.
 - **Arrow keys** nudge a selected data set sideways by 1 pt (5 pt with Shift). On XY graphs you can also nudge it up and down, for example to make a waterfall plot. Selected drawings move with the arrow keys too.
 - **Double-click** a data set, an axis, a bracket or the legend to open Format Graph at the matching section. Double-clicking a data set picks that data set in the dialog. The legend opens **Style** on column and XY graphs, where **Show the legend (all data sets)** is.
 - **Graph › Show or Hide Legend** turns the legend on or off. **Graph › Nudge Data Set…** opens the nudge settings for the selected data set.
