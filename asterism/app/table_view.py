@@ -215,6 +215,13 @@ class TableHeader(QHeaderView):
         self.setDefaultSectionSize(84)
         self.setMinimumSectionSize(36)
         self._editor: QLineEdit | None = None
+        # Names and titles are centred over all of a data set's sub-columns, but Qt only
+        # repaints from the resized section rightwards: repaint everything, or the
+        # sub-columns to the left keep the text at its old position.
+        self.sectionResized.connect(self._span_resized)
+
+    def _span_resized(self, *_) -> None:
+        self.viewport().update()
 
     @property
     def t(self) -> Table:

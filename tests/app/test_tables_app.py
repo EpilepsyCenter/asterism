@@ -275,3 +275,17 @@ def test_arrows_reach_sub_column_titles(app, close_later):
     assert view.head == ("sub", c)
     QTest.keyClick(view, Qt.Key_Down)
     assert view.head is None and view.currentIndex() == m.index(0, c)
+
+
+def test_resizing_a_sub_column_repaints_the_whole_header(app, close_later, monkeypatch):
+    # A data set's name and title span its sub-columns; Qt alone repaints only from the
+    # resized section rightwards, leaving stale text over the sub-columns to the left.
+    from asterism.app import table_view
+    calls = []
+    monkeypatch.setattr(table_view.TableHeader, "_span_resized", lambda self, *a: calls.append(a))
+    w = _window(app, "nested", replicates=3)
+    close_later(w)
+    t = w.project.tables[0]
+    hdr = w._widget_for(t).horizontalHeader()
+    hdr.resizeSection(2, 200)
+    assert calls
