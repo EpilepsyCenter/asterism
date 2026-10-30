@@ -1,0 +1,39 @@
+---
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+const {
+  title,
+  description = 'ASTERISM — scientific graphing and statistics for labs. Data tables, analyses that stay live, Prism-range graphs and figures, and export that opens essentially final. Free for noncommercial use.',
+} = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content={description} />
+  <link rel="icon" type="image/svg+xml" href={`${base}/logo/asterism-wordmark.svg`} />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+</head>
+<body>
+  <Nav />
+  <slot />
+  <Footer />
+</body>
+</html>

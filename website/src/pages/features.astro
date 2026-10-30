@@ -1,0 +1,296 @@
+---
+import Base from '../layouts/Base.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const link = (p: string) => `${base}${p}`;
+const docs = (anchor: string) => `${link('/docs')}#${anchor}`;
+
+// Each block is one area of the program, in the order you meet them: table,
+// import, analysis, transform, graph, figure, file. The rows under each are
+// the actual contents, not a summary of them — this page is meant to answer
+// "is the thing I need in there?" without downloading anything.
+const blocks = [
+  {
+    n: '01',
+    title: 'Data tables',
+    anchor: 'tables',
+    doc: 'tables',
+    body: 'Eight table types, each with the analyses and graph types that suit it. The type is chosen when the table is made and can be changed afterwards.',
+    rows: [
+      ['Column', 'One group per column. The common case: a few treatments, a value per animal or well.'],
+      ['XY', 'An X value per row, one or more Y data sets against it. Dates can be used as X.'],
+      ['Grouped', 'Two factors at once — rows are one, data sets the other.'],
+      ['Nested', 'Subjects within groups, so the analysis counts animals rather than cells.'],
+      ['Contingency', 'Counts in a table of categories.'],
+      ['Survival', 'Times with an event or censoring code.'],
+      ['Parts of whole', 'One column of parts that make up a total.'],
+      ['Multiple variables', 'One row per subject, one column per variable.'],
+    ],
+    tail: 'Values can be entered one per cell, as replicates side by side, or as a mean with SD, SEM, %CV or N already worked out. Any value can be excluded from the analysis without deleting it — it stays visible in the table and hollow on the graph.',
+  },
+  {
+    n: '02',
+    title: 'Importing',
+    anchor: 'importing',
+    doc: 'importing',
+    body: 'Spreadsheets and instrument exports become tables of the right type, with a preview of what will be made before anything is created.',
+    rows: [
+      ['CSV, TSV, TXT', 'Separator detected. Decimal commas understood. Numbers stored as text are read as numbers.'],
+      ['Excel', '.xlsx, .xlsm and old .xls. Every sheet is read, with the values the cells show rather than their formulas.'],
+      ['Wide or long', 'A column per group, or one row per observation with a group column — either layout is understood.'],
+      ['QuantStudio qPCR', 'ΔΔCt relative expression, standard curves and titres from the instrument export.'],
+      ['Prism', '.prism and .pzfx — see below.'],
+      ['Lab exports', 'Result tables from NED-Net and TRACER are recognised and come in with their columns named.'],
+    ],
+    tail: 'An import can be changed afterwards: reopen it, point it at a newer version of the file, and the table, its analyses and its graphs follow.',
+  },
+  {
+    n: '03',
+    title: 'Comparing groups',
+    anchor: 't-tests',
+    doc: 'analyses-groups-t-tests',
+    body: 'The tests a bench project actually needs, with the design, the test and the options separated so the choice is explicit rather than implied.',
+    rows: [
+      ['t tests', 'Paired or unpaired, Student’s or Welch, parametric or the nonparametric equivalent, one- or two-tailed. Also from means and SDs alone.'],
+      ['One-way ANOVA', 'Ordinary, repeated measures, Welch, or Kruskal–Wallis, with the usual multiple-comparison families and corrections.'],
+      ['Two-way ANOVA', 'Both factors, their interaction, and comparisons within or across rows. Repeated measures on either factor or both.'],
+      ['Nested', 'Nested t test and nested one-way ANOVA, so replicates inside a subject are not counted as independent.'],
+      ['Multiple t tests', 'A test per row with a correction across the family, for a wide screen.'],
+      ['Normality and outliers', 'Shapiro–Wilk, D’Agostino–Pearson, Anderson–Darling, Kolmogorov–Smirnov; ROUT and Grubbs.'],
+      ['One-sample', 'Against a fixed value, parametric or not.'],
+      ['Frequency distribution', 'Counts or percentages into bins, cumulative if you want, ready to graph.'],
+    ],
+    tail: 'Student’s t test is the default, as it is in Prism, so a reanalysis matches. Welch can be made the default for new t tests in Settings if you would rather not assume equal variances.',
+  },
+  {
+    n: '04',
+    title: 'Regression and curves',
+    anchor: 'nonlinear-regression',
+    doc: 'analyses-xy-nonlinear-regression',
+    body: 'Fits are drawn on the graph of the data they came from and move with it. Parameters come back with confidence intervals and the usual goodness-of-fit numbers.',
+    rows: [
+      ['Nonlinear regression', 'Around forty built-in models across dose-response, enzyme kinetics, binding, exponentials, growth, peaks, polynomials and sine waves.'],
+      ['Your own equation', 'Typed in, with the names you use becoming the parameters to fit; initial values and constraints optional.'],
+      ['Model comparison', 'Two models on the same data, compared by F test or AICc.'],
+      ['Linear regression', 'Slope, intercept, confidence bands, and a test of whether slopes differ between data sets.'],
+      ['Standard curves', 'Unknowns read off the fitted curve, with the interpolation shown.'],
+      ['Correlation', 'Pearson or Spearman, one pair or a matrix.'],
+      ['Area under the curve', 'Total and peak-by-peak, with a baseline you set.'],
+    ],
+  },
+  {
+    n: '05',
+    title: 'Counts, survival and proportions',
+    anchor: 'contingency',
+    doc: 'analyses-counts-contingency',
+    body: 'The analyses for data that are not measurements.',
+    rows: [
+      ['Contingency tables', 'Chi-square or Fisher’s exact, with odds ratio, relative risk or difference between proportions and their intervals.'],
+      ['Survival', 'Kaplan–Meier curves, median survival, log-rank and Gehan–Breslow–Wilcoxon, hazard ratio, trend across ordered groups.'],
+      ['Fraction of total', 'Each value as a percentage of its column, row, or the whole table.'],
+    ],
+  },
+  {
+    n: '06',
+    title: 'Transforms',
+    anchor: 'transform',
+    doc: 'transforms-transform',
+    body: 'Each transform makes a new table that stays linked to the original, so the chain from raw numbers to the graph in the paper is visible in the sidebar.',
+    rows: [
+      ['Transform', 'Logs, reciprocals, powers, trigonometric functions, or an equation you type.'],
+      ['Normalize', 'To a chosen 0% and 100%, to the first or largest value, or to a row of controls.'],
+      ['Remove baseline', 'Subtract or divide by a baseline column, with the arithmetic shown.'],
+      ['Prune rows', 'Keep every nth row, or average over a window, for a long recording.'],
+      ['Transpose', 'Rows into columns, carrying the titles.'],
+      ['Smooth, differentiate, integrate', 'For traces and time series.'],
+      ['Observed vs. expected', 'With a chi-square or binomial test of the difference.'],
+    ],
+  },
+  {
+    n: '07',
+    title: 'Graphs',
+    anchor: 'graph-types',
+    doc: 'graphs-graph-types',
+    body: 'The gallery shows each graph type drawn with your own data, so the choice is made by looking rather than by name. Graphs update when the data or the analysis changes.',
+    rows: [
+      ['Column', 'Fifteen types: scatter with mean and SEM, scatter on bars, bars with points, box and whiskers, Tukey boxes, violins, floating bars, aligned dots at the median, before-after, and horizontal versions.'],
+      ['Grouped', 'Fourteen: side by side, separated, stacked, stacked to 100%, connected means, every replicate, heat map, horizontal, and back-to-back for pyramids.'],
+      ['Nested', 'Subject means over the replicates they came from, so the structure of the design is on the graph.'],
+      ['XY', 'Symbols, lines, both, error bars, fitted curves, and SuperPlots.'],
+      ['Survival', 'Staircase curves with censoring ticks and confidence bands.'],
+      ['Other', 'Contingency, parts of whole as pie or donut, and multiple-variable graphs.'],
+    ],
+    tail: 'Significance brackets are added from the analysis rather than drawn by hand: they know which comparison they mark, and they move and re-stack when the graph is resized or the test is changed.',
+  },
+  {
+    n: '08',
+    title: 'Formatting',
+    anchor: 'formatting',
+    doc: 'formatting',
+    body: 'One dialog with everything in it, and direct editing on the graph itself for the things that are quicker to do by hand. Sizes are in millimetres, so a graph is made at the size it will be printed.',
+    rows: [
+      ['Data sets', 'Plot style, symbols, lines, bars, error bars and whiskers, per data set or all at once.'],
+      ['Axes', 'Range and scale, log axes, ticks, number format, grid lines, bands, breaks, and a right-hand Y axis.'],
+      ['Titles and fonts', 'Per element, with the font, size, weight and colour.'],
+      ['Size and frame', 'Plot height, column width or X-axis length in millimetres; frame, offset axes, or none.'],
+      ['Colour schemes', 'Including colour-blind-safe sets.'],
+      ['Drawings', 'Lines, arrows, shapes and text boxes on the graph.'],
+      ['Plot a function', 'An equation drawn over the data without a table.'],
+      ['Apply to other graphs', 'Push one graph’s formatting onto the rest, so a figure’s panels match.'],
+    ],
+  },
+  {
+    n: '09',
+    title: 'Figures and export',
+    anchor: 'figures',
+    doc: 'figures',
+    body: 'A figure is a page of panels that are still the live graphs, not pictures of them. Fix a number in the table and the panel redraws in place.',
+    rows: [
+      ['Panels', 'Graphs, tables and results sheets placed on a page, with automatic panel letters.'],
+      ['Overlays', 'Two graphs on top of each other, for an inset or a shared axis.'],
+      ['Page format', 'Page size, margins and a grid to align to.'],
+      ['PDF and SVG', 'Vector, with the text still text. In SVG every data set, axis and bracket is its own named group, so a label can still be fixed in Illustrator or Inkscape.'],
+      ['PNG and TIFF', '300 dpi by default, or 150, 600 or 1200.'],
+      ['Copy as picture', 'Straight into Word, PowerPoint, Keynote or Illustrator as vector.'],
+    ],
+    tail: 'A graph exports at the size it is drawn, plus a narrow margin; a figure exports at exactly its page size. What you see at 100% is what you get, so nothing needs scaling afterwards.',
+  },
+  {
+    n: '10',
+    title: 'Files, autosave and updates',
+    anchor: 'files',
+    doc: 'settings',
+    body: 'A project is one file holding its tables, analyses, graphs and figures. It lives on your own disk and needs no account.',
+    rows: [
+      ['.asterism', 'One file per project, one window per file.'],
+      ['Autosave', 'Periodic recovery copies, offered back after a crash.'],
+      ['Reads', '.asterism, .prism, .pzfx, spreadsheets and instrument exports.'],
+      ['Updates', 'Checked and installed from inside the app, so Releases is a one-time download.'],
+      ['Offline', 'Nothing is sent anywhere. The help is built in.'],
+    ],
+  },
+];
+---
+<Base title="What's inside — ASTERISM">
+<style>
+.page-hd .wrap { max-width: 68ch; }
+.page-hd p.lead { color: var(--ink-soft); font-size: 17px; line-height: 1.7; margin: 18px 0 0; }
+
+.blocks { padding: 10px 0 64px; }
+.block {
+  padding: 42px 0;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 40px;
+  align-items: start;
+}
+.block:first-child { border-top: none; }
+
+.block .lede { position: sticky; top: calc(var(--nav-h) + 24px); }
+.block .num { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.08em; }
+.block h2 {
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  margin: 10px 0 0;
+  line-height: 1.12;
+}
+.block .lede p { color: var(--ink-soft); font-size: 15.5px; line-height: 1.65; margin: 14px 0 0; }
+.block .lede a.more {
+  display: inline-block;
+  margin: 16px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  text-decoration: none;
+  padding-bottom: 1px;
+}
+.block .lede a.more:hover { border-bottom-color: var(--accent); }
+
+/* The rows are the substance of the page, so they get the card and the room. */
+.rows {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.rows dl { margin: 0; }
+.rows .r {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 18px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--rule);
+}
+.rows .r:first-child { border-top: none; }
+.rows dt {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.rows dd { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
+.block .tail {
+  margin: 16px 0 0;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 14px;
+}
+
+@media (max-width: 900px) {
+  .block { grid-template-columns: 1fr; gap: 24px; }
+  .block .lede { position: static; }
+  .block h2 { font-size: 24px; }
+}
+@media (max-width: 600px) {
+  .rows .r { grid-template-columns: 1fr; gap: 4px; }
+}
+</style>
+
+<div class="scope-zone">
+  <header class="page-hd"><div class="wrap">
+    <div class="eyebrow">What's inside</div>
+    <h1>Everything in the program, <span>listed.</span></h1>
+    <p class="lead">Written to answer one question before you download anything: is the analysis, the graph type or the export format you need actually in there? Each row below is a real part of the program, not a category. Where something is partial or has a caveat, it says so.</p>
+  </div></header>
+</div>
+
+<div class="blocks"><div class="wrap">
+  {blocks.map((b) => (
+    <section class="block" id={b.anchor}>
+      <div class="lede">
+        <div class="num">{b.n}</div>
+        <h2>{b.title}</h2>
+        <p>{b.body}</p>
+        <a class="more" href={docs(b.doc)}>In the help →</a>
+      </div>
+      <div>
+        <div class="rows"><dl>
+          {b.rows.map(([k, v]) => (
+            <div class="r"><dt>{k}</dt><dd>{v}</dd></div>
+          ))}
+        </dl></div>
+        {b.tail && <p class="tail">{b.tail}</p>}
+      </div>
+    </section>
+  ))}
+</div></div>
+
+<section class="band">
+  <div class="wrap">
+    <div class="eyebrow">Next</div>
+    <h2>How a project <span>comes together.</span></h2>
+    <p>The workflow page follows one experiment from an empty table to an exported figure, which is the quickest way to see whether the program fits how you work.</p>
+    <div class="btns">
+      <a class="btn-lg primary" href={link('/workflow')}>See the workflow</a>
+      <a class="btn-lg" href={link('/docs')}>Read the help</a>
+    </div>
+  </div>
+</section>
+</Base>

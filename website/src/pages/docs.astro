@@ -1,0 +1,411 @@
+---
+import Base from '../layouts/Base.astro';
+import { marked } from 'marked';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const link = (p: string) => `${base}${p}`;
+const repo = 'https://github.com/EpilepsyCenter/asterism';
+const releases = `${repo}/releases`;
+const helpUrl = `${repo}/tree/main/asterism/help/pages`;
+
+// The help is read from the application's own source, so the site and the
+// manual inside the program cannot drift apart.
+const rawModules = import.meta.glob(
+  '../../../asterism/help/pages/*.md',
+  { eager: true, query: '?raw', import: 'default' }
+) as Record<string, string>;
+
+const sourceFor = (slug: string): string | undefined =>
+  Object.entries(rawModules).find(([p]) => p.endsWith('/' + slug + '.md'))?.[1];
+
+// Reading order, copied from PAGES in asterism/help/__init__.py. Keep it in
+// step with that list — it is the order the in-app help uses. "shortcuts" is
+// listed there but has no markdown file, so it drops out below rather than
+// being hardcoded away.
+const PAGE_ORDER: [string, string][] = [
+  ['start', 'Getting started'],
+  ['tables', 'Data tables'],
+  ['importing', 'Importing data'],
+  ['prism', 'Prism files'],
+  ['graphs', 'Graphs'],
+  ['formatting', 'Formatting graphs'],
+  ['analyses', 'Analyses'],
+  ['analyses-groups', 'Comparing groups'],
+  ['analyses-xy', 'Regression and curves'],
+  ['analyses-counts', 'Counts, survival and proportions'],
+  ['transforms', 'Transforms'],
+  ['figures', 'Figures and export'],
+  ['settings', 'Settings, autosave and files'],
+  ['methods', 'How results are calculated'],
+  ['shortcuts', 'Keyboard shortcuts'],
+];
+
+const PAGES = PAGE_ORDER.filter(([slug]) => sourceFor(slug) !== undefined);
+const available = new Set(PAGES.map(([slug]) => slug));
+const missing = PAGE_ORDER.filter(([slug]) => !available.has(slug)).map(([, t]) => t);
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+}
+
+interface Heading { level: number; text: string; anchor: string }
+
+// Pull the headings out in document order and strip the explicit {#anchor}
+// syntax the help uses, so marked never sees it as body text. Code fences are
+// skipped so a commented '#' inside one is not mistaken for a heading.
+function scanHeadings(md: string): { md: string; heads: Heading[] } {
+  const heads: Heading[] = [];
+  let inFence = false;
+  const lines = md.split('\n').map((line) => {
+    if (/^\s*```/.test(line)) { inFence = !inFence; return line; }
+    if (inFence) return line;
+    const m = /^(#{1,3})\s+(.+?)\s*$/.exec(line);
+    if (!m) return line;
+    let text = m[2];
+    let anchor: string | null = null;
+    const am = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/.exec(text);
+    if (am) { anchor = am[1]; text = text.slice(0, am.index); }
+    const clean = text.replace(/`/g, '').trim();
+    heads.push({ level: m[1].length, text: clean, anchor: anchor ?? slugify(clean) });
+    return m[1] + ' ' + text.trim();
+  });
+  return { md: lines.join('\n'), heads };
+}
+
+// Every help page lands on this one page, so ids are prefixed with the page's
+// own slug: the page title becomes #<slug>, a heading inside it
+// #<slug>-<anchor>. The other pages of this site link into that scheme.
+const idFor = (slug: string, h: Heading) =>
+  h.level === 1 ? slug : `${slug}-${h.anchor}`;
+
+// Links are rewritten in a single pass: two passes would catch the output of
+// the first, turning "#graphs-axes" into "#graphs-graphs-axes".
+function rewriteLinks(md: string, slug: string): string {
+  // A link to a page that does not exist degrades to its own text.
+  let out = md.replace(
+    /\[([^\]]+)\]\(([a-z0-9-]+)\.md(?:#[A-Za-z0-9_-]+)?\)/g,
+    (m, text, page) => (available.has(page) ? m : text)
+  );
+  return out.replace(/\]\(([^)]+)\)/g, (m, target: string) => {
+    const t = target.trim();
+    if (/^(https?:|mailto:|#?$)/.test(t)) return m;
+    const cross = /^([a-z0-9-]+)\.md(?:#([A-Za-z0-9_-]+))?$/.exec(t);
+    if (cross) {
+      const [, page, anchor] = cross;
+      if (!available.has(page)) return m;
+      return `](#${anchor ? `${page}-${anchor}` : page})`;
+    }
+    const inPage = /^#([A-Za-z0-9_-]+)$/.exec(t);
+    if (inPage) return `](#${slug}-${inPage[1]})`;
+    return m;
+  });
+}
+
+interface Section { slug: string; title: string; html: string; subs: Heading[] }
+
+const sections: Section[] = [];
+for (const [slug, title] of PAGES) {
+  const raw = sourceFor(slug)!;
+  const { md, heads } = scanHeadings(rewriteLinks(raw, slug));
+  let html = await marked.parse(md, { gfm: true });
+
+  // marked emits the headings in source order, so the scanned list can be
+  // consumed in step with them.
+  let i = 0;
+  html = html.replace(/<h([1-3])>([\s\S]*?)<\/h\1>/g, (_m, levelStr, inner) => {
+    const h = heads[i++];
+    const id = h ? idFor(slug, h) : '';
+    return `<h${levelStr} id="${id}">${inner}</h${levelStr}>`;
+  });
+
+  // The band of second-level headings belongs under the page title, which is
+  // inside the injected markup, so it is spliced in after the h1 rather than
+  // rendered alongside the article.
+  const subs = heads.filter((h) => h.level === 2);
+  if (subs.length > 1) {
+    const band =
+      '<nav class="in-page" aria-label="Inside ' + title + '">' +
+      subs
+        .map((h) => '<a href="#' + slug + '-' + h.anchor + '">' + h.text + '</a>')
+        .join('') +
+      '</nav>';
+    html = html.replace(/<\/h1>/, '</h1>' + band);
+  }
+
+  sections.push({ slug, title, html, subs });
+}
+
+const sectionCount = sections.length;
+---
+<Base title="Help — ASTERISM">
+<style>
+.doc-layout { display: grid; grid-template-columns: 232px 1fr; gap: 44px; padding: 44px 0 40px; align-items: start; }
+
+aside.side {
+  position: sticky;
+  top: calc(var(--nav-h) + 20px);
+  max-height: calc(100vh - var(--nav-h) - 40px);
+  overflow: auto;
+  padding-right: 8px;
+  font-size: 13.5px;
+}
+aside.side h5 {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+aside.side h5.tail { margin-top: 26px; }
+aside.side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+aside.side a {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--muted);
+  line-height: 1.45;
+  transition: background 0.12s, color 0.12s;
+}
+aside.side a:hover { background: var(--card); color: var(--ink); }
+aside.side ol { list-style: none; margin: 0; padding: 0; counter-reset: pg; }
+aside.side ol li { counter-increment: pg; display: flex; gap: 8px; align-items: baseline; }
+aside.side ol li::before {
+  content: counter(pg, decimal-leading-zero);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--rule-strong);
+  flex: none;
+  padding-left: 2px;
+}
+aside.side ol a { padding-left: 4px; }
+
+main.doc { min-width: 0; max-width: 760px; }
+
+.doc-header { padding-bottom: 30px; margin-bottom: 20px; border-bottom: 1px solid var(--rule); }
+.doc-header .crumb {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.doc-header h1 { font-weight: 600; font-size: 40px; line-height: 1.05; letter-spacing: -0.032em; margin: 0 0 16px; }
+.doc-header h1 span { color: var(--accent); }
+.doc-header .lead { color: var(--ink-soft); font-size: 17px; line-height: 1.65; max-width: 62ch; }
+.doc-header .meta { margin-top: 20px; display: flex; gap: 7px; flex-wrap: wrap; }
+
+/* Each help page keeps its own band of contents, because the sidebar lists the
+   fourteen pages rather than every heading in all of them. */
+.sec { padding-top: 26px; }
+.sec + .sec { border-top: 1px solid var(--rule); margin-top: 44px; }
+.sec .sec-hd { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.note-missing {
+  margin: 0 0 30px;
+  padding: 12px 16px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 900px) {
+  .doc-layout { grid-template-columns: 1fr; gap: 24px; }
+  aside.side { position: static; max-height: none; }
+  .doc-header h1 { font-size: 32px; }
+}
+</style>
+
+<!-- The help body is injected with set:html and so carries no Astro scope
+     marker; its styles have to be global. -->
+<style is:global>
+.help-body { font-size: 15.5px; line-height: 1.7; color: var(--ink-soft); }
+
+.help-body h1 {
+  font-weight: 600;
+  font-size: 30px;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin: 6px 0 18px;
+  scroll-margin-top: calc(var(--nav-h) + 20px);
+}
+.help-body h2 {
+  font-weight: 600;
+  font-size: 21px;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  margin: 46px 0 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--rule);
+  scroll-margin-top: calc(var(--nav-h) + 20px);
+}
+.help-body h3 {
+  font-weight: 600;
+  font-size: 15.5px;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 30px 0 9px;
+  scroll-margin-top: calc(var(--nav-h) + 20px);
+}
+
+.help-body p { margin: 0 0 14px; }
+.help-body strong { color: var(--ink); font-weight: 600; }
+
+.help-body code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--card);
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink);
+}
+.help-body pre {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow: auto;
+  margin: 0 0 18px;
+}
+.help-body pre code { background: transparent; border: none; padding: 0; }
+
+.help-body .in-page {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: -6px 0 26px;
+}
+.help-body .in-page a {
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  padding: 3px 11px;
+  transition: border-color 0.12s, color 0.12s;
+}
+.help-body .in-page a:hover { border-color: var(--accent); color: var(--accent-ink); }
+
+.help-body a { color: var(--accent); }
+.help-body a:hover { text-decoration: underline; }
+
+.help-body ul, .help-body ol { padding-left: 22px; margin: 0 0 16px; }
+.help-body li { margin-bottom: 5px; }
+.help-body ul li::marker { color: var(--rule-strong); }
+
+/* The graph-type and model lists are long two-column tables; the first column
+   is the name, so it takes the ink colour. */
+.help-body table { width: 100%; border-collapse: collapse; margin: 0 0 18px; font-size: 14px; }
+.help-body th, .help-body td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+.help-body th {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.help-body td:first-child { color: var(--ink); }
+
+/* The help uses > quotes as note boxes, the same as the program does. */
+.help-body blockquote {
+  border-left: 2px solid var(--accent);
+  padding: 11px 16px;
+  margin: 0 0 16px;
+  background: var(--card);
+  border-radius: 0 6px 6px 0;
+}
+.help-body blockquote p:last-child { margin-bottom: 0; }
+
+.help-body kbd {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+.help-body hr { border: none; border-top: 1px solid var(--rule); margin: 32px 0; }
+</style>
+
+<div class="scope-zone">
+<header class="page-hd"><div class="wrap">
+  <div>
+    <div class="eyebrow">Help · v0.1.1</div>
+    <h1>The built-in <span>help.</span></h1>
+    <p class="sub">The same help that ships inside the program, served from <a href={helpUrl}><code>asterism/help/pages</code></a> in the repository.</p>
+  </div>
+  <div class="meta">
+    <span><strong>{sectionCount}</strong> pages</span>
+    <span><strong>v0.1.1</strong> current</span>
+    <span class="led">Single page</span>
+  </div>
+</div></header>
+</div>
+
+<div class="wrap doc-layout">
+  <aside class="side">
+    <h5>Contents</h5>
+    <ol>
+      {sections.map((s) => (
+        <li><a href={`#${s.slug}`}>{s.title}</a></li>
+      ))}
+    </ol>
+    <h5 class="tail">Source</h5>
+    <ul>
+      <li><a href={helpUrl}>help/pages</a></li>
+      <li><a href={repo}>Repository</a></li>
+      <li><a href={releases}>Releases</a></li>
+    </ul>
+  </aside>
+
+  <main class="doc">
+    <div class="doc-header">
+      <div class="crumb"><span>Help</span><span style="opacity:.4;">/</span><span>All pages</span></div>
+      <h1>ASTERISM <span>help.</span></h1>
+      <p class="lead">Every page of the in-app help on one page, in reading order: the tables, the analyses and how each result is calculated, the graph and formatting options, figures and export, and the file format. It is the whole reference, so use the contents rather than scrolling.</p>
+      <div class="meta">
+        <span class="chip">v0.1.1</span>
+        <span class="chip">macOS · Windows · Linux</span>
+        <span class="chip">Free for noncommercial use</span>
+      </div>
+    </div>
+
+    {missing.length > 0 && (
+      <p class="note-missing">
+        One page of the in-app help has no source file in the repository and is
+        left out here: <strong>{missing.join(', ')}</strong>. It is listed in the
+        program's own contents, so it may be empty in the app too.
+      </p>
+    )}
+
+    {sections.map((s, i) => (
+      <section class="sec">
+        <div class="sec-hd">{String(i + 1).padStart(2, '0')} / {sectionCount}</div>
+        <article class="help-body" set:html={s.html}></article>
+      </section>
+    ))}
+  </main>
+</div>
+</Base>
