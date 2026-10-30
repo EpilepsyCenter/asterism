@@ -74,3 +74,35 @@ class NavDelegate(QStyledItemDelegate):
                                           int(text_r.width()))
         p.drawText(text_r, Qt.AlignVCenter | Qt.AlignLeft, text)
         p.restore()
+
+
+class FontNameDelegate(QStyledItemDelegate):
+    """Font list rows: each name in its own typeface but at the list's normal size (Qt's
+    font box draws them half again larger), on even 22 px rows. Fonts that can't show
+    Latin letters (symbol fonts) keep the interface font so their names stay readable."""
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        fam = index.data(Qt.DisplayRole)
+        if fam:
+            from PySide6.QtGui import QFont, QFontDatabase
+            if QFontDatabase.WritingSystem.Latin in QFontDatabase.writingSystems(fam):
+                f = QFont(option.font)
+                f.setFamily(fam)
+                option.font = f
+
+    def sizeHint(self, option, index):
+        s = super().sizeHint(option, index)
+        return QSize(s.width(), 22)
+
+
+def font_combo():
+    """A font family box with a calm, readable list: names at normal size, a list wide
+    enough for long names, and more of them visible at once."""
+    from PySide6.QtWidgets import QFontComboBox
+    box = QFontComboBox()
+    box.setItemDelegate(FontNameDelegate(box))
+    box.setMaxVisibleItems(16)
+    box.view().setMinimumWidth(240)
+    box.view().setTextElideMode(Qt.ElideRight)
+    return box

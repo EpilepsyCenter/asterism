@@ -24,6 +24,7 @@ VIEW_MARGIN = 36.0          # points of white kept around the graph when zoomed 
 
 
 HANDLE = 6.0                # handle size on drawings (points at 100 %)
+SNAP_PX = 5.0               # snapping distance while dragging, in screen pixels
 
 
 def _handles(el) -> dict:
@@ -55,6 +56,8 @@ class ElementItem(QGraphicsObject):
         self.setCursor(Qt.ArrowCursor)
         self._press = None
         self._handle = None          # (name, current point) while a handle is dragged
+        self._drag = None            # (press point in parent coords, {item: start pos}) while dragging
+        self.snapper = None          # weak GraphSheet hook: (item, group, delta, axis) -> delta
 
     def boundingRect(self) -> QRectF:
         return self.el.bounds.adjusted(-8, -8, 8, 8)
@@ -109,6 +112,7 @@ class ElementItem(QGraphicsObject):
                     e.accept()
                     return
         self._press = QPointF(self.pos())
+        self._drag = None
         super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
@@ -116,7 +120,40 @@ class ElementItem(QGraphicsObject):
             self._handle = (self._handle[0], e.pos())
             self.update()
             return
-        super().mouseMoveEvent(e)
+        if not (self.flags() & QGraphicsItem.ItemIsMovable) or self._press is None \
+                or not e.buttons() & Qt.LeftButton:
+            super().mouseMoveEvent(e)
+            return
+        parent = self.parentItem()
+        here = parent.mapFromScene(e.scenePos()) if parent else e.scenePos()
+        if self._drag is None:
+            # A click that wobbles a pixel is not a drag (it would snap the element).
+            from PySide6.QtWidgets import QApplication
+            moved = e.screenPos() - e.buttonDownScreenPos(Qt.LeftButton)
+            if moved.manhattanLength() < QApplication.startDragDistance():
+                e.accept()
+                return
+            # What moves together is what a move saves: selected drawings move as a group,
+            # anything else moves alone.
+            group = [self]
+            if self.el.kind == "drawing" and self.scene():
+                group += [it for it in self.scene().selectedItems() if it is not self
+                          and isinstance(it, ElementItem) and it.el.kind == "drawing"]
+            start = parent.mapFromScene(e.buttonDownScenePos(Qt.LeftButton)) if parent \
+                else e.buttonDownScenePos(Qt.LeftButton)
+            self._drag = (start, {it: QPointF(it.pos()) for it in group})
+        start, group = self._drag
+        d = here - start
+        axis = None
+        if e.modifiers() & Qt.ShiftModifier:        # Shift: straight across or straight up/down
+            axis = "x" if abs(d.x()) >= abs(d.y()) else "y"
+            d = QPointF(d.x(), 0.0) if axis == "x" else QPointF(0.0, d.y())
+        snap = self.snapper() if self.snapper is not None else None
+        if snap is not None:
+            d = snap(self, list(group), d, axis)
+        for it, p0 in group.items():
+            it.setPos(p0 + d)
+        e.accept()
 
     def mouseReleaseEvent(self, e):
         if self._handle:
@@ -125,6 +162,10 @@ class ElementItem(QGraphicsObject):
             self.reshaped.emit(self.el.meta["drawing"], name, pt.x(), pt.y())
             return
         super().mouseReleaseEvent(e)
+        self._drag = None
+        snap = self.snapper() if self.snapper is not None else None
+        if snap is not None:
+            snap(None, [], QPointF(), None)                  # clear the guides
         if self._press is not None and (self.pos() - self._press).manhattanLength() > 0.5:
             d = self.pos() - self._press
             self.moved.emit(self.el.id, d.x(), d.y())
@@ -208,6 +249,7 @@ class GraphSheet(QWidget):
         self.items: list[ElementItem] = []
         self._placeholder = None
         self._editing = None
+        self._guides = []           # snap guide lines shown while dragging
         self.tool = None                          # drawing tool in use: line, arrow, rect, ellipse, text
         self._draw_start = None
         self._preview = None
@@ -268,6 +310,7 @@ class GraphSheet(QWidget):
             it.activated.connect(self._activated)
             it.moved.connect(self._moved)
             it.reshaped.connect(self._reshaped)
+            it.snapper = weakref.WeakMethod(self._snap)   # weak: no item → sheet cycle
             it.setSelected(e.id in selected)
             self.items.append(it)
         self.scene.blockSignals(False)
@@ -326,6 +369,58 @@ class GraphSheet(QWidget):
         spec = copy.deepcopy(self.graph.spec)
         spec.sig["hidden"] = []
         self.project.undo.push(SpecCommand(self.graph, spec, "Show All Comparisons"))
+
+    def _snap(self, item, group: list, d: QPointF, axis: str | None) -> QPointF:
+        """While dragging: pull the moving element's edges and centre onto the edges and
+        centres of the other elements when they come within a few pixels, and show a guide
+        line for each snap. `axis` "x"/"y" means the move is locked to that direction.
+        Called with item None to clear the guides."""
+        for g in self._guides:
+            self.scene.removeItem(g)
+        self._guides = []
+        if item is None:
+            return d
+        tol = SNAP_PX / max(self.view.transform().m11(), 0.01)
+        r = item.el.bounds.translated(self._drag_origin(item) + d)
+        others = [it for it in self.items if it not in group and it.el.kind != "errors"]
+        best = {"x": None, "y": None}
+        for it in others:
+            o = it.el.bounds.translated(it.pos())
+            for name, mine, theirs in (
+                    ("x", (r.left(), r.right()), (o.left(), o.right())),
+                    ("y", (r.top(), r.bottom()), (o.top(), o.bottom()))):
+                if axis is not None and axis != name:
+                    continue
+                c_mine = (mine[0] + mine[1]) / 2
+                c_theirs = (theirs[0] + theirs[1]) / 2
+                pairs = [(a, b) for a in mine for b in theirs] + [(c_mine, c_theirs)]
+                for a, b in pairs:
+                    off = b - a
+                    if abs(off) <= tol and (best[name] is None or abs(off) < abs(best[name][0])):
+                        best[name] = (off, b, o)
+        dx = best["x"][0] if best["x"] else 0.0
+        dy = best["y"][0] if best["y"] else 0.0
+        snapped = r.translated(dx, dy)
+        pen = QPen(QColor(theme.LIGHT["accent"]), 1, Qt.DashLine)
+        pen.setCosmetic(True)
+        if best["x"]:
+            _, x, o = best["x"]
+            self._guide(QPointF(x, min(snapped.top(), o.top())), QPointF(x, max(snapped.bottom(), o.bottom())), pen)
+        if best["y"]:
+            _, y, o = best["y"]
+            self._guide(QPointF(min(snapped.left(), o.left()), y), QPointF(max(snapped.right(), o.right()), y), pen)
+        return QPointF(d.x() + dx, d.y() + dy)
+
+    def _drag_origin(self, item) -> QPointF:
+        """Where the item sat when the drag began (its position before any of `d`)."""
+        return item._drag[1][item] if item._drag else QPointF(item.pos())
+
+    def _guide(self, a: QPointF, b: QPointF, pen: QPen) -> None:
+        from PySide6.QtWidgets import QGraphicsLineItem
+        g = QGraphicsLineItem(a.x(), a.y(), b.x(), b.y(), self.root)
+        g.setPen(pen)
+        g.setZValue(1000)
+        self._guides.append(g)
 
     def _moved(self, gid: str, dx: float, dy: float) -> None:
         if gid.startswith("draw-"):

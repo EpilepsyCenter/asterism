@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFontComboB
                                QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSpinBox,
                                QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
+from ..widgets import font_combo
 from ...doc.commands import SpecCommand
 from ...doc.model import Graph, Project
 from ...doc.spec import DataSetStyle
@@ -249,7 +250,7 @@ class FormatGraphDialog(SectionDialog):
                                           ("stars", "Significance stars"),
                                           ("legend", "Legend"))):
             fs = self.spec.fonts[key]
-            fam = QFontComboBox()
+            fam = font_combo()
             fam.setCurrentText(fs.family)
             size = QDoubleSpinBox()
             size.setRange(4, 72)

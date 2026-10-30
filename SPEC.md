@@ -415,18 +415,22 @@ the macOS pasteboard, EMF and SVG on Windows (our own EMF writer), SVG plus PNG 
     graphs sit indented under their table.
   - *Top bar* above the sheet only (not across the sidebar): the sheet's name (click to
     rename) and a one-line description (e.g. "Column table · 2 data sets") on the left;
-    then caption-less icon groups for project-wide actions: **Project** (new, open, save,
-    undo, redo, print), **Sheet** (new table / graph / figure / notes, duplicate, delete),
-    **Edit** (cut, copy, paste, insert/delete rows, exclude, sort, transpose); an
-    **Export** button with a menu at the right end, and a button to show/hide the tool panel.
-    Icons that don't fit go into a "»" overflow menu: the top bar never sets a minimum
-    window width, so the sidebars can always be resized.
-  - *Tool panel* on the right: the tools for the current sheet's content, in captioned
-    groups: **Analyze** (a labelled Analyze… button plus analysis tools), **Graph** (a
-    labelled Format graph… button, graph type, axes, significance, colours, copy
-    formatting, legend, nudge), **Draw**, **Text**. Tools that do not apply to the current
-    sheet are greyed out, not hidden; tools not built yet are greyed out with a tooltip.
-    Icon buttons share the panel's width, so the right margin always equals the left.
+    then a small unlabelled group of file and edit commands (new project, open, save ·
+    undo, redo · print), and labelled buttons, label under the icon, for **Table**,
+    **Graph**, **Figure**, **Notes** (new sheets), **Analyze** and **Export** (a menu); a
+    button at the right end shows/hides the tool panel. Cut/copy/paste, row and column
+    tools, duplicate and delete live in the menus, the tool panel and the sidebar's
+    right-click menu. Buttons that don't fit go into a "»" overflow menu: the top bar
+    never sets a minimum window width, so the sidebars can always be resized.
+  - *Tool panel* on the right: one page per kind of sheet, listing only the commands that
+    apply, by name with their shortcuts (nothing greyed out for "wrong sheet"). Each section
+    has its main command as a filled button. **Data table**: Analyze (the analyses that fit
+    this table type, grouped as Compare groups / Describe / Fit and relate / Transform
+    data) and Data (insert/delete rows and data sets, exclude, table format). **Graph**:
+    Format Graph and the graph commands, Draw (labelled tiles), Text (font controls and
+    icon buttons). **Results**: Analysis Settings, Analyze further, how results are
+    calculated. **Figure**: Add Graphs and Tables, add text, grid, format, Arrange tiles.
+    Notes and All graphs show a short note.
   - Both sidebars are **resizable** by dragging their inner edge (left: about 180–480 px;
     right: about 200–360 px) and can be hidden; widths are remembered between sessions.
   - *Status bar*: muted items on the left (cell position; for a selection, n and mean),

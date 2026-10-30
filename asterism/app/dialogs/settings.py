@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QFontComboBox, QLabel, QLineEdit, QPushButton, QSpinBox
 
+from ..widgets import font_combo
 from .. import prefs
 from ..graph.formatting import SCHEMES
 from .common import FormGrid, Section, SectionDialog, combo, tab_page
@@ -83,7 +84,7 @@ class SettingsDialog(SectionDialog):
                            "“Apply Formatting to Other Graphs” change those."))
         pl.addWidget(Section("Text and axes"))
         g = FormGrid()
-        self.w["graph.font"] = QFontComboBox()
+        self.w["graph.font"] = font_combo()
         self.w["graph.font"].setCurrentText(prefs.get("graph.font"))
         self.w["graph.font_size"] = _spin(prefs.get("graph.font_size"), 6, 24, " pt")
         self.w["graph.axis_width"] = combo([("½ pt", 0.5), ("1 pt", 1.0), ("1½ pt", 1.5), ("2 pt", 2.0)],

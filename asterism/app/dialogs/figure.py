@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QDoubleSpinBox, QFontComboBox, QListWidget, QListWidgetItem,
                                QPlainTextEdit, QSpinBox)
 
+from ..widgets import font_combo
 from ...doc.model import LETTER_STYLES, PAGE_SIZES
 from ..graph.layout import GRAPHABLE_TYPES
 from .common import FormGrid, Section, SectionDialog, combo, tab_page
@@ -97,7 +98,7 @@ class FormatFigureDialog(SectionDialog):
         pl.addWidget(self.c_letters)
         g = FormGrid()
         self.style = combo([(v, k) for k, v in LETTER_STYLES.items()], p.get("letter_style", "A"))
-        self.font = QFontComboBox()
+        self.font = font_combo()
         self.font.setCurrentText(p.get("letter_font", "Arial"))
         self.lsize = QDoubleSpinBox()
         self.lsize.setRange(4, 72)

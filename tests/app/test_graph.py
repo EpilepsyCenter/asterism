@@ -100,3 +100,70 @@ def test_points_can_be_hidden_on_scatter_bar_and_box(app):
     for c in (0, 1):
         g.spec.style(c).appearance, g.spec.style(c).show_points = "box", True
     assert circles() == 20                             # box with all points
+
+
+def _drag(gs, item, by, shift=False, steps=4):
+    """Drag `item` by `by` (view pixels) with real mouse events, optionally holding Shift."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    vp = gs.view.viewport()
+    start = QPointF(gs.view.mapFromScene(item.mapToScene(item.el.bounds.center())))
+    mods = Qt.ShiftModifier if shift else Qt.NoModifier
+
+    def send(kind, pos, buttons):
+        ev = QMouseEvent(kind, pos, QPointF(vp.mapToGlobal(pos.toPoint())), Qt.LeftButton, buttons, mods)
+        QApplication.sendEvent(vp, ev)
+
+    send(QEvent.MouseButtonPress, start, Qt.LeftButton)
+    for i in range(1, steps + 1):
+        send(QEvent.MouseMove, start + QPointF(by[0] * i / steps, by[1] * i / steps), Qt.LeftButton)
+    guides = len(gs._guides)
+    send(QEvent.MouseButtonRelease, start + QPointF(*by), Qt.NoButton)
+    return guides
+
+
+def _sheet(app):
+    from asterism.analysis import engine
+    from asterism.app.graph.view import GraphSheet
+    from asterism.doc.sample import sample_project
+    p = sample_project(engine)
+    gs = GraphSheet(p.graphs[0], p)
+    gs.resize(900, 700)
+    gs.show()
+    app.processEvents()
+    return p, gs
+
+
+def test_shift_drag_moves_straight(app):
+    p, gs = _sheet(app)
+    item = next(it for it in gs.items if it.el.id == "y-title")
+    _drag(gs, item, (-30, 9), shift=True)                # mostly sideways: only x changes
+    ox, oy = p.graphs[0].spec.offsets["y-title"]
+    assert ox < -5 and oy == 0.0
+    item = next(it for it in gs.items if it.el.id == "graph-title")
+    _drag(gs, item, (7, 40), shift=True)                 # mostly down: only y changes
+    ox, oy = p.graphs[0].spec.offsets["graph-title"]
+    assert ox == 0.0 and oy > 5
+
+
+def test_drag_snaps_to_other_elements(app):
+    p, gs = _sheet(app)
+    title = next(it for it in gs.items if it.el.id == "graph-title")
+    axis = next(it for it in gs.items if it.el.kind == "x-axis")
+    z = gs.view.transform().m11()
+    # Drag the title so its left edge ends 2 screen pixels right of the x axis' left edge:
+    # it should land exactly on it, with a guide shown while dragging.
+    gap = (axis.el.bounds.left() - title.el.bounds.left()) * z + 2
+    guides = _drag(gs, title, (gap, 0))
+    moved = next(it for it in gs.items if it.el.id == "graph-title")
+    axis = next(it for it in gs.items if it.el.kind == "x-axis")
+    assert guides >= 1 and not gs._guides                # guide while dragging, gone after
+    assert moved.el.bounds.left() == pytest.approx(axis.el.bounds.left(), abs=0.01)
+
+
+def test_a_wobbly_click_does_not_move(app):
+    p, gs = _sheet(app)
+    item = next(it for it in gs.items if it.el.id == "graph-title")
+    _drag(gs, item, (1, 1), steps=1)                     # under the drag distance
+    assert "graph-title" not in p.graphs[0].spec.offsets

@@ -35,9 +35,10 @@ from .sheets import InfoSheetView, PlaceholderSheet, ResultsSheet
 from .sidebar import ProjectSidebar
 from .table_view import DataTableSheet
 from .toolbar import StatusStrip, ToolPanel, TopBar
+from .widgets import font_combo
 
 APP_NAME = "ASTERISM"
-SIDEBAR_W, TOOLS_W = 250, 232
+SIDEBAR_W, TOOLS_W = 300, 314
 
 _windows: list["MainWindow"] = []
 # Analyses whose result table gets its own graph when they are created (as Prism does).
@@ -180,6 +181,8 @@ class MainWindow(QMainWindow):
         self.a_analyze = A("Analyze…", "function", self.analyze, "Ctrl+Shift+A", "accent", "Analyze data")
         self.a_params = A("Analysis Settings…", "slider.horizontal.3", self.change_params, kinds=("analysis",))
         self.a_desc = A("Descriptive Statistics", "sum", lambda: self._quick("descriptive"))
+        self.a_ttest = A("t Test (and Nonparametric)…", "rectangle.split.2x1", lambda: self._quick("ttest"), kinds=T,
+                         tip="Compare two groups: unpaired or paired t test, Mann-Whitney or Wilcoxon")
         self.a_anova = A("One-way ANOVA…", "square.split.1x2", lambda: self._quick("anova1"), kinds=T)
         self.a_normality = A("Normality Tests…", "checkmark.seal", lambda: self._quick("normality"), kinds=T)
         self.a_freq = A("Frequency Distribution…", "chart.bar.xaxis", lambda: self._quick("frequency"), kinds=T)
@@ -212,10 +215,7 @@ class MainWindow(QMainWindow):
         self._table_types[self.a_anova2] = {"grouped", "xy"}
         self._table_types[self.a_multi_t] = {"grouped", "xy"}
         self._table_types[self.a_nested] = {"nested"}
-        analyze_later = [self.a_cont, self.a_surv, self.a_frac, self.a_nonlin, self.a_linreg, self.a_corr, self.a_auc,
-                         self.a_anova, self.a_anova2, self.a_multi_t, self.a_nested,
-                         self.a_normality, self.a_freq, self.a_outliers,
-                         self.a_transform, self.a_normalize]
+        self._table_types[self.a_ttest] = {"column"}
         # Graph
         self.a_fmt_graph = A("Format Graph…", "paintbrush", lambda: self.format_graph(), "Ctrl+Shift+F", "accent", kinds=G)
         self.a_axes = A("Axes…", "ruler", lambda: self.format_graph("y"), kinds=G)
@@ -228,9 +228,6 @@ class MainWindow(QMainWindow):
                             tip="Draw a curve from an equation on an XY graph")
         self.a_nudge = A("Nudge Data Set…", "arrow.up.and.down.and.arrow.left.and.right", self._nudge, kinds=G,
                          tip="Shift a data set sideways (or up, on XY graphs): select it and use the arrow keys")
-        graph_later = [self.a_graph_type,
-                       self.a_scheme, self.a_copy_format,
-                       self.a_legend, self.a_nudge, self.a_function]
         # Draw (M9)
         self.draw_tools = {}
         for kind, text, icon_ in (("line", "Line", "line.diagonal"), ("arrow", "Arrow", "arrow.up.right"),
@@ -244,7 +241,6 @@ class MainWindow(QMainWindow):
         self.a_draw_front = A("Bring to Front", "square.3.layers.3d.top.filled", lambda: self._drawing_op("front"), kinds=G)
         self.a_draw_back = A("Send to Back", "square.3.layers.3d.bottom.filled", lambda: self._drawing_op("back"), kinds=G)
         self.a_draw_align = A("Align Drawings", "align.horizontal.center", self._align_menu, kinds=G)
-        draw = [*self.draw_tools.values(), self.a_picture, self.a_draw_front, self.a_draw_align]
         # Text
         self.a_bold = A("Bold", "bold", lambda: self._font(bold=None), QKeySequence.Bold, kinds=G)
         self.a_italic = A("Italic", "italic", lambda: self._font(italic=None), QKeySequence.Italic, kinds=G)
@@ -259,8 +255,6 @@ class MainWindow(QMainWindow):
         self.a_text_left = A("Align Left", "text.alignleft", lambda: self._align_text("left"), kinds=G)
         self.a_text_center = A("Centre", "text.aligncenter", lambda: self._align_text("center"), kinds=G)
         self.a_text_right = A("Align Right", "text.alignright", lambda: self._align_text("right"), kinds=G)
-        text_later = [self.a_underline, self.a_sup, self.a_sub, self.a_symbol, self.a_text_color,
-                      self.a_text_left, self.a_text_center, self.a_text_right]
         # View
         self.a_overview = A("All Graphs", "square.grid.2x2", self.show_overview, "Ctrl+Shift+G")
         self.a_tags = []
@@ -292,25 +286,25 @@ class MainWindow(QMainWindow):
         self.a_settings = A("Settings…", "gearshape", self.open_settings, "Ctrl+,")
         self.a_settings.setMenuRole(QAction.PreferencesRole)
 
-        self.top_groups = [
-            [self.a_new, self.a_open, self.a_save, self.a_undo, self.a_redo, self.a_print],
-            [self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info,
-             self.a_duplicate, self.a_delete],
-            [self.a_cut, self.a_copy, self.a_paste, self.a_insert_row, self.a_delete_row,
-             self.a_insert_set, self.a_delete_set, self.a_exclude, self.a_sort],
-        ]
+        # Short labels for the labelled top-bar buttons and the panel's tiles (menus keep the full text).
+        for a_, label in ((self.a_new_table, "Table"), (self.a_new_graph, "Graph"), (self.a_new_figure, "Figure"),
+                          (self.a_new_info, "Notes"), (self.a_analyze, "Analyze"), (self.a_picture, "Picture"),
+                          (self.a_draw_front, "Front"), (self.a_draw_back, "Back"), (self.a_draw_align, "Align"),
+                          (self.a_fig_left, "Left edges"), (self.a_fig_top, "Top edges"), (self.a_fig_hc, "Centres"),
+                          (self.a_fig_width, "Same width"), (self.a_fig_front, "Front"), (self.a_fig_back, "Back")):
+            a_.setIconText(label)
+        self.file_groups = [[self.a_new, self.a_open, self.a_save], [self.a_undo, self.a_redo], [self.a_print]]
+        self.top_groups = [[self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info], [self.a_analyze]]
         self.export_actions = [self.a_export_pdf, self.a_export_svg, self.a_export_png, self.a_export_tiff,
                                self.a_copy_graph, self.a_export_table]
-        self.tool_groups = [
-            ("Analyze", self.a_analyze, [self.a_params, self.a_desc, *analyze_later]),
-            ("Graph", self.a_fmt_graph, [self.a_axes, self.a_bracket, self.a_add_to_figure, *graph_later]),
-            ("Figure", self.a_fig_add, [self.a_fig_text, self.a_fig_grid, self.a_fig_left, self.a_fig_top,
-                                        self.a_fig_hc, self.a_fig_width, self.a_fig_front, self.a_fig_back,
-                                        self.a_fig_format]),
-            ("Draw", None, draw),
-            ("Text", "text", None),
+        # Analyses in the tool panel, by purpose; each table type lists only those that apply.
+        self.analysis_groups = [
+            ("Compare groups", [self.a_ttest, self.a_anova, self.a_anova2, self.a_multi_t, self.a_nested,
+                                self.a_cont, self.a_surv]),
+            ("Describe", [self.a_desc, self.a_normality, self.a_outliers, self.a_freq]),
+            ("Fit and relate", [self.a_linreg, self.a_nonlin, self.a_corr, self.a_auc]),
+            ("Transform data", [self.a_transform, self.a_normalize, self.a_frac]),
         ]
-        self.text_actions = [self.a_bold, self.a_italic, *text_later]
         self.project.undo.changed.connect(self._undo_changed)
         self._undo_changed()
 
@@ -343,7 +337,7 @@ class MainWindow(QMainWindow):
         menu("Sheet", [self.a_new_table, self.a_new_graph, self.a_new_figure, self.a_new_info,
                        None, self.a_table_format, self.a_import_settings, None, self.a_duplicate, self.a_delete, None,
                        self.tag_menu, None, self.a_prev, self.a_next])
-        menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_anova,
+        menu("Analyze", [self.a_analyze, self.a_params, None, self.a_desc, self.a_ttest, self.a_anova,
                          self.a_normality, self.a_freq, self.a_outliers, None, self.a_anova2,
                          self.a_multi_t, None, self.a_nested, None, self.a_nonlin, self.a_linreg,
                          self.a_corr, self.a_auc, None, self.a_cont, self.a_surv, self.a_frac, None,
@@ -387,7 +381,7 @@ class MainWindow(QMainWindow):
         self.font_size.setFixedWidth(74)
         self.font_size.setCurrentText("12")
         self.font_size.textActivated.connect(lambda s: self._font(size=float(s)))
-        self.font_family = QFontComboBox()
+        self.font_family = font_combo()
         self.font_family.setMinimumWidth(0)
         self.font_family.setCurrentText("Arial")
         self.font_family.currentFontChanged.connect(lambda f: self._font(family=f.family()))
@@ -405,7 +399,7 @@ class MainWindow(QMainWindow):
         self.sidebar.setMinimumWidth(180)
         self.sidebar.setMaximumWidth(480)
 
-        self.top = TopBar(self.top_groups, self.export_actions, self.a_toggle_tools)
+        self.top = TopBar(self.file_groups, self.top_groups, self.export_actions, self.a_toggle_tools)
         self.top.title.renamed.connect(self._rename_current)
         self.stack = QStackedWidget()
         self.status = StatusStrip(self.a_toggle_sidebar)
@@ -420,7 +414,7 @@ class MainWindow(QMainWindow):
         cv.addWidget(self.stack, 1)
         cv.addWidget(self.status)
 
-        self.tools = ToolPanel(self.tool_groups, self.text_widgets, self.text_actions)
+        self.tools = ToolPanel()
         self.tools.setMinimumWidth(200)
         self.tools.setMaximumWidth(360)
 
@@ -961,6 +955,7 @@ class MainWindow(QMainWindow):
         self._overview_subtitle()
         self.status.zoom_w.setVisible(False)
         self._sync_actions()
+        self._sync_panel()
         self._update_status()
 
     def _overview_subtitle(self) -> None:
@@ -1051,6 +1046,7 @@ class MainWindow(QMainWindow):
         if is_table:
             w.setFocus()
         self._sync_actions()
+        self._sync_panel()
         self._update_status()
         self._sync_text_controls()
 
@@ -1072,6 +1068,78 @@ class MainWindow(QMainWindow):
         ref = getattr(ft, "import_ref", None) if ft is not None else None
         self.a_import_settings.setEnabled(bool(ref) and ref.get("session") in self.project.imports)
         self._undo_changed()
+
+    # ------------------------------------------------------------------ tool panel
+
+    def _sync_panel(self) -> None:
+        """Show the tool panel's page for the current sheet."""
+        s = self.current
+        if isinstance(s, Table):
+            self.tools.show_page(f"table:{s.table_type}", lambda: self._table_page(s.table_type))
+        elif isinstance(s, Graph) and s.table.table_type not in GRAPHABLE_TYPES:
+            self.tools.show_page("graph-placeholder", lambda: [
+                ("head", "Graph"), ("note", "This kind of graph can't be drawn yet, so there is nothing to format.")])
+        elif isinstance(s, Graph):
+            self.tools.show_page("graph", self._graph_page)
+        elif isinstance(s, Analysis):
+            self.tools.show_page("analysis", self._results_page)
+        elif isinstance(s, FigureSheet):
+            self.tools.show_page("figure", self._figure_page)
+        elif isinstance(s, InfoSheet):
+            self.tools.show_page("info", lambda: [
+                ("head", "Notes"), ("note", "Write notes about the experiment here. They are saved with the project.")])
+        else:
+            self.tools.show_page("none", lambda: [
+                ("head", "Tools"), ("note", "Pick a sheet in the sidebar to see its tools here.")])
+
+    # Shorter names in the panel where the menu name doesn't fit (tooltips keep the details).
+    _PANEL_NAMES = {"t Test (and Nonparametric)…": "t Test…",
+                    "Exclude or Include Values": "Exclude Values",
+                    "Apply Formatting to Other Graphs…": "Format Other Graphs…"}
+
+    def _table_page(self, table_type: str) -> list:
+        items = [("head", "Analyze"), ("primary", self.a_analyze)]
+        for title, actions in self.analysis_groups:
+            fits = [a for a in actions if table_type in self._table_types.get(a, {table_type})]
+            if fits:
+                items.append(("sub", title))
+                items += [("row", a, self._PANEL_NAMES.get(a.text())) for a in fits]
+        items += [("head", "Data")]
+        items += [("row", a, self._PANEL_NAMES.get(a.text())) for a in (
+            self.a_insert_row, self.a_delete_row, self.a_insert_set, self.a_delete_set, self.a_exclude,
+            self.a_table_format)]
+        return items
+
+    def _graph_page(self) -> list:
+        d = self.draw_tools
+        return [
+            ("head", "Graph"), ("primary", self.a_fmt_graph),
+            *[("row", a, self._PANEL_NAMES.get(a.text())) for a in (
+                self.a_graph_type, self.a_axes, self.a_bracket, self.a_legend, self.a_scheme, self.a_copy_format,
+                self.a_nudge, self.a_function, self.a_add_to_figure)],
+            ("head", "Draw"),
+            ("tiles", [d["line"], d["arrow"], d["rect"], d["ellipse"], d["text"], self.a_picture,
+                       self.a_draw_front, self.a_draw_back, self.a_draw_align]),
+            ("head", "Text"), ("widgets", self.text_widgets),
+            ("icons", [self.a_bold, self.a_italic, self.a_underline, self.a_sup, self.a_sub]),
+            ("icons", [self.a_symbol, self.a_text_color, self.a_text_left, self.a_text_center, self.a_text_right]),
+        ]
+
+    def _results_page(self) -> list:
+        return [
+            ("head", "Analysis"), ("primary", self.a_params),
+            ("row", self.a_analyze, "Analyze Further…"),
+            ("row", self.a_help_methods),
+        ]
+
+    def _figure_page(self) -> list:
+        return [
+            ("head", "Figure"), ("primary", self.a_fig_add),
+            *[("row", a) for a in (self.a_fig_text, self.a_fig_grid, self.a_fig_format)],
+            ("head", "Arrange"),
+            ("tiles", [self.a_fig_left, self.a_fig_top, self.a_fig_hc, self.a_fig_width, self.a_fig_front,
+                       self.a_fig_back]),
+        ]
 
     def _update_status(self) -> None:
         w = self.stack.currentWidget()
@@ -1107,6 +1175,7 @@ class MainWindow(QMainWindow):
                 self.top.title.set_name("")
                 self.top.subtitle.setText("")
                 self._sync_actions()
+                self._sync_panel()
 
     def _step_sheet(self, step: int) -> None:
         sheets = self._all_sheets()
@@ -1216,7 +1285,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Analyze", "This analysis needs two or more data sets "
                                     "with values.")
             return
-        if key == "multiple_t" and len(cols) != 2:
+        if key in ("multiple_t", "ttest") and len(cols) != 2:
             self.analyze()          # let the user pick the two data sets
             return
         from . import prefs

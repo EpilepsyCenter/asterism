@@ -302,18 +302,25 @@ QLineEdit#SheetTitle {{ background: transparent; border: 1px solid transparent; 
 QLineEdit#SheetTitle:hover {{ border: 1px solid {control_border}; background: {field}; }}
 QLineEdit#SheetTitle:focus {{ border: 1px solid {accent}; background: {field}; }}
 QFrame#ToolSep {{ background: {border}; border: none; }}
-QToolBar#TopTools {{ background: transparent; border: none; spacing: 2px; padding: 0; }}
-QToolBar#TopTools::separator {{ background: {border}; width: 1px; margin: 9px 7px; }}
-QToolBar#TopTools QToolButton {{ border-radius: 6px; padding: 5px; }}
-QToolBar#TopTools QToolButton#qt_toolbar_ext_button {{ padding: 2px; }}
+QToolBar#FileTools, QToolBar#TopTools {{ background: transparent; border: none; spacing: 1px; padding: 0; }}
+QToolBar#FileTools::separator, QToolBar#TopTools::separator {{ background: {border}; width: 1px; margin: 12px 6px; }}
+QToolBar#FileTools QToolButton {{ border-radius: 6px; padding: 5px; }}
+QToolBar#TopTools QToolButton {{ border-radius: 6px; padding: 3px 4px 2px 4px; min-width: 42px; font-size: 11px; }}
+QToolBar#TopTools QToolButton::menu-indicator {{ image: none; width: 0; }}
+QToolBar#FileTools QToolButton#qt_toolbar_ext_button,
+QToolBar#TopTools QToolButton#qt_toolbar_ext_button {{ padding: 2px; min-width: 0; }}
 QToolButton#TopTool, QToolButton#Tool {{ border-radius: 6px; padding: 0; }}
-QToolButton#ExportButton, QToolButton#WideTool {{ background: {field}; border: 1px solid {control_border};
-    border-radius: 6px; padding: 3px 10px; font-weight: 500; }}
-QToolButton#ExportButton:hover, QToolButton#WideTool:hover {{ background: {surface_hover}; }}
-QToolButton#ExportButton:disabled, QToolButton#WideTool:disabled {{ color: {disabled}; background: {chrome}; }}
-QToolButton#ExportButton::menu-indicator {{ image: none; width: 0; }}
 QWidget#ToolPanel {{ background: {chrome}; }}
-QLabel#ToolGroup {{ color: {muted}; font-size: 11px; font-weight: 600; }}
+QLabel#PanelHead {{ color: {text}; font-size: 12px; font-weight: 600; }}
+QLabel#PanelSub {{ color: {muted}; font-size: 10px; font-weight: 600; letter-spacing: 0.4px; }}
+QLabel#PanelNote {{ color: {muted}; font-size: 12px; }}
+QToolButton#PanelPrimary {{ background: {accent}; color: {on_accent}; border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 600; padding: 0 10px; }}
+QToolButton#PanelPrimary:hover {{ background: {accent_hover}; }}
+QToolButton#PanelPrimary:disabled {{ background: {surface_hover}; color: {disabled}; }}
+QToolButton#PanelTile {{ border-radius: 6px; font-size: 10px; color: {muted}; padding: 3px 0 2px 0; }}
+QToolButton#PanelTile:checked {{ background: {accent_soft}; color: {accent}; }}
+QToolButton#PanelTile:disabled {{ color: {disabled}; }}
 QFrame#ToolRule {{ background: {border}; border: none; }}
 QWidget#StatusStrip {{ background: {chrome}; border-top: 1px solid {border}; }}
 QWidget#StatusStrip QLabel {{ color: {muted}; font-size: 11px; }}

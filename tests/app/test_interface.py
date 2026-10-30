@@ -105,16 +105,66 @@ def test_no_prism_coined_terms_in_interface_text():
 
 
 def test_tool_panel_margins_are_equal_at_any_width(win, app):
-    from PySide6.QtWidgets import QToolButton
+    from PySide6.QtWidgets import QAbstractButton
     win.resize(1400, 900)
     win.show()
+    win.show_sheet(win.project.graphs[0])         # rows, tiles and icon rows
     for width in (200, 251, 317, 360):
         sizes = win.split.sizes()
         win.split.setSizes([sizes[0], sizes[1] + sizes[2] - width, width])
         app.processEvents()
         assert abs(win.tools.width() - width) <= 6, (width, win.tools.width())
-        inner = win.tools.findChild(QToolButton, "WideTool").parentWidget()
-        tools = [b for b in inner.findChildren(QToolButton) if b.isVisible()]
+        page = win.tools.current_page()
+        tools = [b for b in page.findChildren(QAbstractButton) if b.isVisible()]
         left = min(b.geometry().left() for b in tools)
-        right = inner.width() - max(b.geometry().right() + 1 for b in tools)
+        right = page.width() - max(b.geometry().right() + 1 for b in tools)
         assert abs(left - right) <= 1, (width, left, right)
+
+
+def test_tool_panel_follows_the_sheet(win):
+    from asterism.app.toolbar import ActionRow
+    from asterism.doc.model import Analysis
+    p = win.project
+    t, g = p.tables[0], p.graphs[0]
+
+    def rows():
+        return [r.action for r in win.tools.current_page().findChildren(ActionRow)]
+
+    win.show_sheet(t)
+    assert win.tools.current_key == "table:column"
+    assert win.a_ttest in rows() and win.a_anova in rows() and win.a_insert_row in rows()
+    assert win.a_linreg not in rows() and win.a_surv not in rows()      # not for column tables
+    assert all(a.isEnabled() for a in rows())                          # nothing greyed out
+    win.show_sheet(g)
+    assert win.tools.current_key == "graph" and win.a_axes in rows() and win.a_ttest not in rows()
+    a = Analysis("descriptive", t, [0, 1], {})
+    p.add_analysis(a)
+    win.show_sheet(a)
+    assert win.tools.current_key == "analysis" and win.a_help_methods in rows()
+    xy = p.add_table(table_type="xy", example=True)
+    win.show_sheet(xy)
+    assert win.tools.current_key == "table:xy" and win.a_linreg in rows() and win.a_ttest not in rows()
+    win.show_overview()
+    assert win.tools.current_key == "none"
+
+
+def test_top_bar_labels_and_file_group(win):
+    from PySide6.QtCore import Qt
+    bar, files = win.top.tools, win.top.file_tools
+    assert files.toolButtonStyle() == Qt.ToolButtonIconOnly
+    assert {win.a_open, win.a_save, win.a_undo, win.a_redo} <= set(files.actions())
+    assert bar.toolButtonStyle() == Qt.ToolButtonTextUnderIcon
+    labels = [a.iconText() for a in bar.actions() if not a.isSeparator()]
+    assert labels == ["Table", "Graph", "Figure", "Notes", "Analyze", "Export"]
+    assert win.a_new_table.text() == "New Data Table…"                  # menus keep the full name
+    on_bar = set(files.actions()) | set(bar.actions())
+    assert win.a_delete not in on_bar and win.a_cut not in on_bar      # menus, sidebar and panel only
+
+
+def test_t_test_from_the_panel(win, monkeypatch):
+    from asterism.app.dialogs import params
+    monkeypatch.setattr(params, "settings_dialog", lambda *a, **k: None)
+    t = win.project.tables[0]
+    win.show_sheet(t)
+    win.a_ttest.trigger()
+    assert win.current.analysis_type == "ttest" and win.current.columns == [0, 1]
