@@ -14,9 +14,11 @@ Get the latest version from the [Releases page](https://github.com/EpilepsyCente
 
 **Updates install from inside the app.** ASTERISM checks for new versions when it starts (at
 most once a day; you can turn this off in **Settings**) and from **Help › Check for Updates**.
-When there's a new version, **Install Update** downloads it, checks it against the release's
-checksums, asks you to save your work, and restarts into the new version. You only download
-from the Releases page once.
+When there's a new version, **Install Update** opens an *Updating ASTERISM* window that shows
+each step: the download (size and time left, with **Cancel**), the check against the release's
+checksums, and then **Restart and Install** or **Later**. Restarting asks you to save your
+work; on Windows the installer shows its progress, and ASTERISM opens again by itself. You only
+download from the Releases page once.
 
 ### The apps are not signed
 

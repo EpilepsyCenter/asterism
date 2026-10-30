@@ -81,3 +81,42 @@ def test_linux_appimage_is_replaced(tmp_path, monkeypatch):
     cmd = SU.prepare(str(new))
     assert cmd == [str(target)] and target.read_bytes() == b"new"
     assert os.access(target, os.X_OK)
+
+
+def test_update_window_steps_and_buttons(app):
+    """The update window: download progress, Cancel, the check step, Later / Install,
+    and the window's close button meaning Cancel or Later."""
+    from PySide6.QtCore import QTimer
+    from asterism.app.dialogs.update import UpdateDialog, time_left
+    d = UpdateDialog("0.2.0", unpacks=True)
+    d.downloading()
+    d.setMaximum(200 * 1048576)
+    d.setValue(50 * 1048576)
+    assert d.bar.fraction == 0.25 and d.left.text() == "50 of 200 MB"
+    assert not d.wasCanceled()
+    d.close()                                   # close button while downloading = Cancel
+    assert d.wasCanceled() and not d.cancel_btn.isEnabled()
+    d.preparing()
+    assert d.bar.fraction is None and not d.cancel_btn.isEnabled()
+    d.close()                                   # while checking: nothing happens
+    QTimer.singleShot(0, d.install_btn.click)
+    assert d.ready("note") == "install"
+    QTimer.singleShot(0, d.close)               # close button when ready = Later
+    assert d.ready("note") == "later"
+    d.finish()
+    assert time_left(4) == "a few seconds left" and time_left(42) == "about 40 s left"
+    assert time_left(600) == "about 10 min left" and time_left(0) == ""
+
+
+def test_background_work_keeps_the_event_loop_running(app):
+    import pytest as _pytest
+    assert SU._in_background(lambda a, b: a + b, 2, 3) == 5
+    with _pytest.raises(ValueError):
+        SU._in_background(lambda: (_ for _ in ()).throw(ValueError("x")))
+
+
+def test_windows_installer_shows_its_progress(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    cmd = SU.prepare(str(tmp_path / "ASTERISM-0.2.0-windows-setup.exe"))
+    assert "/SILENT" in cmd and "/VERYSILENT" not in cmd

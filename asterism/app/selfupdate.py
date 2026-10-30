@@ -5,8 +5,8 @@ release's SHA256SUMS.txt, ask to save open work, quit, and let the new version t
 
   macOS    ASTERISM-<v>-mac.zip → a small script waits for ASTERISM to quit, replaces the
            ASTERISM.app it was started from, and opens the new one.
-  Windows  ASTERISM-<v>-windows-setup.exe runs silently over the installed copy (same
-           installer ID) and starts ASTERISM again.
+  Windows  ASTERISM-<v>-windows-setup.exe runs over the installed copy (same installer
+           ID, no questions, its progress window showing) and starts ASTERISM again.
   Linux    ASTERISM-<v>-linux-x86_64.AppImage replaces the AppImage file, which is started.
 
 Files downloaded by the app itself (not a browser) aren't marked as coming from the
@@ -84,7 +84,7 @@ def sha256(path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Downloading (with a progress window)
+# Downloading (shown in the update window, dialogs/update.py)
 # ---------------------------------------------------------------------------
 
 def _download(manager: QNetworkAccessManager, url: str, path: str | None, progress=None) -> bytes | None:
@@ -125,16 +125,43 @@ def _download(manager: QNetworkAccessManager, url: str, path: str | None, progre
     return b"" if out else bytes(data)
 
 
-def download_and_verify(release: dict, parent=None) -> str | None:
+def _in_background(fn, *args):
+    """Run fn(*args) in a thread while the Qt event loop keeps running (so the update
+    window keeps animating); returns its result or raises its exception."""
+    import threading
+    from PySide6.QtCore import QTimer
+    box: dict = {}
+
+    def run():
+        try:
+            box["result"] = fn(*args)
+        except BaseException as e:          # re-raised on the GUI thread below
+            box["error"] = e
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    loop = QEventLoop()
+    timer = QTimer(interval=50, timeout=lambda: None if t.is_alive() else loop.quit())
+    timer.start()
+    loop.exec()
+    timer.stop()
+    t.join()
+    if "error" in box:
+        raise box["error"]
+    return box.get("result")
+
+
+def download_and_verify(release: dict, parent=None, dlg=None) -> str | None:
     """Download this system's update and check its SHA-256. Returns the file's path, or
-    None (with a message) if anything went wrong."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QMessageBox, QProgressDialog
+    None (with a message) if anything went wrong. `dlg`: the update window
+    (dialogs/update.py) that shows the download and the check."""
+    from PySide6.QtWidgets import QMessageBox
     asset, sums_asset = pick_asset(release)
     if asset is None or sums_asset is None:
         QMessageBox.warning(parent, "Update", "This release has no file for this system to install "
                                               "automatically. Download it from the release page instead.")
         return None
+    if dlg is not None:
+        dlg.downloading()
     manager = QNetworkAccessManager()
     sums = _download(manager, sums_asset["browser_download_url"], None)
     expected = parse_sums(sums.decode("utf-8", "replace")).get(asset["name"]) if sums is not None else None
@@ -144,24 +171,31 @@ def download_and_verify(release: dict, parent=None) -> str | None:
         return None
     folder = tempfile.mkdtemp(prefix="asterism-update-")
     path = os.path.join(folder, asset["name"])
-    dlg = QProgressDialog(f"Downloading {asset['name']}…", "Cancel", 0, max(1, int(asset.get("size") or 1)), parent)
-    dlg.setWindowTitle("Updating ASTERISM")
-    dlg.setWindowModality(Qt.WindowModal)
-    dlg.setMinimumDuration(0)
-    dlg.setValue(0)
+    if dlg is not None:
+        dlg.setMaximum(int(asset.get("size") or 0))
+        dlg.setValue(0)
     got = _download(manager, asset["browser_download_url"], path, dlg)
-    cancelled = dlg.wasCanceled()
-    dlg.close()
+    cancelled = dlg is not None and dlg.wasCanceled()
     if got is None:
+        _discard(path)
         if not cancelled:
             QMessageBox.warning(parent, "Update", "The download didn't finish. Try again later, or download "
                                                   "the update from the release page.")
         return None
-    if sha256(path) != expected:
+    if dlg is not None:
+        dlg.preparing()
+    if _in_background(sha256, path) != expected:
+        _discard(path)
         QMessageBox.warning(parent, "Update", "The downloaded file doesn't match the release's checksum, so "
                                               "it wasn't installed. Try again later.")
         return None
     return path
+
+
+def _discard(path: str) -> None:
+    """Remove a downloaded update and its temporary folder."""
+    import shutil
+    shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -169,16 +203,35 @@ def download_and_verify(release: dict, parent=None) -> str | None:
 # ---------------------------------------------------------------------------
 
 def mac_script(pid: int, new_app: str, old_app: str, open_cmd: str = "open") -> str:
-    """Shell script: wait for ASTERISM to quit, replace the app, open the new one."""
+    """Shell script: wait for ASTERISM to quit, swap in the new app, open it.
+
+    The new app is moved into place (instant on the same disk; a copy otherwise); the
+    old one is kept until that worked and put back if it didn't."""
     q = lambda s: "'" + s.replace("'", "'\\''") + "'"
+    old, new, backup = q(old_app), q(new_app), q(old_app + ".update-backup")
     return f"""#!/bin/bash
 while kill -0 {pid} 2>/dev/null; do sleep 0.3; done
-rm -rf {q(old_app)}
-ditto {q(new_app)} {q(old_app)}
-xattr -dr com.apple.quarantine {q(old_app)} 2>/dev/null
+rm -rf {backup}
+if mv {old} {backup}; then
+  if mv {new} {old} 2>/dev/null || ditto {new} {old}; then
+    rm -rf {backup}
+  else
+    rm -rf {old}; mv {backup} {old}
+  fi
+fi
+xattr -dr com.apple.quarantine {old} 2>/dev/null
 rm -rf {q(os.path.dirname(new_app))}
-{open_cmd} {q(old_app)}
+{open_cmd} {old}
 """
+
+
+def unpack_mac(path: str) -> str | None:
+    """macOS: unpack the downloaded .zip next to it; the new ASTERISM.app, or None."""
+    unpacked = os.path.join(os.path.dirname(path), "new")
+    if not os.path.isdir(unpacked):
+        subprocess.run(["ditto", "-x", "-k", path, unpacked], check=True)
+    new_app = os.path.join(unpacked, "ASTERISM.app")
+    return new_app if os.path.isdir(new_app) else None
 
 
 def prepare(path: str) -> list[str] | None:
@@ -188,19 +241,18 @@ def prepare(path: str) -> list[str] | None:
     if target is None:
         return None
     if sys.platform == "darwin":
-        folder = os.path.dirname(path)
-        unpacked = os.path.join(folder, "new")
-        subprocess.run(["ditto", "-x", "-k", path, unpacked], check=True)
-        new_app = os.path.join(unpacked, "ASTERISM.app")
-        if not os.path.isdir(new_app):
+        new_app = unpack_mac(path)               # already unpacked by install(): reused
+        if new_app is None:
             return None
-        script = os.path.join(folder, "install.sh")
+        script = os.path.join(os.path.dirname(path), "install.sh")
         with open(script, "w", encoding="utf-8") as f:
             f.write(mac_script(os.getpid(), new_app, target))
         os.chmod(script, 0o755)
         return ["/bin/bash", script]
     if sys.platform == "win32":
-        return [path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/SP-"]
+        # /SILENT (not /VERYSILENT): no questions, but the installer shows its progress
+        # window, so the user sees the update being installed. It restarts ASTERISM after.
+        return [path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/SP-"]
     # Linux AppImage: replace the file now (the running copy keeps its open file), start it later
     os.chmod(path, 0o755)
     staged = target + ".new"
@@ -222,17 +274,53 @@ def launch_detached(cmd: list[str]) -> None:
     subprocess.Popen(cmd, env=env, **kwargs)
 
 
+def ready_note() -> str:
+    """What "ready to install" says will happen."""
+    if sys.platform == "darwin":
+        what = ("ASTERISM will close, install the update and open again by itself. The first start "
+                "of the new version can take up to a minute while macOS checks it.")
+    elif sys.platform == "win32":
+        what = ("ASTERISM will close and the installer will show its progress. ASTERISM opens again "
+                "when it is done.")
+    else:
+        what = "ASTERISM will close and open again with the new version."
+    return what + " You are asked to save open work first."
+
+
 def install(release: dict, parent=None) -> None:
-    """Download, verify, ask to save, quit, and start the new version."""
+    """Download and verify (with the update window), then — once the user chooses Restart and
+    Install — ask to save, quit, and start the new version."""
     from PySide6.QtWidgets import QApplication, QMessageBox
-    path = download_and_verify(release, parent)
+    from .dialogs.update import UpdateDialog
+    version = str(release.get("tag_name") or "").lstrip("v")
+    dlg = UpdateDialog(version, parent, unpacks=sys.platform == "darwin")
+    dlg.show()
+    path = download_and_verify(release, parent, dlg)
     if path is None:
+        dlg.finish()
+        return
+    if sys.platform == "darwin":
+        try:
+            new_app = _in_background(unpack_mac, path)
+        except (OSError, subprocess.CalledProcessError):
+            new_app = None
+        if new_app is None:
+            dlg.finish()
+            _discard(path)
+            QMessageBox.warning(parent, "Update", "The update couldn't be unpacked. Download it from the "
+                                                  "release page instead.")
+            return
+    choice = dlg.ready(ready_note())
+    dlg.finish()
+    if choice != "install":
+        _discard(path)                            # offered again at the next check
         return
     from .main_window import windows
     for w in list(windows()):                     # each window asks about unsaved changes
         if not w.close():
-            QMessageBox.information(parent, "Update", "The update is downloaded. It will be offered again "
-                                                      "next time you check for updates.")
+            _discard(path)
+            QMessageBox.information(parent, "Update", "The update wasn't installed. It will be offered "
+                                                      "again next time you check for updates.")
             return
     try:
         cmd = prepare(path)

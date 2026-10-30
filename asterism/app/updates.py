@@ -90,8 +90,8 @@ def offer(parent, release: dict, latest: str, current: str, url: str) -> None:
     box.setWindowTitle("An update is available")
     box.setText(f"ASTERISM {latest} is available (you have {current}).")
     can = selfupdate.can_install() and selfupdate.pick_asset(release)[0] is not None
-    box.setInformativeText("Install it now? ASTERISM asks to save your work, restarts and opens the new version."
-                           if can else "Open the download page?")
+    box.setInformativeText("Install it now? ASTERISM shows the download's progress, then asks before it "
+                           "restarts into the new version." if can else "Open the download page?")
     install = box.addButton("Install Update" if can else "Open Download Page", QMessageBox.AcceptRole)
     notes = box.addButton("What's New", QMessageBox.HelpRole) if can else None
     box.addButton("Later", QMessageBox.RejectRole)
