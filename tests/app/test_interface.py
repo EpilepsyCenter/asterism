@@ -67,7 +67,7 @@ def test_rename_from_the_top_bar_title(win):
     win.top.title.editingFinished.emit()
     assert t.name == "Seizure grades"
     win.a_undo.trigger()
-    assert t.name == "Cumulative SE seizure grade"
+    assert t.name == "Response score"
 
 
 def test_dialogs_use_a_section_sidebar_not_tabs(win):

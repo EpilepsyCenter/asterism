@@ -122,7 +122,7 @@ Every edit can be undone with **Edit › Undo** (⌘Z). Analyses and graphs upda
 
 ### Column titles
 
-The header shows each data set's name ("Group A", "Data set B", "Outcome C" and so on) above its title. Double-click the title row under the name to type a title, such as "Control" or "EGFP". Graphs and results use the title, or the name if there is no title.
+The header shows each data set's name ("Group A", "Data set B", "Outcome C" and so on) above its title. Double-click the title row under the name to type a title, such as "Control" or "Treated". Graphs and results use the title, or the name if there is no title.
 
 From the keyboard: press ↑ in the first row to move up to the title, and ← → to go from title to title. Type to replace a title, or press F2 to edit it; ↓ or Enter goes back to the first row, Escape cancels, and Backspace clears the title.
 

@@ -87,7 +87,7 @@ The Start window appears when ASTERISM opens (and from **File › Start Window�
 - **Empty project**: start with an empty Column table.
 - **Import data…**: start from a spreadsheet, a lab export or a Prism file (see [Importing data](importing.md) and [Prism files](prism.md)).
 - **Open…**: open a project file.
-- **Sample project**: a small project with example data to explore.
+- **Sample project**: an example project with made-up data to explore: every kind of data table, the main analyses (t test, ANOVA, nested t test, curve fitting, regression, survival and more), many graph types and a finished figure. Also in **File › Open Sample Project**.
 
 On the right are your recent projects. Double-click one, or select it and click **Open**. Projects whose files have moved or been deleted are greyed out.
 

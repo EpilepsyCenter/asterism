@@ -23,7 +23,7 @@ def test_edit_cell_updates_results_and_graph_then_undo(win):
     assert any(it.el.id.startswith("bracket") for it in gs.items)
 
     model = win._widget_for(t).model()
-    model.setData(model.index(10, 1), "300")          # outlier into SV2A
+    model.setData(model.index(10, 1), "300")          # outlier into Treated
     assert a.result.p != p_before                     # analysis recomputed
     assert gs.auto_range.vmax >= 300                  # graph rescaled
 
@@ -100,7 +100,7 @@ def test_svg_export_passes_fidelity_qa(win, tmp_path):
         pytest.skip("no fonts in this Qt platform")
     fonts = [f.get_object() for f in page["/Resources"]["/Font"].values()]
     assert fonts and all(f["/Subtype"] != "/Type3" for f in fonts)   # TrueType, not Type 3
-    assert "EGFP" in page.extract_text()                                # live text
+    assert "Control" in page.extract_text()                                # live text
 
 
 # --- project files and window state (M1) ---------------------------------------------
@@ -179,7 +179,7 @@ def test_revert_restores_saved_version(win, tmp_path, monkeypatch):
     win.revert()
     fresh = windows()[-1]
     try:
-        assert fresh is not win and fresh.project.tables[0].name == "Cumulative SE seizure grade"
+        assert fresh is not win and fresh.project.tables[0].name == "Response score"
     finally:
         fresh.close()
 

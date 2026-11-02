@@ -86,7 +86,7 @@ def test_edit_recomputes_analysis_and_rebuilds_graph():
     p0 = a.result.p
     p.undo.push(CellsCommand(p.tables[0], [(10, 1, 300.0)]))
     assert a.result.p != p0 and hits
-    assert a.name == "Student's t test of Cumulative SE seizure grade"
+    assert a.name == "Student's t test of Response score"
 
 
 def test_params_change_is_undoable():

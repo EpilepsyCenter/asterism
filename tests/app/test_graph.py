@@ -149,17 +149,28 @@ def test_shift_drag_moves_straight(app):
 
 def test_drag_snaps_to_other_elements(app):
     p, gs = _sheet(app)
-    title = next(it for it in gs.items if it.el.id == "graph-title")
-    axis = next(it for it in gs.items if it.el.kind == "x-axis")
     z = gs.view.transform().m11()
-    # Drag the title so its left edge ends 2 screen pixels right of the x axis' left edge:
-    # it should land exactly on it, with a guide shown while dragging.
-    gap = (axis.el.bounds.left() - title.el.bounds.left()) * z + 2
+
+    def items():
+        return (next(it for it in gs.items if it.el.id == "graph-title"),
+                next(it for it in gs.items if it.el.kind == "x-axis"))
+
+    title, _ = items()
+    _drag(gs, title, (80, 0))                            # move the title well away first
+    title, axis = items()
+    # Drag it back so its centre ends 2 screen pixels right of the x axis' centre: it should
+    # land exactly on it, with a guide shown while dragging.
+    gap = (axis.el.bounds.center().x() - title.el.bounds.center().x()) * z + 2
     guides = _drag(gs, title, (gap, 0))
-    moved = next(it for it in gs.items if it.el.id == "graph-title")
-    axis = next(it for it in gs.items if it.el.kind == "x-axis")
+    title, axis = items()
     assert guides >= 1 and not gs._guides                # guide while dragging, gone after
-    assert moved.el.bounds.left() == pytest.approx(axis.el.bounds.left(), abs=0.01)
+    # It lands exactly on the nearest line: an edge or centre of another element (several
+    # elements line up near the axis' centre, so which one it picks is not the point).
+    r = title.el.bounds
+    lines = {round(v, 3) for it in gs.items if it is not title for o in [it.el.bounds]
+             for v in (o.left(), o.center().x(), o.right())}
+    assert any(round(v, 3) in lines for v in (r.left(), r.center().x(), r.right()))
+    assert abs(r.center().x() - axis.el.bounds.center().x()) < 5 / z
 
 
 def test_a_wobbly_click_does_not_move(app):

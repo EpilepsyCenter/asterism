@@ -250,3 +250,38 @@ def _missing(panel, x, y, why) -> FigElement:
         cv.rect(rect.x(), rect.y(), rect.width(), rect.height(), fill="#f3f2ee", stroke="#b0b0b0", width=0.75)
         cv.text(rect.center().x(), rect.center().y(), why, FontSpec(size=8), color="#55585f", anchor="middle")
     return FigElement(panel["id"], "missing", panel["id"], rect, draw, {})
+
+
+def place_panels(project, figure, items: list[tuple[str, str]], columns: int = 2) -> None:
+    """Add panels (kind, sheet id) below what is already on the figure's page, `columns`
+    to a row, each shrunk to fit its share of the row. One undoable step."""
+    import copy
+    from ...doc.commands import FigureCommand
+    from ...doc.model import FigureSheet
+    st = copy.deepcopy(figure.state())
+    _, els = build_figure(figure, project)
+    bottom = max([e.rect.bottom() / MM for e in els if e.kind != "letter"] + [5.0])
+    new = [figure.new_panel(kind, ref, font_size=8.0 if kind in ("table", "results") else 10.0)
+           for kind, ref in items]
+    tmp = FigureSheet()                       # measure the new panels at their own size
+    tmp.page = dict(figure.page)
+    tmp.panels = new
+    _, nels = build_figure(tmp, project)
+    sizes = {e.panel: (e.rect.width() / MM, e.rect.height() / MM) for e in nels if e.kind != "letter"}
+    pw, _ = figure.page_mm()
+    margin, gap = 15.0, 10.0
+    y = bottom + gap if figure.panels else margin
+    for i in range(0, len(new), columns):
+        row = new[i:i + columns]
+        x = margin
+        for pn in row:
+            w, h = sizes.get(pn["id"], (60.0, 40.0))
+            avail = (pw - 2 * margin - gap * (len(row) - 1)) / len(row)
+            if pn["kind"] in ("graph", "table", "results") and w > avail:
+                pn["scale"] = round(avail / w, 3)       # shrink to fit the row
+                w, h = avail, h * pn["scale"]
+            pn["x"], pn["y"] = round(x, 1), round(y, 1)
+            x += w + gap
+        y += max(sizes.get(pn["id"], (0, 40.0))[1] * pn.get("scale", 1.0) for pn in row) + gap
+    st["panels"] += new
+    project.undo.push(FigureCommand(figure, st, "Add to Figure"))

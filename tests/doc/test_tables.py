@@ -163,7 +163,7 @@ def test_every_type_round_trips_through_a_file(tt, tmp_path):
 
 def test_version_1_files_open_as_column_tables():
     v1 = {"format": "asterism-project", "version": 1, "app_version": "0.1.0",
-          "tables": [{"id": "t1", "name": "Old", "type": "column", "titles": ["EGFP", "SV2A"],
+          "tables": [{"id": "t1", "name": "Old", "type": "column", "titles": ["Control", "Treated"],
                       "columns": [[1.0, 2.0, None, 4.0], [3.0]]}],
           "infos": [], "layouts": [],
           "analyses": [{"id": "a1", "name": "", "auto_name": True, "type": "ttest", "table": "t1",
@@ -172,5 +172,5 @@ def test_version_1_files_open_as_column_tables():
     p = fileformat.project_from_dict(json.loads(json.dumps(v1)), engine)
     t = p.tables[0]
     assert (t.table_type, t.y_format) == ("column", "single")
-    assert t.titles == ["EGFP", "SV2A"] and t.get(3, 0) == 4.0 and t.get(0, 1) == 3.0
+    assert t.titles == ["Control", "Treated"] and t.get(3, 0) == 4.0 and t.get(0, 1) == 3.0
     assert p.analyses[0].table is t and p.graphs[0].table is t

@@ -1451,39 +1451,8 @@ class MainWindow(QMainWindow):
 
     def _place_panels(self, figure, items: list[tuple[str, str]], columns: int = 2) -> None:
         """Add panels below what is already on the page, `columns` to a row."""
-        import copy as _copy
-        from ..doc.commands import FigureCommand
-        from .figure.layout import build_figure
-        st = _copy.deepcopy(figure.state())
-        _, els = build_figure(figure, self.project)
-        from .graph.canvas import MM
-        bottom = max([e.rect.bottom() / MM for e in els if e.kind != "letter"] + [5.0])
-        new = []
-        for kind, ref in items:
-            pn = figure.new_panel(kind, ref, font_size=8.0 if kind in ("table", "results") else 10.0)
-            new.append(pn)
-        tmp = FigureSheet()                       # measure the new panels at their own size
-        tmp.page = dict(figure.page)
-        tmp.panels = new
-        _, nels = build_figure(tmp, self.project)
-        sizes = {e.panel: (e.rect.width() / MM, e.rect.height() / MM) for e in nels if e.kind != "letter"}
-        pw, _ = figure.page_mm()
-        margin, gap = 15.0, 10.0
-        y = bottom + gap if figure.panels else margin
-        for i in range(0, len(new), columns):
-            row = new[i:i + columns]
-            x = margin
-            for pn in row:
-                w, h = sizes.get(pn["id"], (60.0, 40.0))
-                avail = (pw - 2 * margin - gap * (len(row) - 1)) / len(row)
-                if pn["kind"] in ("graph", "table", "results") and w > avail:
-                    pn["scale"] = round(avail / w, 3)       # shrink to fit the row
-                    w, h = avail, h * pn["scale"]
-                pn["x"], pn["y"] = round(x, 1), round(y, 1)
-                x += w + gap
-            y += max(sizes.get(pn["id"], (0, 40.0))[1] * pn.get("scale", 1.0) for pn in row) + gap
-        st["panels"] += new
-        self.project.undo.push(FigureCommand(figure, st, "Add to Figure"))
+        from .figure.layout import place_panels
+        place_panels(self.project, figure, items, columns)
 
     def figure_add(self) -> None:
         if not isinstance(self.current, FigureSheet):
@@ -1849,7 +1818,8 @@ def new_window(project: Project | None = None) -> MainWindow:
 
 
 def open_sample(origin: MainWindow | None = None) -> MainWindow:
-    return _show(MainWindow(sample_project(engine)), origin if isinstance(origin, MainWindow) else None)
+    from .example import example_project
+    return _show(MainWindow(example_project(engine)), origin if isinstance(origin, MainWindow) else None)
 
 
 def run_start(origin: MainWindow | None = None) -> MainWindow | None:

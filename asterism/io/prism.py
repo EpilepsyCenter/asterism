@@ -55,7 +55,7 @@ def read(path: str | Path) -> PrismImport:
 # ---------------------------------------------------------------------------
 
 def _plain(v, default: str = "") -> str:
-    """Prism stores some titles as formatted text: {"string": "EGFP", "formatting": […]}."""
+    """Prism stores some titles as formatted text: {"string": "Control", "formatting": […]}."""
     if isinstance(v, dict):
         v = v.get("string", default)
     return str(v) if v not in (None, "") else default

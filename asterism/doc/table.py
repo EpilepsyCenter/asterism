@@ -495,7 +495,7 @@ def fill_example(t: DataTable) -> None:
             put(r, "row", name)
             put(r, t.flat(0), v)
     elif tt == "multivar":
-        t.titles[:4] = ["Age (weeks)", "Weight (g)", "Seizures per day", "Sex"]
+        t.titles[:4] = ["Age (weeks)", "Weight (g)", "Events per day", "Sex"]
         rows = [(8, 24.1, 3.0, "F"), (9, 26.3, 4.5, "M"), (10, 25.0, 2.1, "F"),
                 (11, 28.4, 6.2, "M"), (12, 27.2, 3.9, "F"), (13, 29.9, 7.4, "M")]
         for r, vals in enumerate(rows):
@@ -503,7 +503,7 @@ def fill_example(t: DataTable) -> None:
                 put(r, t.flat(ds), v)
     elif tt == "nested":
         rng = np.random.default_rng(3)
-        t.titles[:2] = ["EGFP", "SV2A"]
+        t.titles[:2] = ["Control", "Treated"]
         for ds, base in enumerate((60.0, 40.0)):
             for s in range(w):
                 t.sub_titles[ds][s] = f"Mouse {ds * w + s + 1}"
