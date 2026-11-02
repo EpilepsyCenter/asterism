@@ -222,9 +222,14 @@ class GraphOverview(QWidget):
         v.setSpacing(0)
         bar = QWidget()
         bar.setObjectName("OverviewBar")
-        h = QHBoxLayout(bar)
-        h.setContentsMargins(16, 8, 16, 8)
-        h.setSpacing(10)
+        # The filters wrap onto a second line when the window is narrow, so this page
+        # never sets a minimum width for the middle of the window (which would squeeze
+        # the sidebars for the rest of the session once it had been shown).
+        outer = QVBoxLayout(bar)
+        outer.setContentsMargins(16, 8, 16, 8)
+        flow_w = QWidget()
+        flow = FlowLayout(flow_w, spacing=10)
+        outer.addWidget(flow_w)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search graphs")
         self.search.setClearButtonEnabled(True)
@@ -245,11 +250,15 @@ class GraphOverview(QWidget):
         self.slider.setFixedWidth(110)
         self.slider.setToolTip("Thumbnail size")
         for wd in (self.search, self.type_combo, self.tag_combo, self.c_results, self.c_figures):
-            h.addWidget(wd)
-        h.addStretch(1)
+            flow.addWidget(wd)
+        sort = QWidget()                       # "Sort:", its menu and the size slider wrap as one
+        h = QHBoxLayout(sort)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(10)
         h.addWidget(QLabel("Sort:"))
         h.addWidget(self.sort_combo)
         h.addWidget(self.slider)
+        flow.addWidget(sort)
         v.addWidget(bar)
 
         self.scroll = QScrollArea()

@@ -168,3 +168,13 @@ def test_t_test_from_the_panel(win, monkeypatch):
     win.show_sheet(t)
     win.a_ttest.trigger()
     assert win.current.analysis_type == "ttest" and win.current.columns == [0, 1]
+
+
+def test_all_graphs_page_does_not_widen_the_window(win, app):
+    # Its filter bar wraps instead of setting a minimum width for the middle of the window.
+    win.resize(1200, 800)
+    win.show()
+    win.show_overview()
+    app.processEvents()
+    assert win.overview.minimumSizeHint().width() < 500
+    assert win.stack.minimumSizeHint().width() < 500
