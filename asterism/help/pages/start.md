@@ -81,7 +81,7 @@ The bar along the bottom shows which cell you are in on a data table. When you s
 
 ## The Start window
 
-The Start window appears when ASTERISM opens (and from **File › Start Window…**):
+The Start window appears when ASTERISM opens (and from **File › Start Window…**). At the top it says what ASTERISM does and which version you have; **What's New** shows what changed in this version and **Help** opens this page. Below are the ways to begin:
 
 - **New project…**: choose the type of your first data table (see [Data tables](tables.md#new-table)).
 - **Empty project**: start with an empty Column table.
@@ -89,7 +89,7 @@ The Start window appears when ASTERISM opens (and from **File › Start Window�
 - **Open…**: open a project file.
 - **Sample project**: an example project with made-up data to explore: every kind of data table, the main analyses (t test, ANOVA, nested t test, curve fitting, regression, survival and more), many graph types and a finished figure. Also in **File › Open Sample Project**.
 
-On the right are your recent projects. Double-click one, or select it and click **Open**. Projects whose files have moved or been deleted are greyed out.
+Under them are your recent projects, the latest first and already selected, so pressing Return reopens it. Double-click one, or select it and click **Open**. Projects whose files have moved or been deleted are greyed out.
 
 Closing the Start window starts an empty project. Untick **Show this window at startup** if you'd rather go straight to an empty project; you can turn it back on in [Settings](settings.md).
 

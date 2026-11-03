@@ -21,8 +21,10 @@ Help › What's New…. Newest version first.
 
 ### Improved
 
+- **A new Start window.** What ASTERISM does and your version at the top, the ways to begin as large buttons, and your recent projects below. The latest project is selected, so Return reopens it. [Read more](start.md#the-start-window)
 - **Clearer selection on graphs.** A dotted outline shows what is selected, and handles appear only on things you can resize. [Read more](graphs.md#selecting-and-moving)
 
 ### Fixed
 
+- **Help opened from a dialog can be used right away.** It used to wait behind the dialog until you closed it.
 - **All graphs no longer widens the window.** Its filters wrap onto a second line in a narrow window, so the sidebars keep their room after you've visited it. [Read more](graphs.md#all-graphs-at-a-glance)

@@ -28,23 +28,33 @@ def window() -> "HelpWindow":
     return _window
 
 
+def _present(w: "HelpWindow") -> None:
+    """Show the help in front. Over a modal window (a dialog, the Start window) it is modal
+    itself: otherwise that window would block it, and it couldn't be scrolled or clicked
+    until the dialog closed. Closing the help returns to the dialog."""
+    modal = QApplication.activeModalWidget()
+    want = Qt.ApplicationModal if modal is not None and modal is not w else Qt.NonModal
+    if w.windowModality() != want:
+        w.hide()                                 # modality can only change while hidden
+        w.setWindowModality(want)
+    w.show()
+    w.raise_()
+    w.activateWindow()
+
+
 def show_topic(topic: str = "") -> "HelpWindow":
     """Open the help at a dialog's topic (or the start page)."""
     w = window()
     slug, frag = H.resolve(topic) if topic else ("start", "")
     w.open(slug, frag)
-    w.show()
-    w.raise_()
-    w.activateWindow()
+    _present(w)
     return w
 
 
 def show_page(slug: str, frag: str = "") -> "HelpWindow":
     w = window()
     w.open(slug, frag)
-    w.show()
-    w.raise_()
-    w.activateWindow()
+    _present(w)
     return w
 
 

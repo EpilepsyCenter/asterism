@@ -156,3 +156,46 @@ def test_app_icon(app):
     ico = QIcon(os.path.join(ASSETS, "icon.svg"))
     assert not ico.isNull() and not ico.pixmap(64, 64).isNull()
     assert os.path.exists(os.path.join(ASSETS, "asterism.icns"))
+
+
+def test_start_window_preselects_the_latest_project_and_has_whats_new_and_help(app, tmp_path):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+    from asterism import __version__
+    from asterism.app import documents, help_window
+    from asterism.app.dialogs.start import StartDialog
+    from asterism.app.dialogs.whats_new import WhatsNewDialog
+    documents.clear_recent()
+    older, newer = _saved_file(tmp_path, "Older.asterism"), _saved_file(tmp_path, "Newer.asterism")
+    documents.add_recent(older)
+    documents.add_recent(newer)
+    d = StartDialog()
+    assert d.recent.currentItem().data(Qt.UserRole) == newer and d.open_btn.isEnabled()
+    assert __version__ in d.version.text()
+    d.whats_new_btn.click()
+    wn = [w for w in QApplication.topLevelWidgets() if isinstance(w, WhatsNewDialog) and w.isVisible()]
+    assert len(wn) == 1 and wn[0].parent() is d          # a child of the Start window: usable over it
+    wn[0].close()
+    d.help_btn.click()
+    h = help_window.window()
+    assert h.isVisible() and h.history[-1] == ("start", "the-start-window")
+    h.close()
+
+
+def test_help_opened_over_a_modal_window_can_be_used(app):
+    """A modal dialog blocks every other window; help opened from it is modal too, on top."""
+    from PySide6.QtCore import Qt, QTimer
+    from PySide6.QtWidgets import QDialog
+    from asterism.app import help_window
+    seen = {}
+    dlg = QDialog()
+
+    def probe():
+        seen["over"] = help_window.show_page("start").windowModality()
+        help_window.window().close()
+        dlg.reject()
+    QTimer.singleShot(50, probe)
+    dlg.exec()
+    assert seen["over"] == Qt.ApplicationModal
+    assert help_window.show_page("start").windowModality() == Qt.NonModal   # no dialog: an ordinary window
+    help_window.window().close()
