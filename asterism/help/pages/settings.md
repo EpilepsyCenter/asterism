@@ -72,7 +72,7 @@ The titre is calculated as quantity per reaction × dilution [× 2] ÷ template 
 **Help › Check for Updates…** looks for a newer version now. When one exists, ASTERISM shows its version number and offers:
 
 - **Install Update:** downloads the new version for your system, checks it against the checksums published with the release, asks you to save any unsaved work, then quits and opens the new version. On a Mac the app in your Applications folder is replaced; on Windows the installer runs by itself in the background; on Linux the AppImage file is replaced.
-- **What's New:** the release notes on GitHub.
+- **Release Notes:** the new version's release notes on GitHub, before you install it. (After an update, ASTERISM shows what changed by itself: see [What's new after an update](start.md#whats-new).)
 - **Later.**
 
 Updates installed this way don't bring back the "unidentified developer" warnings. If ASTERISM can't replace itself (for example, the Applications folder needs an administrator, or you run it from source), it opens the download page instead.

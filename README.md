@@ -99,10 +99,17 @@ packaging/make_dmg.sh                                        # macOS disk image
 ```
 
 The Windows installer (`packaging/windows/asterism.iss`, Inno Setup) and the Linux AppImage
-(`packaging/linux/make_appimage.sh`) are built by GitHub Actions. To release: set the
-version in `asterism/__init__.py`, push a tag like `v0.1.0`, and the **Release** workflow
-builds all three apps, runs `--selftest` on each, and attaches them to a draft release to
-publish from the Releases page.
+(`packaging/linux/make_appimage.sh`) are built by GitHub Actions. To release:
+
+1. Set the version in `asterism/__init__.py`.
+2. Add a `## <version>` entry at the top of `asterism/help/changelog.md`: short bullets for
+   users under *New*, *Improved* and *Fixed*, with `[Read more](page.md#section)` links into
+   the help. The app shows it in its **What's new** window the first time the new version
+   starts. Run `.venv/bin/python -m pytest tests/test_whats_new.py`; it fails if a link
+   doesn't land on a help heading (it and `--selftest` also fail if the version has no entry).
+3. Push a tag like `v0.1.0`. The **Release** workflow builds all three apps, runs
+   `--selftest` on each, and attaches them to a draft release to publish from the Releases
+   page.
 
 ## Design
 

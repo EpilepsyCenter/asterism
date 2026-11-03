@@ -153,7 +153,8 @@ You can change most things by working on the graph itself.
 
 ### Selecting and moving
 
-- **Click** an element to select it: a data set, an axis, a title, a bracket, the legend or a drawing. Selection handles appear around it. Drag across empty space to select several elements.
+- **Click** an element to select it: a data set, an axis, a title, a bracket, the legend or a drawing. A dotted outline shows what is selected; square or round handles appear only on things you can resize by dragging them. Drag across empty space to select several elements.
+- **Resize the graph:** select an axis (or the frame) and drag the square handles around the plot area. The side handles change the width or the height, the corners both; hold **Shift** on a corner to keep the proportions. This sets the same sizes as [Format Graph › Size and frame](formatting.md#size-and-frame).
 - **Drag** titles, significance brackets, the legend and drawings to move them. The graph itself stays centred.
 - Hold **Shift** while dragging to move straight across or straight up and down.
 - While you drag, edges and centres snap to the edges and centres of the other elements (axes, titles, the plot, other brackets) when they come close, and a dashed guide line shows what lined up.

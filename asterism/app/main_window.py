@@ -280,6 +280,7 @@ class MainWindow(QMainWindow):
         self.a_help = A("ASTERISM Help", "questionmark.circle", self.open_help, "Ctrl+?")
         self.a_help_methods = A("How Results Are Calculated", "function", lambda: self.open_help_page("methods"))
         self.a_help_shortcuts = A("Keyboard Shortcuts", "keyboard", lambda: self.open_help_page("shortcuts"))
+        self.a_whats_new = A("What's New…", "doc.text", self.whats_new)
         self.a_updates = A("Check for Updates…", "arrow.counterclockwise", self.check_updates)
         self.a_about = A("About ASTERISM", "info.circle", self._about)
         self.a_about.setMenuRole(QAction.AboutRole)
@@ -356,7 +357,7 @@ class MainWindow(QMainWindow):
                         self.a_fig_format])
         menu("View", [self.a_overview, None, self.a_toggle_sidebar, self.a_toggle_tools])
         mb.addMenu("Window")
-        menu("Help", [self.a_help, None, self.a_help_methods, self.a_help_shortcuts, None, self.a_updates,
+        menu("Help", [self.a_help, None, self.a_help_methods, self.a_help_shortcuts, None, self.a_whats_new, self.a_updates,
                       self.a_about])
 
     def _fill_recent(self) -> None:
@@ -1727,6 +1728,10 @@ class MainWindow(QMainWindow):
         self.status.zoom.setValue(int(round(z * 100)))
         self.status.zoom.blockSignals(False)
         self.status.zoom_label.setText(f"{z * 100:.0f}%")
+
+    def whats_new(self) -> None:
+        from .dialogs.whats_new import show_from_menu
+        show_from_menu(self)
 
     def check_updates(self) -> None:
         from . import updates

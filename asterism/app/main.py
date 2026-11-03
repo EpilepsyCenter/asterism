@@ -130,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("ASTERISM")
     app.setApplicationDisplayName("ASTERISM")
     app.setOrganizationName("ASTERISM")
+    from . import documents
+    keys_at_start = documents.own_keys()         # before anything at startup writes a setting
     from . import theme
     theme.install(app)
     from PySide6.QtGui import QIcon
@@ -151,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
         if hand_over(files):
             return 0
         listen(app)
+    from PySide6.QtCore import QTimer
+    from .dialogs import whats_new
+    whats_new.show_when_ready(*whats_new.startup_entries(keys_at_start))    # before the update check (4 s)
     restored = offer_recovery()                  # unsaved work from a session that didn't end normally
     if restored and not files:
         return app.exec()
@@ -168,7 +173,6 @@ def main(argv: list[str] | None = None) -> int:
         new_window()
     from . import prefs
     if prefs.get("updates.auto") and not os.environ.get("ASTERISM_NO_UPDATE_CHECK"):
-        from PySide6.QtCore import QTimer
         from . import updates
         QTimer.singleShot(4000, lambda: updates.check(windows()[-1] if windows() else None, silent=True))
     return app.exec()

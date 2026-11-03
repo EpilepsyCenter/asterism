@@ -63,6 +63,13 @@ def set_value(key: str, v) -> None:
     _settings().setValue(key, v)
 
 
+def own_keys() -> list[str]:
+    """Every key ASTERISM has stored (without the system-wide defaults macOS falls back to)."""
+    s = _settings()
+    s.setFallbacksEnabled(False)
+    return s.allKeys()
+
+
 # --- per-file window memory: size, position and the sheet in front ------------------------
 
 MAX_FILE_STATES = 100

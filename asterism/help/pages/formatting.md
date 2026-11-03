@@ -228,7 +228,7 @@ The Text tools in the Tools panel change fonts directly on the graph; see [Graph
 
 ## Size and frame
 
-- **Column width** (graphs with groups) or **X-axis length** (graphs with a numeric X axis), and **Plot height**, in millimetres. These set the plot area; the graph exports at this size.
+- **Column width** (graphs with groups) or **X-axis length** (graphs with a numeric X axis), and **Plot height**, in millimetres. These set the plot area; the graph exports at this size. You can also drag them on the graph: select an axis and drag the handles around the plot area (see [Selecting and moving](graphs.md#selecting-and-moving)).
 - **Orientation** (column, grouped, contingency and nested graphs): **Vertical (columns go up)** or **Horizontal (bars go across)**.
 - **Frame:** **Axes only**, **Axes, offset from the data** (the axes stand a little apart from the data, a common journal style) or **Closed box**.
 - **Line thickness** and **Line colour** of the axes.

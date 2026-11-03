@@ -51,6 +51,16 @@ def run(app) -> int:
                 assert len(H.to_html(H.load(slug))) > 500, slug
     check("help pages", help_pages)
 
+    def whats_new():
+        from asterism import help as H
+        from asterism.help import changelog as C
+        log = C.load()
+        # a release has its own entry (between releases the newest one is the version to come)
+        assert any(C.version_key(e.version) >= C.version_key(__version__) for e in log), \
+            f"no '## {__version__}' in changelog.md"
+        assert "<li" in H.to_html(C.for_menu(log, __version__)[0].body)
+    check("what's new (changelog)", whats_new)
+
     def icons():
         from . import icons as I
         bad = [n for n in I.LUCIDE if I.icon(n).isNull()]

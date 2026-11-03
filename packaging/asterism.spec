@@ -13,6 +13,7 @@ ICON = {"darwin": "asterism.icns", "win32": "asterism.ico"}.get(sys.platform, "a
 
 datas = [
     (os.path.join(ROOT, "asterism", "help", "pages"), "asterism/help/pages"),
+    (os.path.join(ROOT, "asterism", "help", "changelog.md"), "asterism/help"),
     (ASSETS, "asterism/app/assets"),
     (os.path.join(ROOT, "LICENSE"), "."),
     (os.path.join(ROOT, "THIRD_PARTY_NOTICES.md"), "."),

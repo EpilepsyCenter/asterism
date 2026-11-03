@@ -93,7 +93,7 @@ def offer(parent, release: dict, latest: str, current: str, url: str) -> None:
     box.setInformativeText("Install it now? ASTERISM shows the download's progress, then asks before it "
                            "restarts into the new version." if can else "Open the download page?")
     install = box.addButton("Install Update" if can else "Open Download Page", QMessageBox.AcceptRole)
-    notes = box.addButton("What's New", QMessageBox.HelpRole) if can else None
+    notes = box.addButton("Release Notes", QMessageBox.HelpRole) if can else None
     box.addButton("Later", QMessageBox.RejectRole)
     box.setDefaultButton(install)
     box.exec()

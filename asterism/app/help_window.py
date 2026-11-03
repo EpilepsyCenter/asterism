@@ -48,6 +48,14 @@ def show_page(slug: str, frag: str = "") -> "HelpWindow":
     return w
 
 
+def colours() -> dict:
+    """Page colours for `help.to_html` in the current theme."""
+    tk = theme.tokens()
+    dark = theme.is_dark()
+    return {"text": tk["text"], "muted": tk["muted"], "accent": tk["accent"],
+            "code_bg": "#232a31" if dark else "#ecebe6", "note_bg": "#13323a" if dark else "#e4f1f4"}
+
+
 def _shortcuts_md() -> str:
     """Every menu command that has a shortcut, from the frontmost project window."""
     from .main_window import MainWindow, windows
@@ -207,15 +215,9 @@ class HelpWindow(QWidget):
 
     # --- pages --------------------------------------------------------------------
 
-    def _colours(self) -> dict:
-        tk = theme.tokens()
-        dark = theme.is_dark()
-        return {"text": tk["text"], "muted": tk["muted"], "accent": tk["accent"],
-                "code_bg": "#232a31" if dark else "#ecebe6", "note_bg": "#13323a" if dark else "#e4f1f4"}
-
     def _render(self, slug: str) -> None:
         md = _shortcuts_md() if slug == "shortcuts" else H.load(slug)
-        self.view.setHtml(H.to_html(md, self._colours()))
+        self.view.setHtml(H.to_html(md, colours()))
         self.slug = slug
 
     def _rerender(self) -> None:

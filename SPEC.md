@@ -98,6 +98,12 @@ multiple-variable methods) arrives after the core is solid, in the order users a
   downloads this system's file, verifies it against the release's SHA256SUMS.txt, and swaps
   the app (macOS zip + helper script), runs the installer silently (Windows) or replaces the
   AppImage (Linux), then restarts.
+- **What's new:** the first start of a newer version (however it was installed) shows that
+  version's notes from `asterism/help/changelog.md`, all skipped versions' notes newest
+  first; a fresh install shows nothing. The last version seen is the `lastSeenVersion`
+  setting; the decision is `help/changelog.py`, the window `app/dialogs/whats_new.py`, also
+  in Help › What's New…. Writing the `## <version>` entry is part of every release
+  (README, "Build and release").
 
 **Why Qt, not Electron or the old Dash app:** the spike showed Qt Widgets gives a
 genuinely native window, fast table editing, direct manipulation on the graph canvas,

@@ -165,3 +165,14 @@ The window title shows when a project has unsaved changes. ASTERISM also keeps a
 - The **?** button in a dialog opens the help for that dialog.
 - **Help › How Results Are Calculated** explains the methods behind the numbers: see [How results are calculated](methods.md).
 - **Help › Keyboard Shortcuts** lists every shortcut: see [Keyboard shortcuts](shortcuts.md).
+- **Help › What's New…** lists what changed in the version you're running: see [What's new after an update](#whats-new).
+
+### What's new after an update {#whats-new}
+
+The first time a new version of ASTERISM starts, whether it was installed with **Help › Check for Updates…** or by hand, a **What's new** window lists what changed since the version you had before, grouped as *New*, *Improved* and *Fixed*. If you skipped versions, it shows the changes of each of them, newest first.
+
+- **Read more** opens this help at the matching section.
+- **Open the Help** opens the help at its start page.
+- **Close** (or Esc) closes the window.
+
+It appears once per version, and not at all after a fresh installation. Open it again any time from **Help › What's New…**.
