@@ -199,3 +199,38 @@ def test_help_opened_over_a_modal_window_can_be_used(app):
     assert seen["over"] == Qt.ApplicationModal
     assert help_window.show_page("start").windowModality() == Qt.NonModal   # no dialog: an ordinary window
     help_window.window().close()
+
+
+def test_open_follows_the_highlighted_project(app, tmp_path):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from asterism.app import documents
+    from asterism.app.dialogs.start import StartDialog
+    documents.clear_recent()
+    a, b = _saved_file(tmp_path, "A.asterism"), _saved_file(tmp_path, "B.asterism")
+    for p in (a, str(tmp_path / "gone.asterism"), b):
+        documents.add_recent(p)                      # newest first: B, gone, A
+    d = StartDialog()
+    d.show()
+    L = d.recent
+    assert d.open_btn.isEnabled()                    # B, preselected
+    r = L.visualItemRect(L.item(0))
+    QTest.mouseClick(L.viewport(), Qt.LeftButton, Qt.ControlModifier, r.center())
+    assert not L.selectedItems() and not d.open_btn.isEnabled()      # nothing highlighted
+    QTest.mouseClick(L.viewport(), Qt.LeftButton, Qt.NoModifier, L.visualItemRect(L.item(2)).center())
+    assert d.open_btn.isEnabled()
+    d.open_btn.click()
+    assert d.result_choice() == ("open", a)
+    d.close()
+
+
+def test_edited_hours_ago_is_singular_for_one(tmp_path):
+    import os
+    import time
+    from asterism.app.dialogs.start import _when
+    f = tmp_path / "x.asterism"
+    f.write_text("")
+    for hours, text in ((1, "edited 1 hour ago"), (3, "edited 3 hours ago")):
+        t = time.time() - hours * 3600 - 60
+        os.utime(f, (t, t))
+        assert _when(str(f)) == text

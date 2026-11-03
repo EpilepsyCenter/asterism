@@ -34,7 +34,8 @@ def _when(path: str) -> str:
     if age < 3600:
         return "edited just now" if age < 120 else f"edited {int(age // 60)} minutes ago"
     if age < 86400:
-        return f"edited {int(age // 3600)} hours ago"
+        h = int(age // 3600)
+        return f"edited {h} hour{'s' if h != 1 else ''} ago"
     if age < 86400 * 2:
         return "edited yesterday"
     return time.strftime("edited %d %b %Y", time.localtime(os.path.getmtime(path)))
@@ -252,9 +253,9 @@ class StartDialog(QDialog):
         self.open_btn = QPushButton("Open")
         self.open_btn.setDefault(True)
         self.open_btn.setEnabled(False)
-        self.open_btn.clicked.connect(lambda: self._open_item(self.recent.currentItem()))
-        self.recent.currentItemChanged.connect(
-            lambda it, _p: self.open_btn.setEnabled(bool(it) and bool(it.flags() & Qt.ItemIsEnabled)))
+        self.open_btn.clicked.connect(lambda: self._open_item(self._chosen()))
+        self.recent.itemSelectionChanged.connect(self._sync_open)      # Open follows the highlighted row
+        self.recent.currentItemChanged.connect(lambda *_: self._sync_open())
         fl.addWidget(self.open_btn)
         root.addWidget(foot)
 
@@ -263,6 +264,9 @@ class StartDialog(QDialog):
         if first is not None:                  # Return reopens the latest project
             self.recent.setCurrentItem(first)
             self.recent.setFocus()
+        # Set Open from the highlight now, not only on change signals: launched from Finder,
+        # Qt can make the first row current before they're connected, and no signal follows.
+        self._sync_open()
         self.setStyleSheet(self._style())
         theme.notifier.changed.connect(lambda: self.setStyleSheet(self._style()))
         self.resize(880, 700)
@@ -289,6 +293,13 @@ QListWidget#StartRecent {{ border: 1px solid {t['border']}; border-radius: 8px; 
 QListWidget#StartRecent::item {{ padding: 4px 6px; border-radius: 6px; }}
 QFrame#StartFoot {{ border-top: 1px solid {t['border']}; }}
 """
+
+    def _chosen(self):
+        """The highlighted project, if it can be opened."""
+        return next((it for it in self.recent.selectedItems() if it.flags() & Qt.ItemIsEnabled), None)
+
+    def _sync_open(self) -> None:
+        self.open_btn.setEnabled(self._chosen() is not None)
 
     def _whats_new(self) -> None:
         from .whats_new import show_from_menu
