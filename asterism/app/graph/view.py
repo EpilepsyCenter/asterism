@@ -88,19 +88,15 @@ class ElementItem(QGraphicsObject):
             for pt in hs.values():
                 painter.drawEllipse(pt, s / 2, s / 2)
             return
-        if self.isSelected():
-            r = self.el.bounds
-            s = 5.0 / max(painter.worldTransform().m11(), 0.01)
+        # Selected but not resizable: a dotted outline only. Handles mean "drag to resize"
+        # (axes get theirs from the sheet's PlotResizer).
+        if self.isSelected() and "plot" not in self.el.meta:
             accent = QColor(theme.LIGHT["accent"])     # the page is always white
-            pen = QPen(accent, 1.2)
+            pen = QPen(accent, 1.0, Qt.DotLine)
             pen.setCosmetic(True)
             painter.setPen(pen)
-            painter.setBrush(QColor("#ffffff"))
-            c = r.center()
-            for pt in (r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight(),
-                       QPointF(c.x(), r.top()), QPointF(c.x(), r.bottom()),
-                       QPointF(r.left(), c.y()), QPointF(r.right(), c.y())):
-                painter.drawRect(QRectF(pt.x() - s / 2, pt.y() - s / 2, s, s))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(self.el.bounds)
 
     def mousePressEvent(self, e):
         if self.isSelected() and e.button() == Qt.LeftButton:
@@ -175,6 +171,132 @@ class ElementItem(QGraphicsObject):
         self.activated.emit(self)
 
 
+RESIZE_PX = 7.0             # size of the plot-area handles, in screen pixels
+_RESIZE_CURSORS = {"tl": Qt.SizeFDiagCursor, "br": Qt.SizeFDiagCursor, "tr": Qt.SizeBDiagCursor,
+                   "bl": Qt.SizeBDiagCursor, "l": Qt.SizeHorCursor, "r": Qt.SizeHorCursor,
+                   "t": Qt.SizeVerCursor, "b": Qt.SizeVerCursor}
+
+
+class PlotResizer(QGraphicsObject):
+    """Eight handles around the plot area while an axis is selected. Dragging one shows the
+    new outline; letting go reports the new width and height (points)."""
+    resized = Signal(float, float)
+
+    def __init__(self, parent: QGraphicsItem):
+        super().__init__(parent)
+        self.rect = QRectF()
+        self._drag = None            # (handle, rect at press, press point) while dragging
+        self._preview = None
+        self.setAcceptHoverEvents(True)
+        self.setZValue(900)
+        self.hide()
+
+    def set_rect(self, r: QRectF) -> None:
+        if self._drag is None:
+            self.prepareGeometryChange()
+            self.rect = QRectF(r)
+            self.update()
+
+    def _size(self) -> float:
+        views = self.scene().views() if self.scene() else []
+        z = views[0].transform().m11() if views else 1.0
+        return RESIZE_PX / max(z, 0.01)
+
+    def _handles(self) -> dict[str, QPointF]:
+        r = self._preview or self.rect
+        c = r.center()
+        return {"tl": r.topLeft(), "t": QPointF(c.x(), r.top()), "tr": r.topRight(),
+                "r": QPointF(r.right(), c.y()), "br": r.bottomRight(), "b": QPointF(c.x(), r.bottom()),
+                "bl": r.bottomLeft(), "l": QPointF(r.left(), c.y())}
+
+    def _handle_at(self, pos: QPointF) -> str | None:
+        s = self._size() * 1.4                      # a little easier to hit than to see
+        for name, pt in self._handles().items():
+            if QRectF(pt.x() - s / 2, pt.y() - s / 2, s, s).contains(pos):
+                return name
+        return None
+
+    def boundingRect(self) -> QRectF:
+        r = self.rect.united(self._preview) if self._preview else self.rect
+        m = RESIZE_PX * 4 + 2                       # the handles at the smallest zoom (25 %)
+        return r.adjusted(-m, -m, m, m)
+
+    def shape(self):
+        from PySide6.QtGui import QPainterPath
+        path = QPainterPath()
+        s = self._size() * 1.4
+        for pt in self._handles().values():
+            path.addRect(QRectF(pt.x() - s / 2, pt.y() - s / 2, s, s))
+        return path
+
+    def paint(self, painter: QPainter, option, widget=None) -> None:
+        accent = QColor(theme.LIGHT["accent"])     # the page is always white
+        pen = QPen(accent, 1.0, Qt.DashLine)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(self._preview or self.rect)
+        pen.setStyle(Qt.SolidLine)
+        pen.setWidthF(1.2)
+        painter.setPen(pen)
+        painter.setBrush(QColor("#ffffff"))
+        s = self._size()
+        for pt in self._handles().values():
+            painter.drawRect(QRectF(pt.x() - s / 2, pt.y() - s / 2, s, s))
+
+    def hoverMoveEvent(self, e) -> None:
+        h = self._handle_at(e.pos())
+        self.setCursor(_RESIZE_CURSORS[h] if h else Qt.ArrowCursor)
+
+    def hoverLeaveEvent(self, e) -> None:
+        self.unsetCursor()
+
+    def mousePressEvent(self, e) -> None:
+        h = self._handle_at(e.pos()) if e.button() == Qt.LeftButton else None
+        if h is None:
+            e.ignore()
+            return
+        self._drag = (h, QRectF(self.rect), e.pos())
+        e.accept()
+
+    def mouseMoveEvent(self, e) -> None:
+        if self._drag is None:
+            return
+        h, r0, p0 = self._drag
+        d = e.pos() - p0
+        r = QRectF(r0)
+        lo = 8.0                                    # never smaller than this (points)
+        if "l" in h:
+            r.setLeft(min(r0.left() + d.x(), r0.right() - lo))
+        if "r" in h:
+            r.setRight(max(r0.right() + d.x(), r0.left() + lo))
+        if "t" in h:
+            r.setTop(min(r0.top() + d.y(), r0.bottom() - lo))
+        if "b" in h:
+            r.setBottom(max(r0.bottom() + d.y(), r0.top() + lo))
+        if e.modifiers() & Qt.ShiftModifier and len(h) == 2:     # Shift on a corner: keep the shape
+            k = max(r.width() / r0.width(), r.height() / r0.height())
+            w, hh = r0.width() * k, r0.height() * k
+            r.setWidth(w) if "r" in h else r.setLeft(r.right() - w)
+            r.setHeight(hh) if "b" in h else r.setTop(r.bottom() - hh)
+        self.prepareGeometryChange()
+        self._preview = r
+        self.update()
+        e.accept()
+
+    def mouseReleaseEvent(self, e) -> None:
+        if self._drag is None:
+            return
+        r, r0 = self._preview, self._drag[1]
+        self._drag = None
+        self.prepareGeometryChange()
+        self._preview = None
+        self.update()
+        if r is not None and (abs(r.width() - r0.width()) > 0.5 or abs(r.height() - r0.height()) > 0.5):
+            self.resized.emit(r.width(), r.height())
+        e.accept()
+
+
 class InlineText(QGraphicsTextItem):
     finished = Signal(bool)
 
@@ -245,6 +367,8 @@ class GraphSheet(QWidget):
         self.root = QGraphicsRectItem(0, 0, 0, 0)
         self.root.setPen(Qt.NoPen)
         self.scene.addItem(self.root)
+        self.resizer = PlotResizer(self.root)
+        self.resizer.resized.connect(self._plot_resized)
 
         self.items: list[ElementItem] = []
         self._placeholder = None
@@ -259,6 +383,7 @@ class GraphSheet(QWidget):
         # Forward through a weak reference: when the sheet is destroyed, Python frees its
         # items first and each selected one makes the scene report a selection change.
         self.scene.selectionChanged.connect(_forward_selection(weakref.ref(self)))
+        self.selectionChanged.connect(self._sync_resizer)
         graph.changed.connect(self.rebuild)
         self.rebuild()
         self.view.set_zoom(2.0)
@@ -294,6 +419,7 @@ class GraphSheet(QWidget):
         for it in self.items:
             self.scene.removeItem(it)
         self.items = []
+        self.resizer.hide()
         if self._placeholder is not None:
             self.scene.removeItem(self._placeholder)
             self._placeholder = None
@@ -335,6 +461,36 @@ class GraphSheet(QWidget):
         return [it.el for it in self.items if it.isSelected()]
 
     # --- direct manipulation ------------------------------------------------------
+
+    # what each size can be set to in Format Graph (mm)
+    _LEN_LIMITS = {"col_width_mm": (4.0, 80.0), "y_len_mm": (10.0, 250.0), "x_len_mm": (10.0, 300.0)}
+
+    def _selected_plot(self):
+        """(plot rect, width field, height field) when an axis is selected, else None."""
+        return next((it.el.meta["plot"] for it in self.items
+                     if it.isSelected() and "plot" in it.el.meta), None)
+
+    def _sync_resizer(self) -> None:
+        plot = self._selected_plot()
+        if plot is None:
+            self.resizer.hide()
+            return
+        self.resizer.set_rect(plot[0])
+        self.resizer.show()
+
+    def _plot_resized(self, w: float, h: float) -> None:
+        """Handles of the plot area dragged: scale the lengths that size it."""
+        plot = self._selected_plot()
+        if plot is None:
+            return
+        r, wf, hf = plot
+        spec = copy.deepcopy(self.graph.spec)
+        for f, k in ((wf, w / max(r.width(), 1e-6)), (hf, h / max(r.height(), 1e-6))):
+            if abs(k - 1.0) < 1e-3:
+                continue
+            lo, hi = self._LEN_LIMITS[f]
+            setattr(spec, f, round(min(max(getattr(spec, f) * k, lo), hi), 1))
+        self.project.undo.push(SpecCommand(self.graph, spec, "Resize Graph"))
 
     def _activated(self, item: ElementItem) -> None:
         k = item.el.kind

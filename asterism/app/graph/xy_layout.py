@@ -15,7 +15,7 @@ from PySide6.QtGui import QPainterPath
 
 from ...doc.model import column_letter
 from .canvas import MM, TextMetrics as TM
-from .layout import (ORDER, TICK_LEN, AxisRange, Element, Plan, YMap, _frame, _guides, _legend, _rect_path,
+from .layout import (ORDER, mark_plot, TICK_LEN, AxisRange, Element, Plan, YMap, _frame, _guides, _legend, _rect_path,
                      _text_rect, _title, _y_axis, _y_title, draw_symbol, nice_range, summarize,
                      summarize_entered)
 
@@ -459,6 +459,7 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
         sw = "bar" if all(spec.style(c).appearance == "bar" for c in cols) else (
             "line" if any(spec.style(c).connect for c in cols) or curves else "auto")
         elements.append(_legend(spec, t, Plan([], pw, [], legend=list(cols), swatch=sw), legend_x, 0.0))
+    mark_plot(elements, pw, ph, "x_len_mm", "y_len_mm")
     content_top = min(tops + [0.0] + [e.bounds.top() for e in elements if e.id == "y-title"])
     elements += _title(spec, graph, pw, content_top)
     elements.sort(key=lambda e: ORDER[e.kind])

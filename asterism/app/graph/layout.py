@@ -1029,10 +1029,13 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
         from .horizontal import horizontalize
         legend = (table, plan) if spec.show_legend and plan.legend else None
         elements = horizontalize(spec, elements, plan, ym, ph, off, legend)
+        mark_plot(elements, ph, plan.width, "y_len_mm", "col_width_mm")
         content_top = min([0.0] + [e.bounds.top() for e in elements if e.kind in ("dataset", "bracket")])
         elements += _title(spec, graph, ph, content_top)
         elements.sort(key=lambda e: ORDER[e.kind])
         return elements, rng
+
+    mark_plot(elements, pw, ph, "col_width_mm", "y_len_mm")
 
     # --- graph title ----------------------------------------------------------
     content_top = min([content_top] + [e.bounds.top() for e in elements if e.id == "y-title"])
@@ -1207,6 +1210,14 @@ def _guides(spec, ym: YMap, pw: float, ph: float, ym2: YMap | None = None, xm=No
                 cv.rect(0.5, top + 0.5, pw - 0.5, max(bot - top - 1.0, 0.1), fill="#ffffff", stroke=None)
         out.append(Element("axis-break", "gap", QRectF(0, 0, pw, ph), draw_gap, QPainterPath(), {}))
     return out
+
+
+def mark_plot(elements, w: float, h: float, w_field: str, h_field: str) -> None:
+    """Tell the axes where the plot area is (from the origin) and which spec lengths size
+    it across and down, so dragging the axes' handles resizes the graph."""
+    for e in elements:
+        if e.kind in ("x-axis", "y-axis", "frame"):
+            e.meta["plot"] = (QRectF(0.0, 0.0, w, h), w_field, h_field)
 
 
 # z-order: data underneath, axes, then annotations on top

@@ -13,7 +13,7 @@ from PySide6.QtGui import QPainterPath, QPainterPathStroker
 from ...doc.model import column_letter
 from ...doc.spec import PALETTE
 from .canvas import MM, TextMetrics as TM
-from .layout import (ORDER, AxisRange, Element, Plan, YMap, _legend, _rect_path, _text_rect, _title,
+from .layout import (ORDER, mark_plot, AxisRange, Element, Plan, YMap, _legend, _rect_path, _text_rect, _title,
                      _y_axis, _y_title, nice_range)
 from .xy_layout import XMap, _x_axis_numeric, _x_title, x_range
 
@@ -142,6 +142,7 @@ def build_parts(graph) -> tuple[list[Element], AxisRange]:
         from .layout import _x_axis
         elements.append(_x_axis(spec, [(gap / 2 + i * (bw + gap) + bw / 2, t.label(c)) for i, c in enumerate(cols)],
                                 [], pw, ph, 0.0))
+        mark_plot(elements, pw, ph, "col_width_mm", "y_len_mm")
         elements += _y_title(spec, num_left, ph)
     elif lay == "waffle":                                 # percentage dot plot: 100 squares
         rng = AxisRange(0.0, 100.0, 20.0)
@@ -353,6 +354,7 @@ def build_survival(graph) -> tuple[list[Element], AxisRange]:
         elements.append(xt)
     if spec.show_legend and len(curves) > 1:
         elements.append(_legend(spec, t, Plan([], pw, [], legend=list(curves), swatch="line"), pw + 12.0, 0.0))
+    mark_plot(elements, pw, ph, "x_len_mm", "y_len_mm")
     content_top = min([0.0] + [e.bounds.top() for e in elements if e.id == "y-title"])
     elements += _title(spec, graph, pw, content_top)
     elements.sort(key=lambda e: ORDER[e.kind])

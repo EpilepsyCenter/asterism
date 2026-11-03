@@ -12,7 +12,7 @@ from PySide6.QtGui import QPainterPath
 from ...doc.model import column_letter
 from ...doc.spec import PALETTE
 from .canvas import TextMetrics as TM, MM
-from .layout import (ORDER, AxisRange, Element, YMap, _frame, _guides, _mix_hex, _rect_path, _text_rect,
+from .layout import (ORDER, mark_plot, AxisRange, Element, YMap, _frame, _guides, _mix_hex, _rect_path, _text_rect,
                      _title, _y_axis, _y_title, draw_symbol, y_range)
 from .xy_layout import XMap, _x_axis_numeric, _x_title, x_range
 
@@ -169,6 +169,7 @@ def build_multivar(graph) -> tuple[list[Element], AxisRange]:
         if entries:
             right = max([pw] + [e.bounds.right() for e in elements if e.kind == "dataset"])
             elements.append(_mv_legend(spec, entries, right + 12.0))
+    mark_plot(elements, pw, ph, "x_len_mm", "y_len_mm")
     content_top = min([0.0] + [e.bounds.top() for e in elements if e.id == "y-title"])
     elements += _title(spec, graph, pw, content_top)
     elements.sort(key=lambda e: ORDER[e.kind])
