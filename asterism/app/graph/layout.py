@@ -431,7 +431,8 @@ class Slot:
     force_bar: bool = False        # stacked bars
     error_dir: str | None = None   # override (stacked: above only)
     no_line: bool = False          # suppress the centre line (connected means draw a symbol)
-    mark_scale: float = 2.2        # size of the big symbols (subject means) relative to the points
+    point_scale: float = 1.0       # size of the points relative to the symbol size (SuperPlot)
+    mark_scale: float = 2.2        # size of the big symbols (subject means) relative to the symbol size
     mark_outline: str = "#000000"  # their outline colour
 
 
@@ -598,6 +599,7 @@ def plan_nested(graph, cols: list[int], colw: float) -> Plan:
     by_dataset = N.get("color_by") == "dataset"
     keys = {(c, sub): k for c, sub, k in subject_color_keys(t, cols, bool(N.get("restart")))}
     mark_scale = float(N.get("mean_size", 2.2))
+    point_scale = float(N.get("point_size", 1.0))
     slots, labels = [], []
     x0 = 0.0
     for c in cols:
@@ -633,7 +635,7 @@ def plan_nested(graph, cols: list[int], colw: float) -> Plan:
             marks = []
         order = colors if len(s["points"]) == len(colors) else None
         slots.append(Slot((c,), c, x0 + colw / 2, colw, s, allv, point_colors=order, marks=marks,
-                          mark_scale=mark_scale, mark_outline=N.get("mean_outline", "#000000")))
+                          point_scale=point_scale if lay == "superplot" else 1.0, mark_scale=mark_scale, mark_outline=N.get("mean_outline", "#000000")))
         labels.append((x0 + colw / 2, t.label(c)))
         x0 += colw
     if lay == "subjects" and slots:
@@ -653,6 +655,7 @@ class _SlotGeom:
         s = sl.summary
         colw, xc = sl.w, sl.x
         self.d = d = max(1.0, st.symbol_size * 2.0)
+        self.pd = pd = max(0.5, d * sl.point_scale)      # the points (smaller or larger on SuperPlots)
         # "Fill" means a bar behind the points only on scatter plots; on boxes, violins and
         # floating bars it fills the shape itself.
         self.show_bar = sl.force_bar or (not sl.no_line and (
@@ -667,11 +670,11 @@ class _SlotGeom:
         self.is_float = st.appearance == "floating" and shape_ok
         self.is_symbol = (st.appearance == "symbol" or sl.no_line) and not sl.force_bar
         self.ys = ys = [ym(v) for v in s["points"]]
-        self.xs = [0.0] * len(ys) if aligned else swarm(ys, d * 1.05, colw * 0.42)
+        self.xs = [0.0] * len(ys) if aligned else swarm(ys, pd * 1.05, colw * 0.42)
         self.bar_w, self.line_w, self.cap_w = colw * 0.62, colw * 0.5, colw * 0.26
-        hit = [QRectF(xc + dx - d / 2, y - d / 2, d, d) for dx, y in zip(self.xs, ys)]
+        hit = [QRectF(xc + dx - pd / 2, y - pd / 2, pd, pd) for dx, y in zip(self.xs, ys)]
         if ys:
-            top = min(ys) - d / 2
+            top = min(ys) - pd / 2
         else:
             ref = s["center"] if s["center"] is not None else s["max"]
             top = ym(ref) if ref is not None else ym(rng.vmin)
@@ -775,7 +778,7 @@ class _SlotGeom:
                 cv.line(xc, yp - h, xc, yp + h, st.bar_border_color, border, "butt")
         colors = sl.point_colors if sl.point_colors and len(sl.point_colors) == len(self.ys) else None
         for j, (dx, y) in enumerate(zip(self.xs, self.ys)):
-            draw_symbol(cv, st.symbol_shape, xc + dx, y, d, colors[j] if colors else st.symbol_color)
+            draw_symbol(cv, st.symbol_shape, xc + dx, y, self.pd, colors[j] if colors else st.symbol_color)
         for (v, col), mx in zip(sl.marks, self.mark_xs):     # subject means (SuperPlot)
             y = ym(v)
             ms = sl.mark_scale

@@ -170,7 +170,7 @@ def test_units_sit_outside_the_number_boxes(app):
     assert spins and all(not getattr(s, "suffix", lambda: "")().strip() for s in spins)
     assert d.n_mean.value() == 2.2
     labels = {lab.text() for lab in d.findChildren(QLabel)}
-    assert "× the points" in labels and "mm" in labels
+    assert "× the symbol size" in labels and "mm" in labels
     d.close()
 
 

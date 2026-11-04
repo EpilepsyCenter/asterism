@@ -174,7 +174,8 @@ def default_nested() -> dict:
         "color_by": "subject",       # subject | dataset (the data set's symbol colour)
         "colors": [],                # subject colours in order ([] = SUBJECT_COLORS)
         "restart": False,            # colours start again in each group (subject n matches across groups)
-        "mean_size": 2.2,            # SuperPlot subject means: size relative to the points
+        "point_size": 1.0,           # SuperPlot values: size relative to the data set's symbol size
+        "mean_size": 2.2,            # SuperPlot subject means: size relative to the symbol size
         "mean_outline": "#000000",   # and their outline colour
     }
 

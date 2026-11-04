@@ -119,10 +119,13 @@ This section appears for grouped, contingency, nested and survival graphs. Parts
 
 The subject colours apply only when you colour points by subject.
 
-*Subject means (SuperPlot)*
+*Symbol sizes (SuperPlot)*
 
-- **Size:** the subject-mean symbols, as a multiple of the points (**× the points**).
-- **Outline:** the colour of their outline.
+Both sizes are multiples of the data set's symbol size, set on the Style page (**× the symbol size**), so each can be changed without the other.
+
+- **Each value:** the symbols of the individual values. Smaller than 1 makes them smaller than the symbol size.
+- **Subject means:** the subject-mean symbols.
+- **Outline:** the colour of the subject means' outline.
 
 **Survival graphs**
 

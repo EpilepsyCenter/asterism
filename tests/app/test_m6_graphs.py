@@ -189,3 +189,58 @@ def test_data_set_order(app):
     d2._table_order()
     d2.apply()
     assert g.spec.order == []                            # back to the table's order
+
+
+def test_superplot_value_size(app):
+    """SuperPlot: the individual values have their own size, apart from the subject means
+    (both relative to the symbol size); only on SuperPlots; saved with the project."""
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.app.graph.layout import build, plan_nested
+    from asterism.doc.spec import spec_from_dict, spec_to_dict
+    p, t, g = _project("nested")
+    g.spec.nested_layout = "superplot"
+    cols = t.used_columns()
+    d = FormatGraphDialog(g, p, "arrangement")
+    assert d.n_points.value() == 1.0 and d.n_points.isEnabled()
+    d.n_points.setValue(0.5)
+    d.n_mean.setValue(3.0)
+    d.apply()
+    assert g.spec.nested["point_size"] == 0.5 and g.spec.nested["mean_size"] == 3.0
+    sl = plan_nested(g, cols, 40.0).slots[0]
+    assert sl.point_scale == 0.5 and sl.mark_scale == 3.0
+    build(g)                                               # draws without error
+    assert spec_from_dict(spec_to_dict(g.spec)).nested["point_size"] == 0.5
+    d.arrangement.setCurrentIndex(d.arrangement.findData("pooled"))
+    assert not d.n_points.isEnabled() and not d.n_mean.isEnabled()
+    g.spec.nested_layout = "pooled"
+    assert plan_nested(g, cols, 40.0).slots[0].point_scale == 1.0      # SuperPlots only
+
+
+def test_nested_default_colour_set_after_another(app):
+    """Choosing the default colour set after another one shows (and saves) the default colours,
+    not the set chosen before."""
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.doc.spec import SUBJECT_COLORS, SUBJECT_PALETTES
+    p, t, g = _project("nested")
+    d = FormatGraphDialog(g, p, "arrangement")
+
+    def choose(key):
+        d.n_palette.setCurrentIndex(d.n_palette.findData(key))
+        d.n_palette.activated.emit(d.n_palette.currentIndex())
+
+    okabe = SUBJECT_PALETTES["okabe"][1]
+    choose("okabe")
+    d.apply()
+    assert g.spec.nested["colors"][0] == okabe[0]
+    choose("distinct")
+    assert [b.color() for _, b in d.n_buttons][:2] == SUBJECT_COLORS[:2]
+    d.apply()
+    assert g.spec.nested["colors"] == []
+    d.close()
+    d = FormatGraphDialog(g, p, "arrangement")                  # reopened: still the default
+    assert d.n_buttons[0][1].color() == SUBJECT_COLORS[0]
+    k, b = d.n_buttons[1]                                       # editing one keeps the others default
+    b.set_color("#ff0000")
+    b.colorChanged.emit("#ff0000")
+    d.apply()
+    assert g.spec.nested["colors"][0] == SUBJECT_COLORS[0] and g.spec.nested["colors"][k] == "#ff0000"

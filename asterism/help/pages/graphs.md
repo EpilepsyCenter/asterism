@@ -76,7 +76,7 @@ For nested tables, where each sub-column is one subject (an animal, a culture) h
 | SuperPlot on bars | The SuperPlot on top of bars |
 | Box and whiskers with points | A box per group with every value as a dot |
 
-A SuperPlot shows both levels at once: the spread of the replicates and the subject means that the nested test compares. The subject colours, and the size and outline of the subject means, are set under **Format Graph › Arrangement** (see [Formatting graphs](formatting.md#arrangement)).
+A SuperPlot shows both levels at once: the spread of the replicates and the subject means that the nested test compares. The subject colours and the sizes of the values and the subject means are set under **Format Graph › Arrangement** (see [Formatting graphs](formatting.md#arrangement)).
 
 ### XY graphs
 

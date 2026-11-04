@@ -421,17 +421,28 @@ class FormatGraphDialog(SectionDialog):
         self.n_colors: list[str] = list(N.get("colors") or [])
         self.n_buttons: list = []
         self._nested_grid()
-        pl.addWidget(Section("Subject means (SuperPlot)"))
+        pl.addWidget(Section("Symbol sizes (SuperPlot)"))
         g = FormGrid()
-        self.n_mean = QDoubleSpinBox()
-        self.n_mean.setRange(1.0, 5.0)
-        self.n_mean.setSingleStep(0.1)
-        self.n_mean.setDecimals(1)
-        self.n_mean.setSuffix(" × the points")
-        self.n_mean.setValue(float(N.get("mean_size", 2.2)))
+
+        def scale(lo: float, hi: float, v: float) -> QDoubleSpinBox:
+            b = QDoubleSpinBox()
+            b.setRange(lo, hi)
+            b.setSingleStep(0.1)
+            b.setDecimals(1)
+            b.setSuffix(" × the symbol size")
+            b.setValue(v)
+            return b
+        self.n_points = scale(0.2, 3.0, float(N.get("point_size", 1.0)))
+        self.n_mean = scale(0.5, 6.0, float(N.get("mean_size", 2.2)))
         self.n_outline = ColorButton(N.get("mean_outline", "#000000"))
-        g.add(("Size:", self.n_mean), ("Outline:", self.n_outline))
+        g.add(("Each value:", self.n_points))
+        g.add(("Subject means:", self.n_mean), ("Outline:", self.n_outline))
         pl.addLayout(g)
+        self.n_size_note = QLabel("The symbol size is set on the Style page.")
+        self.n_size_note.setEnabled(False)
+        self.n_size_note.setContentsMargins(18, 0, 0, 0)
+        pl.addWidget(self.n_size_note)
+        self.arrangement.currentIndexChanged.connect(lambda *_: self._nested_sync())
         self.n_restart.currentIndexChanged.connect(lambda *_: self._nested_grid())
         self.n_color_by.currentIndexChanged.connect(lambda *_: self._nested_sync())
         self.n_palette.activated.connect(self._nested_palette)
@@ -460,13 +471,15 @@ class FormatGraphDialog(SectionDialog):
         return out
 
     def _nested_grid(self) -> None:
-        from ..graph.layout import subject_palette
+        # No colours of our own = the default set (not the colours saved in the graph:
+        # choosing the default set after another one must show the default colours).
+        from ...doc.spec import SUBJECT_COLORS
         while self.n_grid.count():
             w = self.n_grid.takeAt(0).widget()
             if w is not None:
                 w.hide()
                 w.deleteLater()
-        pal = self.n_colors or subject_palette(self.spec)
+        pal = self.n_colors or list(SUBJECT_COLORS)
         self.n_buttons = []
         rows = self._subject_rows()
         per_col = max(1, (len(rows) + 2) // 3)          # up to three columns of colours
@@ -486,8 +499,8 @@ class FormatGraphDialog(SectionDialog):
         self.n_custom = True
 
     def _nested_capture(self) -> None:
-        from ..graph.layout import subject_palette
-        pal = list(self.n_colors or subject_palette(self.spec))
+        from ...doc.spec import SUBJECT_COLORS
+        pal = list(self.n_colors or SUBJECT_COLORS)
         need = max([k for k, _ in self.n_buttons] + [len(pal) - 1]) + 1
         while len(pal) < need:
             pal.append(pal[len(pal) % max(1, len(pal))])
@@ -513,6 +526,10 @@ class FormatGraphDialog(SectionDialog):
         by_subject = self.n_color_by.currentData() == "subject"
         for w in (self.n_restart, self.n_palette, self.n_grid_box):
             w.setEnabled(by_subject)
+        if hasattr(self, "n_mean"):
+            superplot = self.arrangement.currentData() == "superplot"
+            for w in (self.n_points, self.n_mean, self.n_outline):
+                w.setEnabled(superplot)
 
     def _store_nested(self) -> None:
         s = self.spec
@@ -521,7 +538,8 @@ class FormatGraphDialog(SectionDialog):
         s.nested = {**s.nested, "color_by": self.n_color_by.currentData(),
                     "restart": bool(self.n_restart.currentData()),
                     "colors": list(self.n_colors) if self.n_custom else [],
-                    "mean_size": self.n_mean.value(), "mean_outline": self.n_outline.color()}
+                    "point_size": self.n_points.value(), "mean_size": self.n_mean.value(),
+                    "mean_outline": self.n_outline.color()}
 
     def _parts_page(self, page, pl) -> QWidget:
         """Parts of whole: chart type and size, each slice's colour and pull-out, borders,
