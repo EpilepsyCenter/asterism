@@ -97,7 +97,7 @@ def test_format_graph_significance_page_and_hiding_from_the_graph(app):
     d = FormatGraphDialog(g, p, "significance")
     d.sig_label.setCurrentIndex(1)                         # P values
     d.sig_shape.setCurrentIndex(1)                         # plain line
-    d.sig_list.item(0).setCheckState(__import__("PySide6.QtCore", fromlist=["Qt"]).Qt.Unchecked)
+    d.sig_list.item(1).setCheckState(__import__("PySide6.QtCore", fromlist=["Qt"]).Qt.Unchecked)   # 0: the analysis
     d.apply()
     assert g.spec.sig["label"] == "p" and g.spec.sig["shape"] == "line" and len(g.spec.sig["hidden"]) == 1
     gs = GraphSheet(g, p)
@@ -631,6 +631,18 @@ def test_before_after_summary_and_grouped_replicates_with_means(app):
     g.spec.ba_summary = "mean_sd"
     by = {e.id: e for e in build(g)[0]}
     assert by["summary-beside"].bounds.left() < by["data-A"].bounds.left()      # outward of the first set
+    g.spec.ba_place = "inline"                                                   # in line with the points
+    by = {e.id: e for e in build(g)[0]}
+    assert abs(by["summary-beside"].bounds.left() + 4 - by["data-A"].bounds.center().x()) < 0.5   # first mark on A
+    from asterism.app.graph.export import svg_bytes
+    from asterism.doc.spec import spec_from_dict, spec_to_dict
+    plain = svg_bytes(g)
+    g.spec.ba_join, g.spec.ba_color, g.spec.ba_shape = True, "#f7941d", "circle"
+    styled = svg_bytes(g)
+    assert b"#f7941d" in styled and b"#f7941d" not in plain
+    back = spec_from_dict(spec_to_dict(g.spec))
+    assert (back.ba_place, back.ba_join, back.ba_color, back.ba_shape) == ("inline", True, "#f7941d", "circle")
+    assert spec_from_dict({}).ba_place == "beside"                               # older files: as before
     t2 = p.add_table(table_type="grouped", y_format="replicates", replicates=3, example=True)
     g2 = p.graphs[1]
     g2.spec = apply_preset(g2.spec, "g_lines", t2.used_columns())
@@ -850,3 +862,103 @@ def test_star_size_and_right_axis_list_in_format_graph(app):
     d.apply()
     assert g.spec.fonts["stars"].size == 18.0 and g.spec.fonts["bracket"].size == 8.0
     assert [g.spec.style(c).axis for c in range(4)] == ["left", "right", "right", "left"]
+
+
+def test_multi_line_titles_and_comparisons_listed_per_analysis(app):
+    """Titles may have several lines (Shift+Return on the graph, \\n in Format Graph); the
+    Significance list hides one analysis's comparison without touching another's."""
+    from PySide6.QtCore import Qt
+    from asterism.analysis import engine
+    from asterism.app.dialogs.format_graph import FormatGraphDialog, title_from_field, title_to_field
+    from asterism.app.graph.export import svg_bytes
+    from asterism.app.graph.layout import build
+    from asterism.doc.model import Analysis, Project
+    p = Project(engine)
+    t = p.add_table(table_type="column", example=False)
+    for r in range(6):
+        for c, base in enumerate((10.0, 14.0, 19.0)):
+            t.set(r, c, base + r * (1 + c * 0.3), emit=False)
+    t.changed.emit()
+    g = p.graphs[0]
+
+    def box(eid):
+        return next(e for e in build(g)[0] if e.id == eid).bounds
+    g.spec.y.title, g.spec.title = "Discharges", "One line"
+    w1, h1 = box("y-title").width(), box("graph-title").height()
+    g.spec.y.title, g.spec.title = "Discharges\nper minute", "One line\nand another"
+    assert box("y-title").width() > 1.8 * w1 and box("graph-title").height() > 1.8 * h1
+    assert b">per minute<" in svg_bytes(g) and b">Discharges<" in svg_bytes(g)
+    assert title_from_field(title_to_field("a\nb")) == "a\nb" and title_to_field("a\nb") == "a\\nb"
+    dlg = FormatGraphDialog(g, p, "fonts")
+    assert dlg.t_ytitle.text() == "Discharges\\nper minute"
+    dlg._collect()
+    assert dlg.spec.y.title == "Discharges\nper minute"
+
+    a1 = Analysis("anova1", t, [0, 1, 2], {"design": "rm", "compare": "all"})
+    a2 = Analysis("anova1", t, [0, 1, 2], {"design": "rm", "distribution": "nonparametric", "compare": "all"})
+    a3 = Analysis("ttest", t, [0, 1], {"design": "paired", "bracket": False})
+    for a in (a1, a2, a3):
+        p.add_analysis(a)
+    g.spec.sig["which"] = "all"
+
+    def brackets():
+        return [e.id for e in build(g)[0] if e.kind == "bracket"]
+    assert len(brackets()) == 6                                   # both ANOVAs, not the switched-off t test
+    dlg = FormatGraphDialog(g, p, "significance")
+    items = [dlg.sig_list.item(i) for i in range(dlg.sig_list.count())]
+    keys = [it.data(Qt.UserRole) for it in items if it.data(Qt.UserRole)]
+    assert len(keys) == 6 and len(set(keys)) == 6                 # one entry per analysis and pair
+    assert sum(1 for it in items if not it.flags() & Qt.ItemIsEnabled) == 1      # the t test: one greyed line
+    assert not items[-1].flags() & Qt.ItemIsEnabled                              # listed after the others
+    for it in items:
+        if it.data(Qt.UserRole) and it.data(Qt.UserRole).startswith(a1.id):
+            it.setCheckState(Qt.Unchecked)
+    dlg._collect()
+    g.spec = dlg.spec
+    assert len(brackets()) == 3 and all(h.startswith(a1.id) for h in g.spec.sig["hidden"])
+    g.spec.sig["hidden"] = ["bracket-A-B"]                        # hidden on the graph: every analysis
+    assert len(brackets()) == 4
+
+
+def test_ns_in_the_p_value_font_and_x_axis_of_a_set_length(app):
+    """"ns" is sized like P values, not like stars; a column graph's X axis can be given a length,
+    which the columns then share (also after a data set is added)."""
+    from asterism.analysis import engine
+    from asterism.app.dialogs.format_graph import FormatGraphDialog
+    from asterism.app.graph.layout import MM, build
+    from asterism.doc.model import Analysis, Project
+    from asterism.doc.spec import spec_from_dict, spec_to_dict
+    p = Project(engine)
+    t = p.add_table(table_type="column", example=False)
+    vals = ((10, 12, 9, 11, 13, 10), (10.4, 11.6, 9.5, 11.2, 12.6, 10.5), (30, 33, 29, 35, 31, 34))
+    for c, col in enumerate(vals):
+        for r, v in enumerate(col):
+            t.set(r, c, float(v), emit=False)
+    t.changed.emit()
+    g = p.graphs[0]
+    p.add_analysis(Analysis("anova1", t, [0, 1, 2], {"compare": "all"}))
+    g.spec.sig["which"] = "all"
+    g.spec.fonts["stars"].size, g.spec.fonts["bracket"].size = 30.0, 8.0
+
+    def heights():
+        return [e.bounds.height() for e in build(g)[0] if e.kind == "bracket"]
+    hs = sorted(heights())
+    assert len(hs) == 3 and hs[0] < 0.6 * hs[-1]                 # one "ns" (small), two starred (large)
+
+    def axis():
+        return next(e.meta["plot"] for e in build(g)[0] if "plot" in e.meta)
+    assert axis()[1] == "col_width_mm" and abs(axis()[0].width() - 3 * g.spec.col_width_mm * MM) < 0.01
+    g.spec.x_fixed, g.spec.x_len_mm = True, 90.0
+    assert axis()[1] == "x_len_mm" and abs(axis()[0].width() - 90 * MM) < 0.01
+    t.set(0, 3, 5.0)                                              # a fourth data set: same axis, thinner columns
+    assert abs(axis()[0].width() - 90 * MM) < 0.01
+    assert spec_from_dict(spec_to_dict(g.spec)).x_fixed and not spec_from_dict({}).x_fixed
+    dlg = FormatGraphDialog(g, p, "frame")
+    assert abs(dlg.x_axis_len.value() - 90.0) < 0.06 and abs(dlg.col_w.value() - 22.5) < 0.06
+    dlg.col_w.setValue(10.0)                                      # column width edited: the axis follows
+    assert abs(dlg.x_axis_len.value() - 40.0) < 0.06
+    dlg._collect()
+    assert not dlg.spec.x_fixed and dlg.spec.col_width_mm == 10.0
+    dlg.x_axis_len.setValue(60.0)                                 # axis length edited: it rules
+    dlg._collect()
+    assert dlg.spec.x_fixed and dlg.spec.x_len_mm == 60.0 and abs(dlg.col_w.value() - 15.0) < 0.06

@@ -85,7 +85,7 @@ def copy_formatting(source, target, aspects: set[str]):
             for f in ("auto", "vmin", "vmax", "interval"):
                 setattr(ta, f, getattr(sa, f))
     if "size" in aspects:
-        for f in ("col_width_mm", "y_len_mm", "x_len_mm", "frame", "axis_width", "axis_color", "show_title"):
+        for f in ("col_width_mm", "y_len_mm", "x_len_mm", "x_fixed", "frame", "axis_width", "axis_color", "show_title"):
             setattr(t, f, getattr(s, f))
     if "fonts" in aspects:
         t.fonts = copy.deepcopy(s.fonts)

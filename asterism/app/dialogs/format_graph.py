@@ -41,6 +41,16 @@ NUMBER_FORMATS = [("Decimal (1500)", "decimal"), ("Power of ten (1.5×10³)", "p
                   ("Scientific (1.5e+03)", "scientific"), ("Antilog: values are log10 (10³)", "antilog")]
 TICK_LEN = [("Very short", "very_short"), ("Short", "short"), ("Medium", "normal"),
             ("Long", "long"), ("Very long", "very_long")]
+def title_to_field(s: str) -> str:
+    """A title in a one-line field: line breaks shown as \\n."""
+    return (s or "").replace("\n", "\\n")
+
+
+def title_from_field(s: str) -> str:
+    return "\n".join(part.strip() for part in s.strip().split("\\n"))
+
+
+TITLE_TIP = "Type \\n for a new line (or Shift+Return when editing the title on the graph)."
 SHAPES = ["circle", "square", "triangle", "diamond", "open_circle", "open_square", "cross", "plus"]
 
 # Old section names (graph view, main window) → section keys.
@@ -201,8 +211,50 @@ class FormatGraphDialog(SectionDialog):
         self.col_w = mm_spin(self.spec.col_width_mm, 4, 80)
         self.height_mm = mm_spin(self.spec.y_len_mm, 10, 250)
         self.x_axis_len = mm_spin(self.spec.x_len_mm, 10, 300)
+        tt = self.graph.table.table_type
+        # Column, grouped and nested graphs: set the X-axis length (the columns share it) or the
+        # column width (the axis follows). The two boxes show the same size; the one edited last rules.
+        self._x_fixed = bool(self.spec.x_fixed)
+        self.sized_by_columns = tt in ("column", "nested") or (
+            tt in ("grouped", "contingency") and self.spec.grouped_layout != "heatmap")
         if self.numx:
             g.add(("X-axis length:", self.x_axis_len), ("Plot height:", self.height_mm))
+        elif self.sized_by_columns:
+            from ..graph.layout import build
+            gs = self.graph.spec           # how long the axis is for the stored column width
+            keep, gs.x_fixed = gs.x_fixed, False
+            try:
+                plot = next((e.meta["plot"] for e in build(self.graph)[0] if "plot" in e.meta), None)
+            finally:
+                gs.x_fixed = keep
+            axis_mm = self.spec.col_width_mm * 3
+            if plot is not None:           # (a horizontal graph's category axis runs down the page)
+                axis_mm = (plot[0].height() if gs.horizontal else plot[0].width()) * 25.4 / 72
+            self._size_ratio = max(axis_mm, 0.1) / max(self.spec.col_width_mm, 0.1)       # axis mm per column mm
+            if self._x_fixed:
+                self.col_w.setValue(self.spec.x_len_mm / self._size_ratio)
+            else:
+                self.x_axis_len.setValue(axis_mm)
+
+            def from_axis(v):
+                self._x_fixed = True
+                self.col_w.blockSignals(True)
+                self.col_w.setValue(v / self._size_ratio)
+                self.col_w.blockSignals(False)
+
+            def from_column(v):
+                self._x_fixed = False
+                self.x_axis_len.blockSignals(True)
+                self.x_axis_len.setValue(v * self._size_ratio)
+                self.x_axis_len.blockSignals(False)
+            self.x_axis_len.valueChanged.connect(from_axis)
+            self.col_w.valueChanged.connect(from_column)
+            tip = ("Set the length of the whole axis and the columns share it, or set the column width and "
+                   "the axis follows. The one you change last is kept when data sets are added or removed.")
+            self.x_axis_len.setToolTip(tip)
+            self.col_w.setToolTip(tip)
+            g.add(("X-axis length:", self.x_axis_len), ("Plot height:", self.height_mm))
+            g.add(("Column width:", self.col_w))
         else:
             g.add(("Column width:", self.col_w), ("Plot height:", self.height_mm))
         self.orient = combo([("Vertical (columns go up)", False), ("Horizontal (bars go across)", True)],
@@ -232,9 +284,11 @@ class FormatGraphDialog(SectionDialog):
         page, pl = tab_page()
         pl.addWidget(Section("Titles"))
         g = FormGrid()
-        self.t_title = QLineEdit(self.spec.title or self.graph.table.name)
+        self.t_title = QLineEdit(title_to_field(self.spec.title or self.graph.table.name))
         self.t_title.setMinimumWidth(320)
-        self.t_ytitle = QLineEdit(self.spec.y.title)
+        self.t_ytitle = QLineEdit(title_to_field(self.spec.y.title))
+        self.t_title.setToolTip(TITLE_TIP)
+        self.t_ytitle.setToolTip(TITLE_TIP)
         g.add(("Graph title:", self.t_title))
         g.add(("Y-axis title:", self.t_ytitle))
         pl.addLayout(g)
@@ -756,24 +810,39 @@ class FormatGraphDialog(SectionDialog):
 
         def lab(k):
             return f"{t.row_label(k[0])}: {t.label(k[1])}" if isinstance(k, tuple) else t.label(k)
-        for a in self.graph.analyses():
+        # One group per analysis, under its name: the same pair of data sets can be compared by
+        # several analyses, and each of those comparisons is shown or hidden on its own.
+        # Analyses that draw brackets come first; the others get one greyed line each.
+        for a in sorted(self.graph.analyses(), key=lambda a: not a.params.get("bracket", True)):
             r = a.result
             if r is None or r.error:
                 continue
             pairs = [(ka, kb, pv) for ka, kb, pv in r.comparisons] + list(r.cell_comparisons)
             if a.analysis_type == "multiple_t" and len(a.columns) == 2:
                 pairs += [((row, a.columns[0]), (row, a.columns[1]), padj) for row, _p, padj in r.rows]
-            for ka, kb, pv in pairs:
+            if not pairs:
+                continue
+            draws = bool(a.params.get("bracket", True))
+            head = QListWidgetItem(a.name + ("" if draws else "  (brackets are switched off in this analysis)"))
+            head.setFlags(Qt.ItemIsEnabled if draws else Qt.NoItemFlags)
+            f = head.font()
+            f.setBold(True)
+            head.setFont(f)
+            self.sig_list.addItem(head)
+            for ka, kb, pv in pairs if draws else []:
                 gid = bracket_id(ka, kb)
-                it = QListWidgetItem(f"{lab(ka)}  vs.  {lab(kb)}    (P = {pv:.4g})")
+                it = QListWidgetItem(f"    {lab(ka)}  vs.  {lab(kb)}    (P = {pv:.4g})")
                 it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
-                it.setCheckState(Qt.Unchecked if gid in hidden else Qt.Checked)
-                it.setData(Qt.UserRole, gid)
+                it.setCheckState(Qt.Unchecked if gid in hidden or f"{a.id}:{gid}" in hidden else Qt.Checked)
+                it.setData(Qt.UserRole, f"{a.id}:{gid}")
                 self.sig_list.addItem(it)
         if self.sig_list.count():
-            note = QLabel("Untick a comparison to hide its bracket (or right-click the bracket on the graph).")
+            note = QLabel("Untick a comparison to hide its bracket (or right-click the bracket on the graph). "
+                          "Each analysis draws brackets or not from its own settings.")
+            note.setWordWrap(True)
             note.setEnabled(False)
             pl.addWidget(note)
+            self.sig_list.setMaximumHeight(190)
             pl.addWidget(self.sig_list)
 
         pl.addWidget(Section("Label"))
@@ -848,7 +917,7 @@ class FormatGraphDialog(SectionDialog):
         except ValueError:
             cuts = list(s.sig.get("cuts", [0.05, 0.01, 0.001, 0.0001]))
         hidden = [self.sig_list.item(i).data(Qt.UserRole) for i in range(self.sig_list.count())
-                  if self.sig_list.item(i).checkState() != Qt.Checked]
+                  if self.sig_list.item(i).data(Qt.UserRole) and self.sig_list.item(i).checkState() != Qt.Checked]
         color = self.sig_color.color()
         s.sig = {**s.sig, "which": self.sig_which.currentData(), "control": self.sig_control.currentData(),
                  "alpha": self.sig_alpha.currentData(), "ns_single": self.sig_ns.isChecked(),
@@ -928,7 +997,9 @@ class FormatGraphDialog(SectionDialog):
         g = FormGrid()
         g.setContentsMargins(0, 0, 0, 0)
         self.xy_box.setLayout(g)
-        self.xy_show = combo([("Mean with error bars", "mean"), ("Each replicate", "replicates"),
+        self.xy_show = combo([("Mean with error bars", "mean"),
+                              ("Mean with error bars and each replicate", "mean_reps"),
+                              ("Each replicate", "replicates"),
                               ("Each replicate, connected (spaghetti)", "spaghetti")])
         self.connect_line = QCheckBox("Connect the points with a line")
         self.line_w = combo(THICK[1:])
@@ -1109,7 +1180,33 @@ class FormatGraphDialog(SectionDialog):
                                 self.spec.ba_summary)
         self.ba_summary.currentIndexChanged.connect(
             lambda _: setattr(self.spec, "ba_summary", self.ba_summary.currentData()))
-        g.add(("Beside the points:", self.ba_summary))
+        g.add(("Summary of each data set:", self.ba_summary))
+        self.ba_place = combo([("Beside the points", "beside"), ("In line with the points", "inline")],
+                              self.spec.ba_place)
+        self.ba_place.currentIndexChanged.connect(
+            lambda _: setattr(self.spec, "ba_place", self.ba_place.currentData()))
+        self.ba_shape = QComboBox()
+        for sh in SHAPES:
+            self.ba_shape.addItem(shape_icon(sh), "", sh)
+        self.ba_shape.setCurrentIndex(max(self.ba_shape.findData(self.spec.ba_shape), 0))
+        self.ba_shape.currentIndexChanged.connect(
+            lambda _: setattr(self.spec, "ba_shape", self.ba_shape.currentData()))
+        g.add(("Position:", self.ba_place), ("Symbol:", self.ba_shape))
+        self.ba_own_color = QCheckBox("Its own colour")
+        self.ba_own_color.setChecked(bool(self.spec.ba_color))
+        self.ba_color = ColorButton(self.spec.ba_color or "#f7941d")
+        self.ba_color.setEnabled(bool(self.spec.ba_color))
+
+        def _ba_color(*_):
+            self.ba_color.setEnabled(self.ba_own_color.isChecked())
+            self.spec.ba_color = self.ba_color.color() if self.ba_own_color.isChecked() else ""
+        self.ba_own_color.toggled.connect(_ba_color)
+        self.ba_color.colorChanged.connect(_ba_color)
+        g.add((None, self.ba_own_color), ("Colour:", self.ba_color))
+        self.ba_join = QCheckBox("Join the summaries with a line")
+        self.ba_join.setChecked(self.spec.ba_join)
+        self.ba_join.toggled.connect(lambda v: setattr(self.spec, "ba_join", v))
+        g.add((None, self.ba_join))
         pl.addLayout(g)
         pl.addSpacing(8)
         pl.addWidget(Section("Data sets and their order"))
@@ -1340,7 +1437,8 @@ class FormatGraphDialog(SectionDialog):
                 pl.addLayout(g)
             pl.addWidget(Section("Title"))
             g = FormGrid()
-            self.x_title = QLineEdit(x.title)
+            self.x_title = QLineEdit(title_to_field(x.title))
+            self.x_title.setToolTip(TITLE_TIP)
             g.add(("X-axis title:", self.x_title))
             pl.addLayout(g)
         pl.addWidget(Section("Ticks"))
@@ -1401,7 +1499,8 @@ class FormatGraphDialog(SectionDialog):
         lay.insertWidget(1, msg)
         lay.insertWidget(2, self.right_list)
         g = FormGrid()
-        self.y2_title = QLineEdit(self.spec.y2.title)
+        self.y2_title = QLineEdit(title_to_field(self.spec.y2.title))
+        self.y2_title.setToolTip(TITLE_TIP)
         g.add(("Title:", self.y2_title))
         lay.insertWidget(3, Section("Title"))
         lay.insertLayout(4, g)
@@ -1601,7 +1700,9 @@ class FormatGraphDialog(SectionDialog):
         self._collect_sig()
         s.col_width_mm = self.col_w.value()
         s.horizontal = bool(self.orient.currentData())
-        s.x_len_mm = self.x_axis_len.value()
+        if self.numx or self._x_fixed:
+            s.x_len_mm = self.x_axis_len.value()
+        s.x_fixed = self._x_fixed and self.sized_by_columns
         s.y_len_mm = self.height_mm.value()
         s.frame = self.frame.currentData()
         s.axis_width = self.axis_w.currentData()
@@ -1643,7 +1744,7 @@ class FormatGraphDialog(SectionDialog):
         if self.numx:
             s.x.scale = self.x_scale.currentData()
             s.x.auto = self.x_auto.isChecked()
-            s.x.title = self.x_title.text().strip()
+            s.x.title = title_from_field(self.x_title.text())
             s.x.fmt = self.x_fmt.currentData()
             if getattr(self, "x_datefmt", None) is not None:
                 s.x.date_fmt = self.x_datefmt.currentData()
@@ -1658,13 +1759,13 @@ class FormatGraphDialog(SectionDialog):
                 s.x.interval = abs(fx(self.x_step, s.x.interval)) or 1.0
         self._collect_axis(s.y, self.axis_ctl["y"])
         self._collect_axis(s.y2, self.axis_ctl["y2"])
-        s.y2.title = self.y2_title.text().strip()
+        s.y2.title = title_from_field(self.y2_title.text())
         if self.numx and "x" in self.axis_ctl:
             self._collect_guides(s.x, self.axis_ctl["x"])
         y = s.y
-        title = self.t_title.text().strip()
+        title = title_from_field(self.t_title.text())
         s.title = "" if title == self.graph.table.name else title
-        y.title = self.t_ytitle.text().strip()
+        y.title = title_from_field(self.t_ytitle.text())
         for key, (fam, size, b, it) in self.font_rows.items():
             fs = s.fonts[key]
             fs.family, fs.size = fam.currentFont().family(), size.value()

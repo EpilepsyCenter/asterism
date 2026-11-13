@@ -87,6 +87,7 @@ For XY tables (a numeric X and one or more Y data sets).
 | Points, mean ± SEM | A point at each X with SEM error bars over the replicates |
 | Points and connecting line | The same points joined by a line |
 | Line only | A line through the means, no points or error bars |
+| Mean ± SEM with each replicate | The means joined by a line, with every replicate as a smaller, fainter point |
 | Each replicate | Every replicate as its own point |
 | Each replicate connected (spaghetti) | Each replicate column as its own line |
 | Line with shaded area | A line with the area under it shaded |

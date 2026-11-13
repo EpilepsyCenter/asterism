@@ -49,7 +49,7 @@ For box and whiskers, the box spans the 25th to 75th percentile with a line at t
 
 ### Lines and replicates (XY graphs)
 
-- **Show:** **Mean with error bars**, **Each replicate**, or **Each replicate, connected (spaghetti)**.
+- **Show:** **Mean with error bars**, **Mean with error bars and each replicate** (the replicates as smaller, fainter points under the mean), **Each replicate**, or **Each replicate, connected (spaghetti)**.
 - **Connect the points with a line**, with **Line thickness** and **Line style** (solid, dashed, dotted).
 - **Break the line where a value is missing** leaves a gap instead of joining across it.
 - **Label points with their row titles**.
@@ -91,7 +91,7 @@ Error bars do not apply to violins and floating bars.
 
 ## Data sets: Show and order
 
-- **Join each row's values across data sets with a line (before-after)** draws paired data: each row's values joined across the groups. Set the **Line thickness** and **Line colour**. **Beside the points** adds a summary next to the dots: **Mean ± SD**, **Mean ± SEM**, **Mean with 95% CI** or **Median with interquartile range** (or **Nothing**).
+- **Join each row's values across data sets with a line (before-after)** draws paired data: each row's values joined across the groups. Set the **Line thickness** and **Line colour**. **Summary of each data set** adds a summary to the dots: **Mean ± SD**, **Mean ± SEM**, **Mean with 95% CI** or **Median with interquartile range** (or **Nothing**). **Position** puts it **Beside the points** or **In line with the points**; **Symbol** and **Its own colour** set how it looks (without its own colour it takes each data set's colours); **Join the summaries with a line** connects them across the data sets.
 - **Data sets and their order:** untick a data set to leave it out of this graph (the data stay in the table and in analyses). Drag data sets in the list, or select one and click **Move Up** or **Move Down**, to change their order on the graph: left to right, bottom to top in a stack, the drawing order on XY graphs, and the order in the legend. **Table Order** puts them back in the order of the table's columns. The order belongs to this graph only; the table and other graphs are unchanged.
 - **Fitted curves on this graph** (XY graphs with fits): untick a data set's fit to hide its curve on this graph; the same switch as in Style › Fitted curve.
 
@@ -231,7 +231,7 @@ The Text tools in the Tools panel change fonts directly on the graph; see [Graph
 
 ## Size and frame
 
-- **Column width** (graphs with groups) or **X-axis length** (graphs with a numeric X axis), and **Plot height**, in millimetres. These set the plot area; the graph exports at this size. You can also drag them on the graph: select an axis and drag the handles around the plot area (see [Selecting and moving](graphs.md#selecting-and-moving)).
+- **X-axis length** and **Plot height**, in millimetres. Graphs with groups (column, grouped, nested) also have **Column width**: set the length of the whole axis and the columns share it, or set the column width and the axis follows. The two boxes show the same size, and the one you change last is the one kept when data sets are added or removed. These set the plot area; the graph exports at this size. You can also drag them on the graph: select an axis and drag the handles around the plot area (see [Selecting and moving](graphs.md#selecting-and-moving)).
 - **Orientation** (column, grouped, contingency and nested graphs): **Vertical (columns go up)** or **Horizontal (bars go across)**.
 - **Frame:** **Axes only**, **Axes, offset from the data** (the axes stand a little apart from the data, a common journal style) or **Closed box**.
 - **Line thickness** and **Line colour** of the axes.
@@ -248,14 +248,14 @@ How [significance brackets](graphs.md#significance-brackets) look and which comp
 - **Multiple comparisons:** **Only the significant ones**, **All of them**, **Only those against a control** (choose the **Control** data set) or **None**.
 - **Significant when P <**: 0.05, 0.01, 0.001 or 0.10.
 - **Show “ns” for a two-group test that isn't significant**.
-- A list of every comparison with its P value: untick one to hide its bracket. Right-clicking a bracket on the graph does the same.
+- A list of every comparison with its P value, grouped under the analysis it comes from: untick one to hide its bracket. When several analyses compare the same two data sets, each is listed (and hidden) separately. An analysis whose brackets are switched off in its own settings is listed last, greyed out. Right-clicking a bracket on the graph and choosing **Hide this comparison** hides that pair for every analysis.
 
 **Label**
 
 - **Show:** **Stars** (from "ns" up to four stars), **P value (P = 0.0123)**, **Number only (0.0123)** or **Stars and P value**.
 - **Stars:** the P value thresholds for one, two, three and four stars: **Four levels: 0.05, 0.01, 0.001, 0.0001**, **Three levels: 0.05, 0.01, 0.001**, **Prism's style: 0.0332, 0.0021, 0.0002, 0.0001**, or **My own thresholds** (type them in **Thresholds**, separated by commas).
 - **At most:** the largest number of stars shown (1 to 4).
-- **Size of stars** and **Size of P values** (the same sizes as on Titles and fonts).
+- **Size of stars** and **Size of P values** (the same sizes as on Titles and fonts). "ns" is a word, not a star, so it takes the size of the P values.
 
 Say in your figure legend which thresholds the stars mean.
 

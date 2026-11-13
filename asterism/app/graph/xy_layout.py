@@ -15,7 +15,7 @@ from PySide6.QtGui import QPainterPath
 
 from ...doc.model import column_letter
 from .canvas import MM, TextMetrics as TM
-from .layout import (ORDER, mark_plot, TICK_LEN, AxisRange, Element, Plan, YMap, _frame, _guides, _legend, _rect_path,
+from .layout import (ORDER, mark_plot, TICK_LEN, AxisRange, Element, Plan, YMap, _frame, _guides, _legend, _mix_hex, text_block, _rect_path,
                      _text_rect, _title, _y_axis, _y_title, draw_symbol, nice_range, summarize,
                      summarize_entered)
 
@@ -275,7 +275,8 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
         for x_, y_ in pts_mean:
             hit_rects.append(QRectF(x_ - d, y_ - d, 2 * d, 2 * d))
         rep_pts = [(xmc(r_["x"]), ymc(v), k_) for r_ in rows for k_, v in r_["reps"]]
-        show_reps = st.xy_show in ("replicates", "spaghetti") and rep_pts
+        show_reps = st.xy_show in ("replicates", "spaghetti", "mean_reps") and rep_pts
+        with_mean = st.xy_show in ("mean", "mean_reps")       # mean ± error; mean_reps adds the replicates
         if show_reps:
             hit_rects += [QRectF(x_ - d, y_ - d, 2 * d, 2 * d) for x_, y_, _ in rep_pts]
         bars = []
@@ -289,13 +290,13 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
                 hit_rects.append(QRectF(x0, min(yb, y0), w_each, abs(y0 - yb)))
         top = min([y for _, y in pts_mean] + [y for _, y, _ in rep_pts]) - d
         for r_ in rows:
-            if st.errors and r_["hi"] is not None and st.xy_show == "mean":
+            if st.errors and r_["hi"] is not None and with_mean:
                 top = min(top, ymc(r_["hi"]))
         tops.append(top)
 
         def draw_ds(cv, st=st, rows=rows, pts_mean=pts_mean, rep_pts=rep_pts, show_reps=show_reps, d=d,
                     col=col, dash=dash, bars=bars, is_bar=is_bar, ymc=ymc, xmc=xmc, base_v=base_v, runs=runs,
-                    row_cols=row_cols, rep_cols=rep_cols, labels=labels, fs_lab=fs_lab):
+                    row_cols=row_cols, rep_cols=rep_cols, labels=labels, fs_lab=fs_lab, with_mean=with_mean):
             if st.fill and len(pts_mean) > 1:
                 y0 = ymc(base_v)
                 poly = [(pts_mean[0][0], y0)] + pts_mean + [(pts_mean[-1][0], y0)]
@@ -305,7 +306,10 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
                     continue                    # empty bin: nothing to draw
                 cv.rect(x0, y0, w, h, fill=st.bar_fill,
                         stroke=st.bar_border_color if st.bar_border > 0 else None, width=st.bar_border)
-            if st.xy_show == "mean" and st.errors:
+            if st.xy_show == "mean_reps" and show_reps and st.show_points and not is_bar:
+                for (x_, y_, _), rc in zip(rep_pts, rep_cols):      # fainter and smaller, under the mean
+                    draw_symbol(cv, st.symbol_shape, x_, y_, max(d * 0.55, 1.5), _mix_hex(rc or col, "#ffffff", 0.55))
+            if with_mean and st.errors:
                 cap = max(d * 0.75, 2.5)
                 for r_ in rows:
                     xc = xmc(r_["x"])
@@ -336,7 +340,7 @@ def build_xy(graph) -> tuple[list[Element], AxisRange]:
                     if len(run) > 1:
                         cv.polyline(run, col, st.line_width, "round", dash)
             if st.show_points and not is_bar:
-                if show_reps:
+                if show_reps and not with_mean:
                     for (x_, y_, _), rc in zip(rep_pts, rep_cols):
                         draw_symbol(cv, st.symbol_shape, x_, y_, d, rc or col)
                 else:
@@ -507,9 +511,11 @@ def _x_title(spec, pw: float, _unused, xy: float) -> Element | None:
     tx = pw / 2 + dx
     ty = xy + tl + 3.0 + TM.ascent(fs_l) + TM.descent(fs_l) + 6.0 + TM.ascent(fs_t) + dy
 
-    def draw(cv, tx=tx, ty=ty):
-        cv.text(tx, ty, ax.title, fs_t, anchor="middle")
-    r = _text_rect(tx, ty, ax.title, fs_t, "middle")
+    lines, r = text_block(tx, ty, ax.title, fs_t, "middle")
+
+    def draw(cv, lines=lines):
+        for lx, ly, ln in lines:
+            cv.text(lx, ly, ln, fs_t, anchor="middle")
     return Element("x-title", "text", r, draw, _rect_path(r),
                    {"font_keys": ["y_title"], "field": "x_title", "text": ax.title, "rotate": 0,
                     "anchor_pt": (tx, ty)})

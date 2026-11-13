@@ -205,3 +205,23 @@ def test_fitted_curve_style_and_hiding(app):
     hidden = it.data(Qt.UserRole)
     assert not g.spec.style(hidden).curve_show
     assert f"fit-{chr(65 + hidden)}" not in ids()
+
+
+def test_mean_with_each_replicate(app):
+    """Mean ± error and the replicates together: the error bars stay, the replicates widen the data set."""
+    from asterism.app.dialogs.graph_type import apply_preset
+    from asterism.app.graph.export import svg_bytes
+    from asterism.app.graph.layout import build
+    p, t, g = _dose(app)
+    cols = t.used_columns()
+
+    def height():
+        return next(e for e in build(g)[0] if e.id == "data-A").hit.boundingRect().height()
+    g.spec = apply_preset(g.spec, "xy_points_line", cols)
+    h_mean, n_mean = height(), svg_bytes(g).count(b"<")
+    g.spec = apply_preset(g.spec, "xy_mean_reps", cols)
+    assert g.spec.style(0).xy_show == "mean_reps" and g.spec.style(0).errors
+    assert height() > h_mean                              # replicates reach beyond the means
+    assert svg_bytes(g).count(b"<") > n_mean              # and are drawn on top of what was there
+    g.spec.style(0).errors = False
+    assert svg_bytes(g).count(b"<") < n_mean + 2 * 3 * len(t.x)      # error bars are still optional

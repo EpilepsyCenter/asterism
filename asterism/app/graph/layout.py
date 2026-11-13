@@ -406,6 +406,21 @@ def _text_rect(x, y, s, fs: FontSpec, anchor="middle", rotate=0.0) -> QRectF:
     return QRectF(x + dx, y - a, w, a + dsc)
 
 
+def text_block(x, y, s, fs: FontSpec, anchor="middle", rotate=0.0, grow="down"):
+    """A title of one or more lines: [(x, y, line)] to draw and the rectangle around them.
+    `grow` says where the extra lines go: "down" (the first line stays at x, y) or "up" (the
+    last line does). Text turned -90° stacks its lines left to right."""
+    lines = s.split("\n")
+    lh = TM.ascent(fs) + TM.descent(fs)
+    out, box = [], QRectF()
+    for i, ln in enumerate(lines):
+        k = i if grow == "down" else i - (len(lines) - 1)
+        px, py = (x + k * lh, y) if rotate == -90 else (x, y + k * lh)
+        out.append((px, py, ln))
+        box = box.united(_text_rect(px, py, ln or " ", fs, anchor, rotate))
+    return out, box
+
+
 def _rect_path(*rects: QRectF) -> QPainterPath:
     p = QPainterPath()
     for r in rects:
@@ -830,13 +845,21 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
         from .parts_survival_layout import build_survival
         return build_survival(graph)
     cols = spec.shown(table.used_columns())
+    def make_plan(colw):
+        if table.table_type in ("grouped", "contingency"):     # counts: rows × outcomes, as grouped bars
+            return plan_grouped(graph, cols, colw)
+        if table.table_type == "nested":
+            return plan_nested(graph, cols, colw)
+        return plan_column(graph, cols, colw)
     colw = spec.col_width_mm * MM
-    if table.table_type in ("grouped", "contingency"):     # counts: rows × outcomes, as grouped bars
-        plan = plan_grouped(graph, cols, colw)
-    elif table.table_type == "nested":
-        plan = plan_nested(graph, cols, colw)
-    else:
-        plan = plan_column(graph, cols, colw)
+    plan = make_plan(colw)
+    if spec.x_fixed:                    # an axis of a set length: the columns share it
+        for _ in range(3):              # (width is close to proportional to the column width)
+            if plan.width <= 0 or abs(plan.width - spec.x_len_mm * MM) < 0.01:
+                break
+            colw *= spec.x_len_mm * MM / plan.width
+            plan = make_plan(colw)
+    w_field = "x_len_mm" if spec.x_fixed else "col_width_mm"
     pw, ph = plan.width, spec.y_len_mm * MM
     aw, ac = spec.axis_width, spec.axis_color
     off = 6.0 if spec.frame == "offset" else 0.0
@@ -964,19 +987,23 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
             if sm["center"] is None:
                 continue
             side = -1.0 if (i == 0 and n_slots > 1) else 1.0         # outward on the first data set
-            x = g.sl.x + side * g.sl.w * 0.42
+            x = g.sl.x if spec.ba_place == "inline" else g.sl.x + side * g.sl.w * 0.42
             m_ = ymap(g.sl.column)[0]
             marks.append((x, m_(sm["center"]), m_(sm["lo"]) if sm["lo"] is not None else None,
                           m_(sm["hi"]) if sm["hi"] is not None else None, g.st))
         if marks:
-            def draw_marks(cv, marks=marks):
+            def draw_marks(cv, marks=marks, own=spec.ba_color, shape=spec.ba_shape, join=spec.ba_join):
+                if join and len(marks) > 1:        # one line through the summaries, under their symbols
+                    st0 = marks[0][4]
+                    cv.polyline([(x, yc) for x, yc, *_ in marks], own or st0.symbol_color,
+                                max(st0.error_width, 1.0), "round")
                 for x, yc, ylo, yhi, st in marks:
                     cap = 3.0
                     for ye in (ylo, yhi):
                         if ye is not None:
-                            cv.line(x, yc, x, ye, st.error_color, st.error_width, "butt")
-                            cv.line(x - cap, ye, x + cap, ye, st.error_color, st.error_width, "butt")
-                    draw_symbol(cv, "square", x, yc, max(4.0, st.symbol_size * 2.2), st.symbol_color)
+                            cv.line(x, yc, x, ye, own or st.error_color, st.error_width, "butt")
+                            cv.line(x - cap, ye, x + cap, ye, own or st.error_color, st.error_width, "butt")
+                    draw_symbol(cv, shape, x, yc, max(4.0, st.symbol_size * 2.2), own or st.symbol_color)
             box = QRectF()
             for x, yc, ylo, yhi, _st in marks:
                 box = box.united(QRectF(x - 4, min(v for v in (yc, ylo, yhi) if v is not None) - 2, 8,
@@ -1032,13 +1059,13 @@ def _build(graph: Graph) -> tuple[list[Element], AxisRange]:
         from .horizontal import horizontalize
         legend = (table, plan) if spec.show_legend and plan.legend else None
         elements = horizontalize(spec, elements, plan, ym, ph, off, legend)
-        mark_plot(elements, ph, plan.width, "y_len_mm", "col_width_mm")
+        mark_plot(elements, ph, plan.width, "y_len_mm", w_field)
         content_top = min([0.0] + [e.bounds.top() for e in elements if e.kind in ("dataset", "bracket")])
         elements += _title(spec, graph, ph, content_top)
         elements.sort(key=lambda e: ORDER[e.kind])
         return elements, rng
 
-    mark_plot(elements, pw, ph, "col_width_mm", "y_len_mm")
+    mark_plot(elements, pw, ph, w_field, "y_len_mm")
 
     # --- graph title ----------------------------------------------------------
     content_top = min([content_top] + [e.bounds.top() for e in elements if e.id == "y-title"])
@@ -1118,12 +1145,14 @@ def _y_title(spec, num_left: float, ph: float, side: str = "left") -> list[Eleme
         tx = num_left - 6.0 - TM.descent(fs_yt) + dx
     ty = ph / 2 + dy
 
-    def draw_yt(cv, tx=tx, ty=ty):
-        cv.text(tx, ty, ay.title, fs_yt, anchor="middle", rotate=-90)
-    r = _text_rect(tx, ty, ay.title, fs_yt, "middle", -90)
+    lines, r = text_block(tx, ty, ay.title, fs_yt, "middle", -90, "down" if right else "up")   # away from the axis
+
+    def draw_yt(cv, lines=lines):
+        for lx, ly, ln in lines:
+            cv.text(lx, ly, ln, fs_yt, anchor="middle", rotate=-90)
     return [Element(key, "text", r, draw_yt, _rect_path(r),
                     {"font_keys": ["y_title"], "field": "y2_title" if right else "y_title", "text": ay.title,
-                     "rotate": -90, "anchor_pt": (tx, ty)})]
+                     "rotate": -90, "anchor_pt": lines[0][:2]})]
 
 
 def _guides(spec, ym: YMap, pw: float, ph: float, ym2: YMap | None = None, xm=None) -> list[Element]:
@@ -1353,7 +1382,9 @@ def _comparisons(graph, anchors: dict) -> list[tuple]:
     """(key a, key b, P) for every comparison to draw, in the analysis's order. A two-group
     test shows its result (also "ns", unless switched off); multiple comparisons follow the
     'which' choice: all, the significant ones, those against a control, or none. Brackets
-    hidden one by one are left out."""
+    hidden one by one are left out: sig["hidden"] holds bracket ids (hidden whichever analysis
+    they come from, as the graph's "Hide this comparison" does) and "<analysis id>:<bracket id>"
+    (that analysis's comparison only, as the Format Graph list does)."""
     sig = sig_settings(graph.spec)
     alpha = float(sig.get("alpha", 0.05))
     hidden = set(sig.get("hidden") or [])
@@ -1372,8 +1403,8 @@ def _comparisons(graph, anchors: dict) -> list[tuple]:
         for ka, kb, pv, m in cand:
             if ka not in anchors or kb not in anchors or abs(anchors[ka][0] - anchors[kb][0]) <= 1e-6:
                 continue
-            if bracket_id(ka, kb) in hidden:
-                continue
+            if bracket_id(ka, kb) in hidden or f"{a.id}:{bracket_id(ka, kb)}" in hidden:
+                continue                      # hidden for every analysis, or for this one only
             if not m:
                 if pv >= alpha and not sig.get("ns_single", True):
                     continue
@@ -1418,7 +1449,8 @@ def _brackets(graph, anchors: dict, tops: list, ac: str, aw: float):
                     moved = True
         placed.append((x1, x2, y))
         label = bracket_label(pv, sig)
-        fs = fs_s if sig.get("label", "stars") == "stars" else fs_b
+        # stars in the stars font; words and numbers ("ns", P values) in the P-value font
+        fs = fs_s if sig.get("label", "stars") == "stars" and label.strip("*") == "" else fs_b
         gid = bracket_id(ka, kb)
         dx, dy = spec.offsets.get(gid, (0.0, 0.0))
         ytop = y + dy
@@ -1443,12 +1475,14 @@ def _title(spec, graph, pw: float, content_top: float) -> list[Element]:
     dx, dy = spec.offsets.get("graph-title", (0.0, 0.0))
     tx, ty = pw / 2 + dx, content_top - 10.0 - TM.descent(fs_t) + dy
 
-    def draw_t(cv, tx=tx, ty=ty):
-        cv.text(tx, ty, title, fs_t, anchor="middle")
-    r = _text_rect(tx, ty, title, fs_t, "middle")
+    lines, r = text_block(tx, ty, title, fs_t, "middle", 0.0, "up")
+
+    def draw_t(cv, lines=lines):
+        for lx, ly, ln in lines:
+            cv.text(lx, ly, ln, fs_t, anchor="middle")
     return [Element("graph-title", "text", r, draw_t, _rect_path(r),
                     {"font_keys": ["title"], "field": "title", "text": title,
-                     "rotate": 0, "anchor_pt": (tx, ty)})]
+                     "rotate": 0, "anchor_pt": lines[0][:2]})]
 
 
 # ---------------------------------------------------------------------------

@@ -45,7 +45,7 @@ class DataSetStyle:
     violin_quartiles: str = "dash"   # quartile lines: dash | dot | solid | none
     violin_median: str = "solid"     # median line: solid | dash | dot | none
     # XY graphs
-    xy_show: str = "mean"            # mean (± error from line_at) | replicates | spaghetti
+    xy_show: str = "mean"            # mean (± error from line_at) | mean_reps (mean ± error over fainter replicates) | replicates | spaghetti
     connect: bool = False            # line joining the points (or means) in X order
     line_width: float = 1.0          # connecting line and fitted curve
     line_dash: str = "solid"         # solid | dash | dot
@@ -212,6 +212,10 @@ class GraphSpec:
     sig: dict = field(default_factory=default_sig)
     horizontal: bool = False         # column / grouped graphs: categories down the page, values across
     ba_summary: str = "none"         # before-after: mean/median with error beside the points (line_at keys)
+    ba_place: str = "beside"         # that summary: beside (next to the points) | inline (in line with them)
+    ba_join: bool = False            # join the summaries of the data sets with a line
+    ba_color: str = ""               # its colour ("" = each data set's symbol and error colours)
+    ba_shape: str = "square"         # its symbol (symbol_shape keys)
     lines_points: bool = False       # grouped connected means: also show each replicate
     connect_rows: bool = False       # before-after: join each row's values across data sets
     connect_width: float = 1.0
@@ -222,7 +226,9 @@ class GraphSpec:
     grouped_layout: str = "interleaved"   # see GROUPED_LAYOUTS
     nested_layout: str = "subjects"  # subjects (side by side) | pooled | superplot
     show_legend: bool = True
-    x_len_mm: float = 60.0           # XY graphs: length of the X axis
+    x_len_mm: float = 60.0           # length of the X axis: XY graphs, and others when x_fixed
+    x_fixed: bool = False            # column, grouped and nested graphs: the X axis is x_len_mm long and
+                                     # the columns share it (off: each column is col_width_mm wide)
     # Parts of whole
     parts_layout: str = "pie"        # pie | donut | stacked100
     parts_labels: str = "percent"    # percent | value | none
@@ -314,7 +320,7 @@ def spec_to_dict(s: GraphSpec) -> dict:
     }
 
 
-_EXTRA = ("order", "horizontal", "ba_summary", "lines_points", "palette", "grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "x_len_mm",
+_EXTRA = ("order", "horizontal", "ba_summary", "ba_place", "ba_join", "ba_color", "ba_shape", "lines_points", "palette", "grouped_layout", "nested_layout", "show_legend", "heat_low", "heat_high", "x_len_mm", "x_fixed",
           "parts_layout", "parts_labels", "donut_hole", "surv_percent", "surv_death", "surv_ci", "surv_ticks")
 
 

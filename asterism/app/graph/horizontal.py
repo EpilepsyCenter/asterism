@@ -74,7 +74,7 @@ def transform(ph: float) -> QTransform:
 def horizontalize(spec, elements, plan, ym, ph: float, off: float, legend_entries):
     """Turn a vertical column/grouped graph's elements on their side; returns the new list
     and the horizontal extent (for the title)."""
-    from .layout import Element, _legend, _rect_path, _text_rect, TICK_LEN
+    from .layout import Element, _legend, _rect_path, _text_rect, text_block, TICK_LEN
     T = transform(ph)
     W = plan.width
     out = []
@@ -125,9 +125,11 @@ def horizontalize(spec, elements, plan, ym, ph: float, off: float, legend_entrie
         dx, dy = spec.offsets.get("y-title", (0.0, 0.0))
         tx, ty = ph / 2 + dx, vb.bottom() + 6.0 + TM.ascent(fs_t) + dy
 
-        def draw_t(cv, tx=tx, ty=ty):
-            cv.text(tx, ty, ay.title, fs_t, anchor="middle")
-        r = _text_rect(tx, ty, ay.title, fs_t, "middle")
+        lines, r = text_block(tx, ty, ay.title, fs_t, "middle")
+
+        def draw_t(cv, lines=lines):
+            for lx, ly, ln in lines:
+                cv.text(lx, ly, ln, fs_t, anchor="middle")
         out.append(Element("y-title", "text", r, draw_t, _rect_path(r),
                            {"font_keys": ["y_title"], "field": "y_title", "text": ay.title, "rotate": 0,
                             "anchor_pt": (tx, ty)}))

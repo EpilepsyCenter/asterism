@@ -81,6 +81,7 @@ XY_PRESETS = [
     ("xy_points", "Points, mean ± SEM", XYBASE, S()),
     ("xy_points_line", "Points and connecting line", S(XYBASE, connect=True), S()),
     ("xy_line", "Line only", S(XYBASE, connect=True, show_points=False, errors=False), S()),
+    ("xy_mean_reps", "Mean ± SEM with each replicate", S(XYBASE, xy_show="mean_reps", connect=True), S()),
     ("xy_replicates", "Each replicate", S(XYBASE, xy_show="replicates", errors=False), S()),
     ("xy_spaghetti", "Each replicate connected (spaghetti)", S(XYBASE, xy_show="spaghetti", errors=False), S()),
     ("xy_area", "Line with shaded area", S(XYBASE, connect=True, fill=True, show_points=False, errors=False), S()),
